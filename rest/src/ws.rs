@@ -262,8 +262,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
             debug!("Received message: {}", text);
 
             // Try to parse the command
-            let command: Result<CommandWithId, _> = serde_json::from_str(&text);
-            match command {
+            match serde_json::from_str(&text) {
                 Ok(CommandWithId {
                     id,
                     cmd: Command::Auth { token },
@@ -290,10 +289,10 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                         break; // Close connection on auth failure
                     }
                 }
-                Ok(CommandWithId { id, cmd }) => {
+                Ok(command) => {
                     if !authenticated {
                         let response = Response::Error {
-                            id,
+                            id: command.id,
                             message: "Not authenticated".to_string(),
                         };
 
@@ -309,11 +308,10 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                     tokio::task::spawn(async move {
                         // Handle authenticated commands
                         handle_command(
-                            cmd,
+                            command,
                             &sdk_clone,
                             &nwc_clone,
                             tx_message_clone,
-                            &id,
                             &active_streams_clone,
                             tx_notification_clone,
                         )
@@ -359,11 +357,10 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 }
 
 async fn handle_command(
-    command: Command,
+    command: CommandWithId,
     sdk: &Arc<PortalSDK>,
     nwc: &Option<Arc<nwc::NWC>>,
     tx_message: mpsc::Sender<Message>,
-    request_id: &str,
     active_streams: &Arc<Mutex<ActiveStreams>>,
     tx_notification: mpsc::Sender<Response>,
 ) {
@@ -388,7 +385,7 @@ async fn handle_command(
         }
     };
 
-    match command {
+    match command.cmd {
         Command::Auth { .. } => {
             // Already handled in the outer function
         }
@@ -436,7 +433,7 @@ async fn handle_command(
 
                     // Convert the URL to a proper response struct
                     let response = Response::Success {
-                        id: request_id.to_string(),
+                        id: command.id,
                         data: ResponseData::AuthInitUrl {
                             url: url.to_string(),
                             stream_id,
@@ -447,7 +444,7 @@ async fn handle_command(
                 }
                 Err(e) => {
                     let response = Response::Error {
-                        id: request_id.to_string(),
+                        id: command.id.to_string(),
                         message: format!("Failed to create auth init URL: {}", e),
                     };
 
@@ -462,7 +459,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Invalid main key: {}", e),
                     )
                     .await;
@@ -475,7 +472,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Invalid subkeys: {}", e),
                     )
                     .await;
@@ -486,7 +483,7 @@ async fn handle_command(
             match sdk.authenticate_key(main_key, subkeys).await {
                 Ok(event) => {
                     let response = Response::Success {
-                        id: request_id.to_string(),
+                        id: command.id,
                         data: ResponseData::AuthResponse {
                             event: AuthResponseData {
                                 user_key: event.user_key.to_string(),
@@ -503,7 +500,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Failed to authenticate key: {}", e),
                     )
                     .await;
@@ -521,7 +518,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Invalid main key: {}", e),
                     )
                     .await;
@@ -534,7 +531,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Invalid subkeys: {}", e),
                     )
                     .await;
@@ -548,7 +545,7 @@ async fn handle_command(
             {
                 Ok(status) => {
                     let response = Response::Success {
-                        id: request_id.to_string(),
+                        id: command.id,
                         data: ResponseData::RecurringPayment { status },
                     };
 
@@ -557,7 +554,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Failed to request recurring payment: {}", e),
                     )
                     .await;
@@ -572,7 +569,7 @@ async fn handle_command(
             let nwc = match nwc {
                 Some(nwc) => nwc,
                 None => {
-                    let _ = send_error(tx_message.clone(), request_id, "Nostr Wallet Connect is not available: set the NWC_URL environment variable to enable it").await;
+                    let _ = send_error(tx_message.clone(), &command.id, "Nostr Wallet Connect is not available: set the NWC_URL environment variable to enable it").await;
                     return;
                 }
             };
@@ -583,7 +580,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Invalid main key: {}", e),
                     )
                     .await;
@@ -596,7 +593,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Invalid subkeys: {}", e),
                     )
                     .await;
@@ -619,7 +616,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Failed to make invoice: {}", e),
                     )
                     .await;
@@ -636,7 +633,7 @@ async fn handle_command(
                 current_exchange_rate: None,
                 subscription_id: payment_request.subscription_id,
                 auth_token: payment_request.auth_token,
-                request_id: request_id.to_string(),
+                request_id: command.id.clone(),
                 description: Some(payment_request.description),
             };
 
@@ -725,7 +722,7 @@ async fn handle_command(
                         .add_task(stream_id.clone(), task);
 
                     let response = Response::Success {
-                        id: request_id.to_string(),
+                        id: command.id,
                         data: ResponseData::SinglePayment {
                             status,
                             stream_id: Some(stream_id),
@@ -737,7 +734,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Failed to request single payment: {}", e),
                     )
                     .await;
@@ -755,7 +752,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Invalid main key: {}", e),
                     )
                     .await;
@@ -768,7 +765,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Invalid subkeys: {}", e),
                     )
                     .await;
@@ -782,7 +779,7 @@ async fn handle_command(
             {
                 Ok(status) => {
                     let response = Response::Success {
-                        id: request_id.to_string(),
+                        id: command.id,
                         data: ResponseData::SinglePayment {
                             status,
                             stream_id: None,
@@ -794,7 +791,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Failed to request single payment: {}", e),
                     )
                     .await;
@@ -808,7 +805,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Invalid main key: {}", e),
                     )
                     .await;
@@ -819,7 +816,7 @@ async fn handle_command(
             match sdk.fetch_profile(main_key).await {
                 Ok(profile) => {
                     let response = Response::Success {
-                        id: request_id.to_string(),
+                        id: command.id,
                         data: ResponseData::ProfileData { profile },
                     };
 
@@ -828,7 +825,7 @@ async fn handle_command(
                 Err(e) => {
                     let _ = send_error(
                         tx_message.clone(),
-                        request_id,
+                        &command.id,
                         &format!("Failed to fetch profile: {}", e),
                     )
                     .await;
@@ -839,14 +836,14 @@ async fn handle_command(
             match sdk.set_profile(profile.clone()).await {
                 Ok(_) => {
                     let response = Response::Success {
-                        id: request_id.to_string(),
+                        id: command.id,
                         data: ResponseData::ProfileData { profile: Some(profile) },
                     };
 
                     let _ = send_message(response).await;
                 }
                 Err(e) => {
-                    let _ = send_error(tx_message.clone(), request_id, &format!("Failed to set profile: {}", e)).await;
+                    let _ = send_error(tx_message.clone(), &command.id, &format!("Failed to set profile: {}", e)).await;
                 }
             }
         }
