@@ -72,6 +72,7 @@ pub struct AuthChallengeEvent {
     pub challenge: String,
     pub expires_at: u64,
     pub required_permissions: Vec<String>,
+    pub event_id: String,
 }
 
 impl MultiKeyListener for AuthChallengeListenerConversation {
@@ -125,6 +126,7 @@ impl MultiKeyListener for AuthChallengeListenerConversation {
             challenge: content.challenge.clone(),
             expires_at: content.expires_at.as_u64(),
             required_permissions: content.required_permissions.clone(),
+            event_id: event.id.to_string(),
         });
 
         Ok(response)

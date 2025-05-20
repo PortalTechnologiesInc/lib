@@ -233,18 +233,22 @@ pub mod payment {
         pub auth_token: Option<String>,
         pub expires_at: Timestamp,
         pub subscription_id: Option<String>,
+        pub description: Option<String>,
+        pub request_id: String,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
+    #[serde(rename_all = "snake_case")]
     pub struct PaymentResponseContent {
-        pub status: String,
-        pub payment_hash: String,
+        pub request_id: String,
+        pub status: PaymentStatus,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
     #[serde(rename_all = "snake_case")]
-    pub enum PaymentStatusContent {
+    pub enum PaymentStatus {
         Pending,
         Rejected { reason: Option<String> },
         Failed { reason: Option<String> },
@@ -267,7 +271,16 @@ pub mod payment {
         pub current_exchange_rate: Option<ExchangeRate>,
         pub expires_at: Timestamp,
         pub auth_token: Option<String>,
-        // TODO: add description
+        pub description: Option<String>,
+        pub request_id: String,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
+    #[serde(rename_all = "snake_case")]
+    pub struct RecurringPaymentResponseContent {
+        pub request_id: String,
+        pub status: RecurringPaymentStatus,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -290,7 +303,7 @@ pub mod payment {
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
     #[serde(rename_all = "snake_case", tag = "status")]
-    pub enum RecurringPaymentStatusContent {
+    pub enum RecurringPaymentStatus {
         Confirmed {
             subscription_id: String,
             authorized_amount: u64,

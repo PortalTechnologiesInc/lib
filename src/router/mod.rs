@@ -8,7 +8,7 @@ use channel::Channel;
 use futures::{Stream, StreamExt};
 use nostr_relay_pool::RelayPoolNotification;
 use serde::{Serialize, de::DeserializeOwned};
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, RwLock, mpsc};
 
 use nostr::{
     event::{Event, EventBuilder, EventId, Kind, Tags},
@@ -43,6 +43,7 @@ pub struct MessageRouter<C: Channel> {
     keypair: LocalKeypair,
     conversations: Mutex<HashMap<String, Box<dyn Conversation + Send>>>,
     aliases: Mutex<HashMap<String, Vec<u64>>>,
+    filters: RwLock<HashMap<String, Filter>>,
     subscribers: Mutex<HashMap<String, Vec<mpsc::Sender<serde_json::Value>>>>,
 }
 
@@ -64,6 +65,7 @@ where
             conversations: Mutex::new(HashMap::new()),
             aliases: Mutex::new(HashMap::new()),
             subscribers: Mutex::new(HashMap::new()),
+            filters: RwLock::new(HashMap::new()),
         }
     }
 
@@ -71,6 +73,7 @@ where
         // Remove conversation state
         self.conversations.lock().await.remove(conversation);
         self.subscribers.lock().await.remove(conversation);
+        self.filters.write().await.remove(conversation);
         let aliases = self.aliases.lock().await.remove(conversation);
 
         // Remove filters from relays
@@ -94,6 +97,7 @@ where
         self.conversations.lock().await.clear();
         self.subscribers.lock().await.clear();
         self.aliases.lock().await.clear();
+        self.filters.write().await.clear();
     }
 
     /// Starts listening for incoming messages and routes them to the appropriate conversations.
@@ -140,7 +144,7 @@ where
                 _ => continue,
             };
 
-            let message = match event {
+            let message = match &event {
                 LocalEvent::Message(event) => {
                     if event.pubkey == self.keypair.public_key() && event.kind != Kind::Metadata {
                         log::trace!("Ignoring event from self");
@@ -173,7 +177,7 @@ where
                         ConversationMessage::Cleartext(CleartextEvent::new_json(&event, cleartext))
                     } else {
                         log::warn!("Failed to decrypt event: {:?}", event);
-                        ConversationMessage::Encrypted(event)
+                        ConversationMessage::Encrypted(event.clone())
                     }
                 }
                 LocalEvent::EndOfStoredEvents => {
@@ -181,34 +185,75 @@ where
                 }
             };
 
-            let conversation_id = subscription_id.as_str();
-            let conversation_id = if let Some((id, _)) = conversation_id.split_once("_") {
-                id
-            } else {
-                conversation_id
-            };
+            self.dispatch_event(subscription_id.clone(), message.clone()).await?;
 
-            let response = match self.conversations.lock().await.get_mut(conversation_id) {
-                Some(conv) => match conv.on_message(message) {
-                    Ok(response) => response,
-                    Err(e) => {
-                        log::warn!("Error in conversation id {:?}: {:?}", conversation_id, e);
-                        Response::new().finish()
-                    }
-                },
-                None => {
-                    log::warn!("No conversation found for id: {:?}", conversation_id);
-                    self.channel
-                        .unsubscribe(conversation_id.to_string())
-                        .await
-                        .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+            let mut to_cleanup = vec![];
+            let mut other_conversations = vec![];
 
+            // Check if there are other potential conversations to dispatch to
+            for (id, filter) in self.filters.read().await.iter() {
+                if id == subscription_id.as_str() {
                     continue;
                 }
-            };
 
-            self.process_response(conversation_id, response).await?;
+                match self.conversations.lock().await.get(id) {
+                    Some(conv) if conv.is_expired() => {
+                        to_cleanup.push(id.clone());
+                        continue;
+                    }
+                    _ => {}
+                }
+
+                if let LocalEvent::Message(event) = &event {
+                    if filter.match_event(&event) {
+                        log::warn!("Dispatching event to {:?}", id);
+                        other_conversations.push(id.clone());
+                    }
+                }
+            }
+
+            for id in to_cleanup {
+                self.cleanup_conversation(&id).await?;
+            }
+
+            for id in other_conversations {
+                log::warn!("Dispatching event to {:?}", id);
+                self.dispatch_event(SubscriptionId::new(id.clone()), message.clone()).await?;
+                log::warn!("Finished dispatching event to {:?}", id);
+            }
         }
+
+        Ok(())
+    }
+
+    async fn dispatch_event(&self, subscription_id: SubscriptionId, message: ConversationMessage) -> Result<(), ConversationError> {
+        let conversation_id = subscription_id.as_str();
+        let conversation_id = if let Some((id, _)) = conversation_id.split_once("_") {
+            id
+        } else {
+            conversation_id
+        };
+
+        let response = match self.conversations.lock().await.get_mut(conversation_id) {
+            Some(conv) => match conv.on_message(message) {
+                Ok(response) => response,
+                Err(e) => {
+                    log::warn!("Error in conversation id {:?}: {:?}", conversation_id, e);
+                    Response::new().finish()
+                }
+            },
+            None => {
+                log::warn!("No conversation found for id: {:?}", conversation_id);
+                self.channel
+                    .unsubscribe(conversation_id.to_string())
+                    .await
+                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+
+                return Ok(());
+            }
+        };
+
+        self.process_response(conversation_id, response).await?;
 
         Ok(())
     }
@@ -228,12 +273,14 @@ where
                     .subscribe_to(selected_relays, id.to_string(), response.filter.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                self.filters.write().await.insert(id.to_string(), response.filter.clone());
             } else {
                 log::trace!("Subscribing to all relays");
                 self.channel
                     .subscribe(id.to_string(), response.filter.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                self.filters.write().await.insert(id.to_string(), response.filter.clone());
             }
         }
 
@@ -305,17 +352,19 @@ where
             if let Some(selected_relays) = response.selected_relays.clone() {
                 log::trace!("Subscribing 'subkey proof' to relays = {:?}", selected_relays);
                 self.channel
-                    .subscribe_to(selected_relays, alias, filter)
+                    .subscribe_to(selected_relays, alias.clone(), filter.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                self.filters.write().await.insert(alias, filter);
             } else {
                 log::trace!("Subscribing 'subkey proof' to all relays");
                 // Subscribe to subkey proofs to all 
                 
                 self.channel
-                    .subscribe(alias, filter)
+                    .subscribe(alias.clone(), filter.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                self.filters.write().await.insert(alias, filter);
             }   
         }
 
@@ -625,7 +674,7 @@ impl Response {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConversationMessage {
     Cleartext(CleartextEvent),
     Encrypted(Event),

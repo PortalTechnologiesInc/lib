@@ -2,7 +2,7 @@ import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { Currency, PaymentStatusContent, PortalSDK, Profile, RecurringPaymentStatusContent, Timestamp } from 'portal-sdk';
+import { AuthResponseData, Currency, PaymentStatusContent, PortalSDK, Profile, RecurringPaymentStatusContent, Timestamp } from 'portal-sdk';
 import { DatabaseManager, Payment } from './session';
 import { bech32 } from 'bech32';
 
@@ -191,8 +191,6 @@ function mainFunction() {
                 </div>
             `);
 
-          const profile = await portalClient.fetchProfile(mainKey);
-
           ws.on('message', (message: Buffer) => {
             const data = JSON.parse(message.toString());
             if (data.HEADERS['HX-Trigger'] === 'portal-login') {
@@ -203,13 +201,13 @@ function mainFunction() {
                     <div class="local-login" id="forget-user-section">
                     </div>
                     `);
-                authenticateKey(portalClient, ws, mainKey, profile, mainKey);
+                authenticateKey(portalClient, ws, mainKey, mainKey);
             }
           });
   
           ws.send(`
               <div id="qr-section">
-                <h3>Hello ${profile?.name || formatNpub(mainKey)}!</h3>
+                <h3>Hello ${formatNpub(mainKey)}!</h3>
               </div>
               <div class="local-login" id="login-button-section">
                 <a href="#" class="login-button" id="portal-login" ws-send='{"cmd": "login"}'>Login with Portal</a>
@@ -218,44 +216,83 @@ function mainFunction() {
                 <a href="#" class="login-button forget-user-button" id="forget-user" onclick="window.resetMainKey()">Not you?</a>
               </div>
               <div id="status" class="status sending">
-                Welcome back, ${profile?.name || formatNpub(mainKey)}!
+                Welcome back, ${formatNpub(mainKey)}!
               </div>
           `);
+
+          portalClient.fetchProfile(mainKey)
+            .then(profile => {
+              console.log('Profile:', profile);
+
+              if (!profile || !profile.name){
+                return;
+              }
+
+              loginTokens.set(mainKey, {
+                type: 'sending_challenge',
+                displayName: profile.name,
+              });
+
+              ws.send(`
+                <div id="qr-section">
+                  <h3>Hello ${profile.name}!</h3>
+                </div>
+                <div id="status" class="status sending">
+                  Welcome back, ${profile.name}!
+                </div>
+              `);
+            });
       }
     } else {
       const loginUrl = await portalClient.newAuthInitUrl((mainKey) => {
           console.log('Auth Init received for key:', mainKey);
-          let profile: Profile | null = null;
-  
+
+          const status = loginTokens.get(loginUrl);
+          if (status && status.type === 'waiting') {
+            loginTokens.set(loginUrl, {
+              type: 'sending_challenge',
+              displayName: formatNpub(mainKey),
+            });
+          } else {
+            return;
+          }
+          
+          ws.send(`
+            <div id="status" class="status sending">
+              Welcome back, ${formatNpub(mainKey)}!
+            </div>
+            <div id="qr-overlay" class="show">Loading...</div>
+            <div id="login-button-section">
+              <a href="#" class="login-button disabled" id="portal-login">Login with Portal</a>
+            </div>
+          `);
+
+          // Fetch the profile in background
           portalClient.fetchProfile(mainKey)
-              .then(p => {
-                  profile = p;
-                  console.log('Profile:', profile);
+            .then(profile => {
+              console.log('Profile:', profile);
+
+              if (profile) {
+                ws.send(`
+                  <div id="status" class="status sending">
+                    Welcome back, ${profile.name}!
+                  </div>
+                `);
+
+                const current = loginTokens.get(loginUrl);
+                if (current) {
+                  current.displayName = profile.name || formatNpub(mainKey);
+                  loginTokens.set(loginUrl, current);
+                }
+              }
+            })
+            .catch(error => {
+              console.log('Error fetching profile:', error);
+            });
   
-                  const status = loginTokens.get(loginUrl);
-                  if (status && status.type === 'waiting') {
-                    loginTokens.set(loginUrl, {
-                      type: 'sending_challenge',
-                      displayName: profile?.name || mainKey,
-                    });
-                  }
-                
-                  ws.send(`
-                    <div id="status" class="status sending">
-                      Welcome back, ${profile?.name || formatNpub(mainKey)}!
-                    </div>
-                    <div id="qr-overlay" class="show">Loading...</div>
-                    <div id="login-button-section">
-                      <a href="#" class="login-button disabled" id="portal-login">Login with Portal</a>
-                    </div>
-                  `);
-  
-                  return authenticateKey(portalClient, ws, loginUrl, profile, mainKey);
-              })
-             .catch(error => {
-                  console.error('Error authenticating:', error);
-              });
+          return authenticateKey(portalClient, ws, loginUrl, mainKey);
       });
+
       loginTokens.set(loginUrl, { type: 'waiting' });
       
       // Send HTML updates
@@ -280,24 +317,50 @@ function mainFunction() {
   }); 
 }
 
-async function authenticateKey(portalClient: PortalSDK, ws: WebSocket, loginUrl: string, profile: Profile | null, mainKey: string) {
-    const authResponse = await portalClient.authenticateKey(mainKey);
+async function authenticateKey(portalClient: PortalSDK, ws: WebSocket, loginUrl: string, mainKey: string) {
+    let authResponse: AuthResponseData | null = null;
+    let timeout: NodeJS.Timeout | null = null;
+    try {
+      authResponse = await Promise.race([
+        portalClient.authenticateKey(mainKey),
+        new Promise((resolve, reject) => {
+          timeout = setTimeout(() => {
+            reject(new Error('Authentication timed out'));
+          }, 10000);
+        })
+      ]) as AuthResponseData | null;
+
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    } catch (error) {
+      console.log(error);
+      ws.send(`<div id="status" class="status timeout">Authentication timed out</div>`);
+      return;
+    }
 
     const sessionId = uuidv4();
     
+    const current = loginTokens.get(loginUrl);
+    console.log(current);
+    let name = null;
+    if (current) {
+      name = current.displayName;
+    }
+
     loginTokens.set(loginUrl, {
       type: 'approved',
-      displayName: profile?.name || mainKey,
+      displayName: name || mainKey,
       publicKey: mainKey,
-      authToken: authResponse.session_token,
+      authToken: authResponse!.session_token,
     });
     
     // Create session
     db.setSession({
       id: sessionId,
       publicKey: mainKey,
-      displayName: profile?.name || formatNpub(mainKey),
-      authToken: authResponse.session_token,
+      displayName: name || formatNpub(mainKey),
+      authToken: authResponse!.session_token,
     });
     
     ws.send(`

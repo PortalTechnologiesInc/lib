@@ -6,7 +6,7 @@ use app::{
 use portal::{
     nostr::nips::{nip19::ToBech32, nip47::PayInvoiceRequest}, profile::Profile, protocol::{
         auth_init::AuthInitUrl,
-        model::payment::{PaymentStatusContent, RecurringPaymentStatusContent},
+        model::payment::{PaymentResponseContent, PaymentStatus, RecurringPaymentResponseContent, RecurringPaymentStatus},
     }
 };
 
@@ -27,7 +27,7 @@ impl PaymentRequestListener for ApprovePayment {
     async fn on_single_payment_request(
         &self,
         event: SinglePaymentRequest,
-    ) -> Result<PaymentStatusContent, CallbackError> {
+    ) -> Result<PaymentResponseContent, CallbackError> {
         log::info!("Received single payment request: {:?}", event);
 
         let nwc = self.0.clone();
@@ -42,19 +42,25 @@ impl PaymentRequestListener for ApprovePayment {
             log::info!("Payment result: {:?}", payment_result);
         });
 
-        Ok(PaymentStatusContent::Pending)
+        Ok(PaymentResponseContent {
+            status: PaymentStatus::Pending,
+            request_id: event.content.request_id,
+        })
     }
 
     async fn on_recurring_payment_request(
         &self,
         event: RecurringPaymentRequest,
-    ) -> Result<RecurringPaymentStatusContent, CallbackError> {
+    ) -> Result<RecurringPaymentResponseContent, CallbackError> {
         log::info!("Received recurring payment request: {:?}", event);
-        Ok(RecurringPaymentStatusContent::Confirmed {
-            subscription_id: "randomid".to_string(),
-            authorized_amount: event.content.amount,
-            authorized_currency: event.content.currency,
-            authorized_recurrence: event.content.recurrence,
+        Ok(RecurringPaymentResponseContent {
+            status: RecurringPaymentStatus::Confirmed {
+                subscription_id: "randomid".to_string(),
+                authorized_amount: event.content.amount,
+                authorized_currency: event.content.currency,
+                authorized_recurrence: event.content.recurrence,
+            },
+            request_id: event.content.request_id,
         })
     }
 }

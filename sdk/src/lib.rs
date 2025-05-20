@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use portal::{
-    nostr::{key::PublicKey, nips::nip01::Metadata},
+    nostr::{key::PublicKey},
     nostr_relay_pool::{RelayOptions, RelayPool},
     profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
     protocol::{
         auth_init::AuthInitUrl, model::payment::{
-            PaymentStatusContent, RecurringPaymentRequestContent, RecurringPaymentStatusContent,
-            SinglePaymentRequestContent,
+            PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
         }, LocalKeypair
     },
     router::{
@@ -114,7 +113,7 @@ impl PortalSDK {
         main_key: PublicKey,
         subkeys: Vec<PublicKey>,
         payment_request: RecurringPaymentRequestContent,
-    ) -> Result<RecurringPaymentStatusContent, PortalSDKError> {
+    ) -> Result<RecurringPaymentResponseContent, PortalSDKError> {
         let conv = RecurringPaymentRequestSenderConversation::new(
             self.router.keypair().public_key(),
             self.router.keypair().subkey_proof().cloned(),
@@ -135,7 +134,7 @@ impl PortalSDK {
         main_key: PublicKey,
         subkeys: Vec<PublicKey>,
         payment_request: SinglePaymentRequestContent,
-    ) -> Result<PaymentStatusContent, PortalSDKError> {
+    ) -> Result<PaymentResponseContent, PortalSDKError> {
         let conv = SinglePaymentRequestSenderConversation::new(
             self.router.keypair().public_key(),
             self.router.keypair().subkey_proof().cloned(),

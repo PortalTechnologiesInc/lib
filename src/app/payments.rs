@@ -9,19 +9,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     protocol::model::{
-        Timestamp, bindings,
-        event_kinds::{
+        bindings, event_kinds::{
             PAYMENT_REQUEST, PAYMENT_RESPONSE, RECURRING_PAYMENT_REQUEST,
             RECURRING_PAYMENT_RESPONSE,
-        },
-        payment::{
-            PaymentStatusContent, RecurringPaymentRequestContent, RecurringPaymentStatusContent,
-            SinglePaymentRequestContent,
-        },
+        }, payment::{
+            PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
+        }, Timestamp
     },
     router::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, Response,
-        adapters::{ConversationWithNotification, one_shot::OneShotSender},
+        adapters::{one_shot::OneShotSender, ConversationWithNotification}, ConversationError, MultiKeyListener, MultiKeyListenerAdapter, Response
     },
 };
 
@@ -88,6 +84,7 @@ impl MultiKeyListener for PaymentRequestListenerConversation {
             recipient: event.pubkey.into(),
             expires_at: content.expires_at(),
             content: content.clone(),
+            event_id: event.id.to_string(),
         });
 
         Ok(response)
@@ -101,6 +98,7 @@ pub struct PaymentRequestEvent {
     pub recipient: bindings::PublicKey,
     pub expires_at: Timestamp,
     pub content: PaymentRequestContent,
+    pub event_id: String,
 }
 
 impl ConversationWithNotification for MultiKeyListenerAdapter<PaymentRequestListenerConversation> {
@@ -126,12 +124,12 @@ impl PaymentRequestContent {
 
 pub struct PaymentStatusSenderConversation {
     event: PaymentRequestEvent,
-    status: PaymentStatusContent,
+    response: PaymentResponseContent,
 }
 
 impl PaymentStatusSenderConversation {
-    pub fn new(event: PaymentRequestEvent, status: PaymentStatusContent) -> Self {
-        Self { event, status }
+    pub fn new(event: PaymentRequestEvent, status: PaymentResponseContent) -> Self {
+        Self { event, response: status }
     }
 }
 
@@ -151,7 +149,7 @@ impl OneShotSender for PaymentStatusSenderConversation {
                 state.event.recipient.into(),
                 Kind::from(PAYMENT_RESPONSE),
                 tags,
-                state.status.clone(),
+                state.response.clone(),
             )
             .finish();
 
@@ -161,12 +159,12 @@ impl OneShotSender for PaymentStatusSenderConversation {
 
 pub struct RecurringPaymentStatusSenderConversation {
     event: PaymentRequestEvent,
-    status: RecurringPaymentStatusContent,
+    response: RecurringPaymentResponseContent,
 }
 
 impl RecurringPaymentStatusSenderConversation {
-    pub fn new(event: PaymentRequestEvent, status: RecurringPaymentStatusContent) -> Self {
-        Self { event, status }
+    pub fn new(event: PaymentRequestEvent, response: RecurringPaymentResponseContent) -> Self {
+        Self { event, response }
     }
 }
 
@@ -186,7 +184,7 @@ impl OneShotSender for RecurringPaymentStatusSenderConversation {
                 state.event.recipient.into(),
                 Kind::from(RECURRING_PAYMENT_RESPONSE),
                 tags,
-                state.status.clone(),
+                state.response.clone(),
             )
             .finish();
 

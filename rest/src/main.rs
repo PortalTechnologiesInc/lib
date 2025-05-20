@@ -120,10 +120,14 @@ async fn handle_ws_upgrade(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    #[cfg(feature = "task-tracing")]
+    console_subscriber::init();
+
     // Load .env file if it exists
     dotenv::dotenv().ok();
 
     // Set up logging
+    #[cfg(not(feature = "task-tracing"))]
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::Layer::default().compact())

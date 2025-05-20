@@ -20,18 +20,13 @@ use portal::{
     protocol::{
         auth_init::AuthInitUrl,
         model::{
-            Timestamp,
-            auth::SubkeyProof,
-            bindings::PublicKey,
-            payment::{
-                PaymentStatusContent, RecurringPaymentRequestContent,
-                RecurringPaymentStatusContent, SinglePaymentRequestContent,
-            },
+            auth::SubkeyProof, bindings::PublicKey, payment::{
+                PaymentResponseContent, PaymentStatus, RecurringPaymentRequestContent, RecurringPaymentResponseContent, RecurringPaymentStatus, SinglePaymentRequestContent
+            }, Timestamp
         },
     },
     router::{
-        MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream,
-        adapters::one_shot::OneShotSenderAdapter,
+        adapters::one_shot::OneShotSenderAdapter, MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream
     },
 };
 
@@ -196,11 +191,11 @@ pub trait PaymentRequestListener: Send + Sync {
     async fn on_single_payment_request(
         &self,
         event: SinglePaymentRequest,
-    ) -> Result<PaymentStatusContent, CallbackError>;
+    ) -> Result<PaymentResponseContent, CallbackError>;
     async fn on_recurring_payment_request(
         &self,
         event: RecurringPaymentRequest,
-    ) -> Result<RecurringPaymentStatusContent, CallbackError>;
+    ) -> Result<RecurringPaymentResponseContent, CallbackError>;
 }
 #[uniffi::export]
 impl PortalApp {
@@ -248,7 +243,7 @@ impl PortalApp {
     }
 
     pub async fn listen_for_auth_challenge(
-        &self,
+        self: Arc<Self>,
         evt: Arc<dyn AuthChallengeListener>,
     ) -> Result<(), AppError> {
         let inner = AuthChallengeListenerConversation::new(self.router.keypair().public_key());
@@ -261,34 +256,40 @@ impl PortalApp {
             .await?;
 
         while let Ok(response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            log::debug!("Received auth challenge: {:?}", response);
+            let _self = self.clone();
+            let evt = evt.clone();
+            tokio::task::spawn(async move {
+                log::debug!("Received auth challenge: {:?}", response);
 
-            let result = evt.on_auth_challenge(response.clone()).await?;
-            log::debug!("Auth challenge callback result: {:?}", result);
+                let result = evt.on_auth_challenge(response.clone()).await?;
+                log::debug!("Auth challenge callback result: {:?}", result);
 
-            if result {
-                let approve = AuthResponseConversation::new(
-                    response.clone(),
-                    vec![],
-                    self.router.keypair().subkey_proof().cloned(),
-                );
-                self.router
-                    .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                        response.recipient.into(),
+                if result {
+                    let approve = AuthResponseConversation::new(
+                        response.clone(),
                         vec![],
-                        approve,
-                    )))
-                    .await?;
-            } else {
-                // TODO: send explicit rejection
-            }
+                        _self.router.keypair().subkey_proof().cloned(),
+                    );
+                    _self.router
+                        .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                            response.recipient.into(),
+                            vec![],
+                            approve,
+                        )))
+                        .await?;
+                } else {
+                    // TODO: send explicit rejection
+                }
+
+                Ok::<(), AppError>(())
+            });
         }
 
         Ok(())
     }
 
     pub async fn listen_for_payment_request(
-        &self,
+        self: Arc<Self>,
         evt: Arc<dyn PaymentRequestListener>,
     ) -> Result<(), AppError> {
         let inner = PaymentRequestListenerConversation::new(self.router.keypair().public_key());
@@ -301,43 +302,50 @@ impl PortalApp {
             .await?;
 
         while let Ok(response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            match &response.content {
-                PaymentRequestContent::Single(content) => {
-                    let req = SinglePaymentRequest {
-                        service_key: response.service_key,
-                        recipient: response.recipient,
-                        expires_at: response.expires_at,
-                        content: content.clone(),
-                    };
-                    let status = evt.on_single_payment_request(req).await?;
-                    let conv = PaymentStatusSenderConversation::new(response.clone(), status);
-                    self.router
-                        .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                            response.recipient.into(),
-                            vec![],
-                            conv,
-                        )))
-                        .await?;
+            let _self = self.clone();
+            let evt = evt.clone();
+            tokio::task::spawn(async move {
+                match &response.content {
+                    PaymentRequestContent::Single(content) => {
+                        let req = SinglePaymentRequest {
+                            service_key: response.service_key,
+                            recipient: response.recipient,
+                            expires_at: response.expires_at,
+                            content: content.clone(),
+                            event_id: response.event_id.clone(),
+                        };
+                        let status = evt.on_single_payment_request(req).await?;
+                        let conv = PaymentStatusSenderConversation::new(response.clone(), status);
+                        _self.router
+                            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                                response.recipient.into(),
+                                vec![],
+                                conv,
+                            )))
+                            .await?;
+                    }
+                    PaymentRequestContent::Recurring(content) => {
+                        let req = RecurringPaymentRequest {
+                            service_key: response.service_key,
+                            recipient: response.recipient,
+                            expires_at: response.expires_at,
+                            content: content.clone(),
+                            event_id: response.event_id.clone(),
+                        };
+                        let status = evt.on_recurring_payment_request(req).await?;
+                        let conv =
+                            RecurringPaymentStatusSenderConversation::new(response.clone(), status);
+                        _self.router
+                            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                                response.recipient.into(),
+                                vec![],
+                                conv,
+                            )))
+                            .await?;
+                    }
                 }
-                PaymentRequestContent::Recurring(content) => {
-                    let req = RecurringPaymentRequest {
-                        service_key: response.service_key,
-                        recipient: response.recipient,
-                        expires_at: response.expires_at,
-                        content: content.clone(),
-                    };
-                    let status = evt.on_recurring_payment_request(req).await?;
-                    let conv =
-                        RecurringPaymentStatusSenderConversation::new(response.clone(), status);
-                    self.router
-                        .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                            response.recipient.into(),
-                            vec![],
-                            conv,
-                        )))
-                        .await?;
-                }
-            }
+                Ok::<(), AppError>(())
+            });
         }
 
         Ok(())
@@ -391,6 +399,7 @@ pub struct SinglePaymentRequest {
     pub recipient: PublicKey,
     pub expires_at: Timestamp,
     pub content: SinglePaymentRequestContent,
+    pub event_id: String,
 }
 
 #[derive(Debug, uniffi::Record)]
@@ -399,6 +408,7 @@ pub struct RecurringPaymentRequest {
     pub recipient: PublicKey,
     pub expires_at: Timestamp,
     pub content: RecurringPaymentRequestContent,
+    pub event_id: String,
 }
 
 #[derive(uniffi::Object)]
@@ -418,23 +428,71 @@ impl NWC {
         })
     }
 
-    pub async fn pay_invoice(&self, invoice: String) -> Result<(), AppError> {
-        self.inner
+    pub async fn pay_invoice(&self, invoice: String) -> Result<String, AppError> {
+        let response = self.inner
             .pay_invoice(portal::nostr::nips::nip47::PayInvoiceRequest::new(invoice))
             .await?;
 
-        Ok(())
+        Ok(response.preimage)
     }
 
-    pub async fn lookup_invoice(&self, invoice: String) -> Result<(), AppError> {
-        self.inner
+    pub async fn lookup_invoice(&self, invoice: String) -> Result<LookupInvoiceResponse, AppError> {
+        let response = self.inner
             .lookup_invoice(portal::nostr::nips::nip47::LookupInvoiceRequest {
                 invoice: None,
                 payment_hash: Some(invoice),
             })
             .await?;
 
-        Ok(())
+        Ok(response.into())
+    }
+}
+
+#[derive(Debug, uniffi::Enum)]
+pub enum TransactionType {
+    Incoming,
+    Outgoing,
+}
+
+impl From<portal::nostr::nips::nip47::TransactionType> for TransactionType {
+    fn from(transaction_type: portal::nostr::nips::nip47::TransactionType) -> Self {
+        match transaction_type {
+            portal::nostr::nips::nip47::TransactionType::Incoming => TransactionType::Incoming,
+            portal::nostr::nips::nip47::TransactionType::Outgoing => TransactionType::Outgoing,
+        }
+    }
+}
+
+#[derive(Debug, uniffi::Record)]
+pub struct LookupInvoiceResponse {
+    pub transaction_type: Option<TransactionType>,
+    pub invoice: Option<String>,
+    pub description: Option<String>,
+    pub description_hash: Option<String>,
+    pub preimage: Option<String>,
+    pub payment_hash: String,
+    pub amount: u64,
+    pub fees_paid: u64,
+    pub created_at: Timestamp,
+    pub expires_at: Option<Timestamp>,
+    pub settled_at: Option<Timestamp>,
+}
+
+impl From<portal::nostr::nips::nip47::LookupInvoiceResponse> for LookupInvoiceResponse {
+    fn from(response: portal::nostr::nips::nip47::LookupInvoiceResponse) -> Self {
+        Self {
+            transaction_type: response.transaction_type.map(|t| t.into()),
+            invoice: response.invoice,
+            description: response.description,
+            description_hash: response.description_hash,
+            preimage: response.preimage,
+            payment_hash: response.payment_hash,
+            amount: response.amount,
+            fees_paid: response.fees_paid,
+            created_at: Timestamp::new(response.created_at.as_u64()),
+            expires_at: response.expires_at.map(|t| Timestamp::new(t.as_u64())),
+            settled_at: response.settled_at.map(|t| Timestamp::new(t.as_u64())),
+        }
     }
 }
 
