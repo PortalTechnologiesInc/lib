@@ -18,6 +18,7 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, Level};
 
 mod ws;
+mod command;
 
 // Re-export the portal types that we need
 pub use portal::nostr::key::PublicKey;

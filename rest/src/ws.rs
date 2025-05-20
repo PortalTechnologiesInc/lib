@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use portal::profile::Profile;
 
 use axum::extract::ws::{Message, WebSocket};
 use futures::{SinkExt, StreamExt};
-use portal::profile::Profile;
 use portal::protocol::model::payment::{
     Currency, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
 };
@@ -14,79 +14,9 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-
+use crate::command::{CommandWithId, Command, SinglePaymentParams};
 use crate::{AppState, PublicKey};
 
-// Commands that can be sent from client to server
-#[derive(Debug, Deserialize)]
-#[serde(tag = "cmd", content = "params")]
-enum Command {
-    // Authentication command - must be first command sent
-    Auth {
-        token: String,
-    },
-
-    // SDK methods
-    NewAuthInitUrl,
-    AuthenticateKey {
-        main_key: String,
-        subkeys: Vec<String>,
-    },
-    RequestRecurringPayment {
-        main_key: String,
-        subkeys: Vec<String>,
-        payment_request: RecurringPaymentRequestContent,
-    },
-    RequestSinglePayment {
-        main_key: String,
-        subkeys: Vec<String>,
-        payment_request: SinglePaymentParams,
-    },
-    RequestPaymentRaw {
-        main_key: String,
-        subkeys: Vec<String>,
-        payment_request: SinglePaymentRequestContent,
-    },
-    FetchProfile {
-        main_key: String,
-    },
-    SetProfile {
-        profile: Profile,
-    },
-}
-
-#[derive(Debug, Deserialize)]
-struct CommandWithId {
-    id: String,
-    #[serde(flatten)]
-    cmd: Command,
-}
-
-// Request parameter structs
-#[derive(Debug, Deserialize)]
-struct AuthParams {
-    token: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct KeyParams {
-    main_key: String,
-    subkeys: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct SinglePaymentParams {
-    description: String,
-    amount: u64,
-    currency: Currency,
-    subscription_id: Option<String>,
-    auth_token: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ProfileParams {
-    main_key: String,
-}
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -144,14 +74,6 @@ enum NotificationData {
     AuthInit { main_key: String },
     #[serde(rename = "payment_status_update")]
     PaymentStatusUpdate { status: InvoiceStatus },
-}
-
-#[derive(Debug, Serialize)]
-struct AuthInitUrlResponse {
-    main_key: String,
-    relays: Vec<String>,
-    token: String,
-    subkey: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -235,27 +157,6 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
         })
     };
 
-    // Helper to send a message to the client
-    let send_message = |msg: Response| {
-        let tx = tx_message.clone();
-        async move {
-            match serde_json::to_string(&msg) {
-                Ok(json) => {
-                    if let Err(e) = tx.send(Message::Text(json)).await {
-                        error!("Failed to send message: {}", e);
-                        false
-                    } else {
-                        true
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to serialize message: {}", e);
-                    false
-                }
-            }
-        }
-    };
-
     // Process incoming messages
     while let Some(Ok(message)) = receiver.next().await {
         if let Message::Text(text) = message {
@@ -276,7 +177,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                             },
                         };
 
-                        if !send_message(response).await {
+                        if !send_message(&tx_message, response).await {
                             break;
                         }
                     } else {
@@ -285,7 +186,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                             message: "Authentication failed".to_string(),
                         };
 
-                        let _ = send_message(response).await;
+                        let _ = send_message(&tx_message,response).await;
                         break; // Close connection on auth failure
                     }
                 }
@@ -296,7 +197,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                             message: "Not authenticated".to_string(),
                         };
 
-                        let _ = send_message(response).await;
+                        let _ = send_message(&tx_message,response).await;
                         break; // Close connection
                     }
 
@@ -333,7 +234,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                         message: format!("Invalid command format: {}", e),
                     };
 
-                    if !send_message(response).await {
+                    if !send_message(&tx_message,response).await {
                         break;
                     }
                 }
@@ -356,6 +257,28 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     info!("WebSocket connection closed");
 }
 
+
+/// Helper to send a message to the client
+async fn send_message(
+    tx: &mpsc::Sender<Message>,
+    msg: Response,
+) -> bool {
+    match serde_json::to_string(&msg) {
+        Ok(json) => match tx.send(Message::Text(json)).await {
+            Ok(_) => true,
+            Err(e) => {
+                error!("Error sending message: {}", e);
+                false
+            }
+        },
+        Err(e) => {
+            error!("Failed to serialize message: {}", e);
+            false
+        }
+    }
+}
+
+
 async fn handle_command(
     command: CommandWithId,
     sdk: &Arc<PortalSDK>,
@@ -364,26 +287,6 @@ async fn handle_command(
     active_streams: &Arc<Mutex<ActiveStreams>>,
     tx_notification: mpsc::Sender<Response>,
 ) {
-    // Helper to send a message to the client
-    let send_message = |msg: Response| {
-        let tx = tx_message.clone();
-        async move {
-            match serde_json::to_string(&msg) {
-                Ok(json) => {
-                    if let Err(e) = tx.send(Message::Text(json)).await {
-                        error!("Failed to send message: {}", e);
-                        false
-                    } else {
-                        true
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to serialize message: {}", e);
-                    false
-                }
-            }
-        }
-    };
 
     match command.cmd {
         Command::Auth { .. } => {
@@ -440,7 +343,7 @@ async fn handle_command(
                         },
                     };
 
-                    let _ = send_message(response).await;
+                    let _ = send_message(&tx_message, response).await;
                 }
                 Err(e) => {
                     let response = Response::Error {
@@ -448,7 +351,7 @@ async fn handle_command(
                         message: format!("Failed to create auth init URL: {}", e),
                     };
 
-                    let _ = send_message(response).await;
+                    let _ = send_message(&tx_message,response).await;
                 }
             }
         }
@@ -495,7 +398,7 @@ async fn handle_command(
                         },
                     };
 
-                    let _ = send_message(response).await;
+                    let _ = send_message(&tx_message,response).await;
                 }
                 Err(e) => {
                     let _ = send_error(
@@ -549,7 +452,7 @@ async fn handle_command(
                         data: ResponseData::RecurringPayment { status },
                     };
 
-                    let _ = send_message(response).await;
+                    let _ = send_message(&tx_message,response).await;
                 }
                 Err(e) => {
                     let _ = send_error(
@@ -729,7 +632,7 @@ async fn handle_command(
                         },
                     };
 
-                    let _ = send_message(response).await;
+                    let _ = send_message(&tx_message,response).await;
                 }
                 Err(e) => {
                     let _ = send_error(
@@ -786,7 +689,7 @@ async fn handle_command(
                         },
                     };
 
-                    let _ = send_message(response).await;
+                    let _ = send_message(&tx_message,response).await;
                 }
                 Err(e) => {
                     let _ = send_error(
@@ -820,7 +723,7 @@ async fn handle_command(
                         data: ResponseData::ProfileData { profile },
                     };
 
-                    let _ = send_message(response).await;
+                    let _ = send_message(&tx_message,response).await;
                 }
                 Err(e) => {
                     let _ = send_error(
@@ -840,7 +743,7 @@ async fn handle_command(
                         data: ResponseData::ProfileData { profile: Some(profile) },
                     };
 
-                    let _ = send_message(response).await;
+                    let _ = send_message(&tx_message, response).await;
                 }
                 Err(e) => {
                     let _ = send_error(tx_message.clone(), &command.id, &format!("Failed to set profile: {}", e)).await;
