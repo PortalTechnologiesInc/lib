@@ -181,23 +181,13 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                             break;
                         }
                     } else {
-                        let response = Response::Error {
-                            id,
-                            message: "Authentication failed".to_string(),
-                        };
-
-                        let _ = send_message(&tx_message,response).await;
+                        let _ = send_error(&tx_message, &id, "Authentication failed").await;
                         break; // Close connection on auth failure
                     }
                 }
                 Ok(command) => {
                     if !authenticated {
-                        let response = Response::Error {
-                            id: command.id,
-                            message: "Not authenticated".to_string(),
-                        };
-
-                        let _ = send_message(&tx_message,response).await;
+                        let _ = send_error(&tx_message, &command.id, "Not authenticated").await;
                         break; // Close connection
                     }
 
@@ -229,12 +219,8 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                         .unwrap_or_default();
 
                     warn!("Failed to parse command: {}", e);
-                    let response = Response::Error {
-                        id,
-                        message: format!("Invalid command format: {}", e),
-                    };
 
-                    if !send_message(&tx_message,response).await {
+                    if !send_error(&tx_message, &id, &format!("Invalid command format: {}", e)).await {
                         break;
                     }
                 }
@@ -255,27 +241,6 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     message_forward_task.abort();
 
     info!("WebSocket connection closed");
-}
-
-
-/// Helper to send a message to the client
-async fn send_message(
-    tx: &mpsc::Sender<Message>,
-    msg: Response,
-) -> bool {
-    match serde_json::to_string(&msg) {
-        Ok(json) => match tx.send(Message::Text(json)).await {
-            Ok(_) => true,
-            Err(e) => {
-                error!("Error sending message: {}", e);
-                false
-            }
-        },
-        Err(e) => {
-            error!("Failed to serialize message: {}", e);
-            false
-        }
-    }
 }
 
 
@@ -346,12 +311,7 @@ async fn handle_command(
                     let _ = send_message(&tx_message, response).await;
                 }
                 Err(e) => {
-                    let response = Response::Error {
-                        id: command.id.to_string(),
-                        message: format!("Failed to create auth init URL: {}", e),
-                    };
-
-                    let _ = send_message(&tx_message,response).await;
+                    let _ = send_error(&tx_message, &command.id, &format!("Failed to create auth init URL: {}", e)).await;
                 }
             }
         }
@@ -361,7 +321,7 @@ async fn handle_command(
                 Ok(key) => key,
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Invalid main key: {}", e),
                     )
@@ -374,7 +334,7 @@ async fn handle_command(
                 Ok(keys) => keys,
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Invalid subkeys: {}", e),
                     )
@@ -402,7 +362,7 @@ async fn handle_command(
                 }
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Failed to authenticate key: {}", e),
                     )
@@ -420,7 +380,7 @@ async fn handle_command(
                 Ok(key) => key,
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Invalid main key: {}", e),
                     )
@@ -433,7 +393,7 @@ async fn handle_command(
                 Ok(keys) => keys,
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Invalid subkeys: {}", e),
                     )
@@ -456,7 +416,7 @@ async fn handle_command(
                 }
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Failed to request recurring payment: {}", e),
                     )
@@ -472,7 +432,7 @@ async fn handle_command(
             let nwc = match nwc {
                 Some(nwc) => nwc,
                 None => {
-                    let _ = send_error(tx_message.clone(), &command.id, "Nostr Wallet Connect is not available: set the NWC_URL environment variable to enable it").await;
+                    let _ = send_error(&tx_message, &command.id, "Nostr Wallet Connect is not available: set the NWC_URL environment variable to enable it").await;
                     return;
                 }
             };
@@ -482,7 +442,7 @@ async fn handle_command(
                 Ok(key) => key,
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Invalid main key: {}", e),
                     )
@@ -495,7 +455,7 @@ async fn handle_command(
                 Ok(keys) => keys,
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Invalid subkeys: {}", e),
                     )
@@ -518,7 +478,7 @@ async fn handle_command(
                 Ok(invoice) => invoice,
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Failed to make invoice: {}", e),
                     )
@@ -636,7 +596,7 @@ async fn handle_command(
                 }
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Failed to request single payment: {}", e),
                     )
@@ -654,7 +614,7 @@ async fn handle_command(
                 Ok(key) => key,
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Invalid main key: {}", e),
                     )
@@ -667,7 +627,7 @@ async fn handle_command(
                 Ok(keys) => keys,
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Invalid subkeys: {}", e),
                     )
@@ -693,7 +653,7 @@ async fn handle_command(
                 }
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Failed to request single payment: {}", e),
                     )
@@ -707,7 +667,7 @@ async fn handle_command(
                 Ok(key) => key,
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Invalid main key: {}", e),
                     )
@@ -727,7 +687,7 @@ async fn handle_command(
                 }
                 Err(e) => {
                     let _ = send_error(
-                        tx_message.clone(),
+                        &tx_message,
                         &command.id,
                         &format!("Failed to fetch profile: {}", e),
                     )
@@ -746,14 +706,34 @@ async fn handle_command(
                     let _ = send_message(&tx_message, response).await;
                 }
                 Err(e) => {
-                    let _ = send_error(tx_message.clone(), &command.id, &format!("Failed to set profile: {}", e)).await;
+                    let _ = send_error(&tx_message, &command.id, &format!("Failed to set profile: {}", e)).await;
                 }
             }
         }
     }
 }
 
-async fn send_error(tx: mpsc::Sender<Message>, request_id: &str, message: &str) -> bool {
+/// Helper to send a message to the client
+async fn send_message(
+    tx: &mpsc::Sender<Message>,
+    msg: Response,
+) -> bool {
+    match serde_json::to_string(&msg) {
+        Ok(json) => match tx.send(Message::Text(json)).await {
+            Ok(_) => true,
+            Err(e) => {
+                error!("Error sending message: {}", e);
+                false
+            }
+        },
+        Err(e) => {
+            error!("Failed to serialize message: {}", e);
+            false
+        }
+    }
+}
+
+async fn send_error(tx: &mpsc::Sender<Message>, request_id: &str, message: &str) -> bool {
     let response = Response::Error {
         id: request_id.to_string(),
         message: message.to_string(),
