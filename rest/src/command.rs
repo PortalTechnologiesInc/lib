@@ -1,8 +1,15 @@
 use portal::profile::Profile;
 use portal::protocol::model::payment::{
-    Currency, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
+    Currency, RecurringPaymentRequestContent, SinglePaymentRequestContent,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+pub struct CommandWithId {
+    pub id: String,
+    #[serde(flatten)]
+    pub cmd: Command,
+}
 
 // Commands that can be sent from client to server
 #[derive(Debug, Deserialize)]
@@ -43,15 +50,6 @@ pub enum Command {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CommandWithId {
-    pub id: String,
-    #[serde(flatten)]
-    pub cmd: Command,
-}
-
-
-
-#[derive(Debug, Deserialize)]
 pub struct SinglePaymentParams {
     pub description: String,
     pub amount: u64,
@@ -59,6 +57,3 @@ pub struct SinglePaymentParams {
     pub subscription_id: Option<String>,
     pub auth_token: Option<String>,
 }
-
-
-

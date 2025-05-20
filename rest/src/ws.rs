@@ -1,89 +1,18 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use portal::profile::Profile;
 
+use crate::command::{Command, CommandWithId};
+use crate::response::*;
+use crate::{AppState, PublicKey};
 use axum::extract::ws::{Message, WebSocket};
 use futures::{SinkExt, StreamExt};
-use portal::protocol::model::payment::{
-    Currency, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
-};
+use portal::protocol::model::payment::SinglePaymentRequestContent;
 use portal::protocol::model::Timestamp;
-use sdk::{PortalSDK};
-use serde::{Deserialize, Serialize};
+use sdk::PortalSDK;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-use crate::command::{CommandWithId, Command, SinglePaymentParams};
-use crate::{AppState, PublicKey};
-
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
-enum InvoiceStatus {
-    Paid { preimage: Option<String> },
-    Timeout,
-    Error { reason: String },
-}
-
-// Response structs for each API
-#[derive(Debug, Serialize)]
-#[serde(tag = "type")]
-enum Response {
-    #[serde(rename = "error")]
-    Error { id: String, message: String },
-
-    #[serde(rename = "success")]
-    Success { id: String, data: ResponseData },
-
-    #[serde(rename = "notification")]
-    Notification { id: String, data: NotificationData },
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "type")]
-enum ResponseData {
-    #[serde(rename = "auth_success")]
-    AuthSuccess { message: String },
-
-    #[serde(rename = "auth_init_url")]
-    AuthInitUrl { url: String, stream_id: String },
-
-    #[serde(rename = "auth_response")]
-    AuthResponse { event: AuthResponseData },
-
-    #[serde(rename = "recurring_payment")]
-    RecurringPayment {
-        status: RecurringPaymentResponseContent,
-    },
-
-    #[serde(rename = "single_payment")]
-    SinglePayment {
-        status: PaymentResponseContent,
-        stream_id: Option<String>,
-    },
-
-    #[serde(rename = "profile")]
-    ProfileData { profile: Option<Profile> },
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "type")]
-enum NotificationData {
-    #[serde(rename = "auth_init")]
-    AuthInit { main_key: String },
-    #[serde(rename = "payment_status_update")]
-    PaymentStatusUpdate { status: InvoiceStatus },
-}
-
-#[derive(Debug, Serialize)]
-struct AuthResponseData {
-    user_key: String,
-    recipient: String,
-    challenge: String,
-    granted_permissions: Vec<String>,
-    session_token: String,
-}
 
 // Struct to track active notification streams
 struct ActiveStreams {
@@ -181,13 +110,13 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                             break;
                         }
                     } else {
-                        let _ = send_error(&tx_message, &id, "Authentication failed").await;
+                        let _ = send_error_message(&tx_message, &id, "Authentication failed").await;
                         break; // Close connection on auth failure
                     }
                 }
                 Ok(command) => {
                     if !authenticated {
-                        let _ = send_error(&tx_message, &command.id, "Not authenticated").await;
+                        let _ = send_error_message(&tx_message, &command.id, "Not authenticated").await;
                         break; // Close connection
                     }
 
@@ -220,7 +149,9 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 
                     warn!("Failed to parse command: {}", e);
 
-                    if !send_error(&tx_message, &id, &format!("Invalid command format: {}", e)).await {
+                    if !send_error_message(&tx_message, &id, &format!("Invalid command format: {}", e))
+                        .await
+                    {
                         break;
                     }
                 }
@@ -243,7 +174,6 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     info!("WebSocket connection closed");
 }
 
-
 async fn handle_command(
     command: CommandWithId,
     sdk: &Arc<PortalSDK>,
@@ -252,7 +182,6 @@ async fn handle_command(
     active_streams: &Arc<Mutex<ActiveStreams>>,
     tx_notification: mpsc::Sender<Response>,
 ) {
-
     match command.cmd {
         Command::Auth { .. } => {
             // Already handled in the outer function
@@ -311,7 +240,12 @@ async fn handle_command(
                     let _ = send_message(&tx_message, response).await;
                 }
                 Err(e) => {
-                    let _ = send_error(&tx_message, &command.id, &format!("Failed to create auth init URL: {}", e)).await;
+                    let _ = send_error_message(
+                        &tx_message,
+                        &command.id,
+                        &format!("Failed to create auth init URL: {}", e),
+                    )
+                    .await;
                 }
             }
         }
@@ -320,7 +254,7 @@ async fn handle_command(
             let main_key = match hex_to_pubkey(&main_key) {
                 Ok(key) => key,
                 Err(e) => {
-                    let _ = send_error(
+                    let _ = send_error_message(
                         &tx_message,
                         &command.id,
                         &format!("Invalid main key: {}", e),
@@ -333,12 +267,9 @@ async fn handle_command(
             let subkeys = match parse_subkeys(&subkeys) {
                 Ok(keys) => keys,
                 Err(e) => {
-                    let _ = send_error(
-                        &tx_message,
-                        &command.id,
-                        &format!("Invalid subkeys: {}", e),
-                    )
-                    .await;
+                    let _ =
+                        send_error_message(&tx_message, &command.id, &format!("Invalid subkeys: {}", e))
+                            .await;
                     return;
                 }
             };
@@ -358,10 +289,10 @@ async fn handle_command(
                         },
                     };
 
-                    let _ = send_message(&tx_message,response).await;
+                    let _ = send_message(&tx_message, response).await;
                 }
                 Err(e) => {
-                    let _ = send_error(
+                    let _ = send_error_message(
                         &tx_message,
                         &command.id,
                         &format!("Failed to authenticate key: {}", e),
@@ -379,7 +310,7 @@ async fn handle_command(
             let main_key = match hex_to_pubkey(&main_key) {
                 Ok(key) => key,
                 Err(e) => {
-                    let _ = send_error(
+                    let _ = send_error_message(
                         &tx_message,
                         &command.id,
                         &format!("Invalid main key: {}", e),
@@ -392,12 +323,9 @@ async fn handle_command(
             let subkeys = match parse_subkeys(&subkeys) {
                 Ok(keys) => keys,
                 Err(e) => {
-                    let _ = send_error(
-                        &tx_message,
-                        &command.id,
-                        &format!("Invalid subkeys: {}", e),
-                    )
-                    .await;
+                    let _ =
+                        send_error_message(&tx_message, &command.id, &format!("Invalid subkeys: {}", e))
+                            .await;
                     return;
                 }
             };
@@ -412,10 +340,10 @@ async fn handle_command(
                         data: ResponseData::RecurringPayment { status },
                     };
 
-                    let _ = send_message(&tx_message,response).await;
+                    let _ = send_message(&tx_message, response).await;
                 }
                 Err(e) => {
-                    let _ = send_error(
+                    let _ = send_error_message(
                         &tx_message,
                         &command.id,
                         &format!("Failed to request recurring payment: {}", e),
@@ -432,7 +360,7 @@ async fn handle_command(
             let nwc = match nwc {
                 Some(nwc) => nwc,
                 None => {
-                    let _ = send_error(&tx_message, &command.id, "Nostr Wallet Connect is not available: set the NWC_URL environment variable to enable it").await;
+                    let _ = send_error_message(&tx_message, &command.id, "Nostr Wallet Connect is not available: set the NWC_URL environment variable to enable it").await;
                     return;
                 }
             };
@@ -441,7 +369,7 @@ async fn handle_command(
             let main_key = match hex_to_pubkey(&main_key) {
                 Ok(key) => key,
                 Err(e) => {
-                    let _ = send_error(
+                    let _ = send_error_message(
                         &tx_message,
                         &command.id,
                         &format!("Invalid main key: {}", e),
@@ -454,12 +382,9 @@ async fn handle_command(
             let subkeys = match parse_subkeys(&subkeys) {
                 Ok(keys) => keys,
                 Err(e) => {
-                    let _ = send_error(
-                        &tx_message,
-                        &command.id,
-                        &format!("Invalid subkeys: {}", e),
-                    )
-                    .await;
+                    let _ =
+                        send_error_message(&tx_message, &command.id, &format!("Invalid subkeys: {}", e))
+                            .await;
                     return;
                 }
             };
@@ -477,7 +402,7 @@ async fn handle_command(
             {
                 Ok(invoice) => invoice,
                 Err(e) => {
-                    let _ = send_error(
+                    let _ = send_error_message(
                         &tx_message,
                         &command.id,
                         &format!("Failed to make invoice: {}", e),
@@ -592,10 +517,10 @@ async fn handle_command(
                         },
                     };
 
-                    let _ = send_message(&tx_message,response).await;
+                    let _ = send_message(&tx_message, response).await;
                 }
                 Err(e) => {
-                    let _ = send_error(
+                    let _ = send_error_message(
                         &tx_message,
                         &command.id,
                         &format!("Failed to request single payment: {}", e),
@@ -613,7 +538,7 @@ async fn handle_command(
             let main_key = match hex_to_pubkey(&main_key) {
                 Ok(key) => key,
                 Err(e) => {
-                    let _ = send_error(
+                    let _ = send_error_message(
                         &tx_message,
                         &command.id,
                         &format!("Invalid main key: {}", e),
@@ -626,12 +551,9 @@ async fn handle_command(
             let subkeys = match parse_subkeys(&subkeys) {
                 Ok(keys) => keys,
                 Err(e) => {
-                    let _ = send_error(
-                        &tx_message,
-                        &command.id,
-                        &format!("Invalid subkeys: {}", e),
-                    )
-                    .await;
+                    let _ =
+                        send_error_message(&tx_message, &command.id, &format!("Invalid subkeys: {}", e))
+                            .await;
                     return;
                 }
             };
@@ -649,10 +571,10 @@ async fn handle_command(
                         },
                     };
 
-                    let _ = send_message(&tx_message,response).await;
+                    let _ = send_message(&tx_message, response).await;
                 }
                 Err(e) => {
-                    let _ = send_error(
+                    let _ = send_error_message(
                         &tx_message,
                         &command.id,
                         &format!("Failed to request single payment: {}", e),
@@ -666,7 +588,7 @@ async fn handle_command(
             let main_key = match hex_to_pubkey(&main_key) {
                 Ok(key) => key,
                 Err(e) => {
-                    let _ = send_error(
+                    let _ = send_error_message(
                         &tx_message,
                         &command.id,
                         &format!("Invalid main key: {}", e),
@@ -683,10 +605,10 @@ async fn handle_command(
                         data: ResponseData::ProfileData { profile },
                     };
 
-                    let _ = send_message(&tx_message,response).await;
+                    let _ = send_message(&tx_message, response).await;
                 }
                 Err(e) => {
-                    let _ = send_error(
+                    let _ = send_error_message(
                         &tx_message,
                         &command.id,
                         &format!("Failed to fetch profile: {}", e),
@@ -695,29 +617,31 @@ async fn handle_command(
                 }
             }
         }
-        Command::SetProfile { profile } => {
-            match sdk.set_profile(profile.clone()).await {
-                Ok(_) => {
-                    let response = Response::Success {
-                        id: command.id,
-                        data: ResponseData::ProfileData { profile: Some(profile) },
-                    };
+        Command::SetProfile { profile } => match sdk.set_profile(profile.clone()).await {
+            Ok(_) => {
+                let response = Response::Success {
+                    id: command.id,
+                    data: ResponseData::ProfileData {
+                        profile: Some(profile),
+                    },
+                };
 
-                    let _ = send_message(&tx_message, response).await;
-                }
-                Err(e) => {
-                    let _ = send_error(&tx_message, &command.id, &format!("Failed to set profile: {}", e)).await;
-                }
+                let _ = send_message(&tx_message, response).await;
             }
-        }
+            Err(e) => {
+                let _ = send_error_message(
+                    &tx_message,
+                    &command.id,
+                    &format!("Failed to set profile: {}", e),
+                )
+                .await;
+            }
+        },
     }
 }
 
 /// Helper to send a message to the client
-async fn send_message(
-    tx: &mpsc::Sender<Message>,
-    msg: Response,
-) -> bool {
+async fn send_message(tx: &mpsc::Sender<Message>, msg: Response) -> bool {
     match serde_json::to_string(&msg) {
         Ok(json) => match tx.send(Message::Text(json)).await {
             Ok(_) => true,
@@ -733,7 +657,7 @@ async fn send_message(
     }
 }
 
-async fn send_error(tx: &mpsc::Sender<Message>, request_id: &str, message: &str) -> bool {
+async fn send_error_message(tx: &mpsc::Sender<Message>, request_id: &str, message: &str) -> bool {
     let response = Response::Error {
         id: request_id.to_string(),
         message: message.to_string(),
