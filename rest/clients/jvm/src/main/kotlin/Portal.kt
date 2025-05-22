@@ -2,8 +2,7 @@ package cc.getportal.sdk
 
 import cc.getportal.sdk.exception.PortalException
 import cc.getportal.sdk.json.JsonUtils
-import command.Command
-import command.CommandWithId
+import command.*
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.WebSocket
@@ -21,13 +20,20 @@ class Portal(
     val onClose: () -> Unit = {}
 ) {
 
+    private data class InternalTask<R : ResponseData>(val onSuccess : (R) -> Unit, val onError: (String) -> Unit)
+
     private val httpClient: OkHttpClient = OkHttpClient()
     private lateinit var socket: WebSocket
     private var authenticated = AtomicBoolean(false)
 
-    private val commands: MutableMap<String, (Any) -> Unit> = ConcurrentHashMap()
+    private val commands: MutableMap<String, InternalTask<ResponseData>> = ConcurrentHashMap()
 
     private var closed = AtomicBoolean(false)
+
+
+    init {
+        connect()
+    }
 
     private fun getHealth(): Boolean {
         val request = Request.Builder()
@@ -58,6 +64,21 @@ class Portal(
         socket = httpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 // deserialize based on response
+                logger.info("Received {}", text)
+                val response = JsonUtils.deserialize(text)
+                when(response) {
+                    is Response.Error -> {
+                        commands.remove(response.id)?.onError?.invoke(response.message)
+                    }
+                    is Response.Notification -> {
+                        TODO(reason = "Notification")
+                    }
+                    is Response.Success -> {
+                        commands.remove(response.id)?.let { internalTask ->
+                            internalTask.onSuccess.invoke(response.data)
+                        }
+                    }
+                }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -65,18 +86,22 @@ class Portal(
             }
         })
 
-        sendCommand(Command.Auth(token = authToken)) {
+        sendCommand(Command.Auth(token = authToken), onError = {
+            logger.error("Authentication failed: {}", it)
+        }) {
             authenticated.set(true)
         }
     }
 
-    fun sendCommand(command: Command, task: (Any) -> Unit) {
+    fun <R : ResponseData> sendCommand(command: Command<R>, onError: (String) -> Unit, onSuccess: (R) -> Unit,) {
         if(!authenticated.get()) {
             throw PortalException("Not authenticated")
         }
         val id = UUID.randomUUID().toString()
-        socket.send(JsonUtils.serialize(CommandWithId(id = id, params = command)))
-        commands[id] = task
+        val msg = JsonUtils.serialize(CommandWithId(id = id, params = command))
+        logger.info("Sending {}", msg)
+        socket.send(msg)
+        commands[id] = InternalTask(onSuccess = onSuccess as (ResponseData) -> Unit, onError = onError)
     }
 
 
