@@ -34,7 +34,7 @@ async function testFullFlow(client: PortalSDK, mainKey: string, subkeys: string[
       amount: 11 * 1000,
       currency: Currency.Millisats,
       description: "Test payment",
-      subscription_id: recurringStatus.subscription_id // Optional: link to subscription
+      subscription_id: recurringStatus.status.subscription_id // Optional: link to subscription
     };
 
     const paymentResult = await client.requestSinglePayment(

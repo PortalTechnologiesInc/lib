@@ -1,6 +1,6 @@
-# NostrAuth REST API
+# Portal REST API
 
-This crate provides a RESTful API for the NostrAuth SDK, allowing it to be used from any programming language via a local REST API server.
+This crate provides a RESTful API for the Portal SDK, allowing it to be used from any programming language via a local REST API server.
 
 ## Setup
 

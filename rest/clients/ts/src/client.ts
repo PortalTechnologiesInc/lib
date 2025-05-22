@@ -12,7 +12,8 @@ import {
   RecurringPaymentStatusContent,
   PaymentStatusContent,
   Event,
-  InvoicePaymentRequestContent
+  InvoicePaymentRequestContent,
+  RecurringPaymentResponseContent
 } from './types';
 
 /**
@@ -288,7 +289,7 @@ export class PortalSDK {
     mainKey: string,
     subkeys: string[] = [],
     paymentRequest: RecurringPaymentRequestContent
-  ): Promise<RecurringPaymentStatusContent> {
+  ): Promise<RecurringPaymentResponseContent> {
     const response = await this.sendCommand('RequestRecurringPayment', { main_key: mainKey, subkeys, payment_request: paymentRequest });
     
     if (response.type === 'recurring_payment') {

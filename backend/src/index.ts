@@ -151,6 +151,8 @@ function mainFunction() {
                     },
                     expires_at: Timestamp.fromNow(3600),
                     current_exchange_rate: undefined,
+                    description: payment.description,
+                    request_id: uuidv4(),
                 };
 
                 const paymentResult = await portalClient.requestRecurringPayment(
@@ -160,7 +162,9 @@ function mainFunction() {
                 );
                 
                 console.log('Recurring payment result:', paymentResult);
-                db.updateSubscriptionStatus(subscriptionId, 'active', nextPaymentAt, paymentResult.subscription_id);
+                if (paymentResult.status.subscription_id) {
+                  db.updateSubscriptionStatus(subscriptionId, 'active', nextPaymentAt, paymentResult.status.subscription_id);
+                }
                 
                 sendHistory(ws, session.publicKey);
             }

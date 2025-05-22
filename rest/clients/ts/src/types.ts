@@ -78,6 +78,11 @@ export interface RecurringPaymentStatusContent {
   authorized_recurrence: RecurrenceInfo;
 }
 
+export interface RecurringPaymentResponseContent {
+  request_id: string;
+  status: RecurringPaymentStatusContent;
+}
+
 export interface PaymentStatusContent {
   status: "pending" | "paid" | "timeout" | "failed" | "rejected";
   preimage?: string;

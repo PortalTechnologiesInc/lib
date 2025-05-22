@@ -243,7 +243,7 @@ impl PortalApp {
     }
 
     pub async fn listen_for_auth_challenge(
-        self: Arc<Self>,
+        &self,
         evt: Arc<dyn AuthChallengeListener>,
     ) -> Result<(), AppError> {
         let inner = AuthChallengeListenerConversation::new(self.router.keypair().public_key());
@@ -256,40 +256,34 @@ impl PortalApp {
             .await?;
 
         while let Ok(response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            let _self = self.clone();
-            let evt = evt.clone();
-            tokio::task::spawn(async move {
-                log::debug!("Received auth challenge: {:?}", response);
+            log::debug!("Received auth challenge: {:?}", response);
 
-                let result = evt.on_auth_challenge(response.clone()).await?;
-                log::debug!("Auth challenge callback result: {:?}", result);
+            let result = evt.on_auth_challenge(response.clone()).await?;
+            log::debug!("Auth challenge callback result: {:?}", result);
 
-                if result {
-                    let approve = AuthResponseConversation::new(
-                        response.clone(),
+            if result {
+                let approve = AuthResponseConversation::new(
+                    response.clone(),
+                    vec![],
+                    self.router.keypair().subkey_proof().cloned(),
+                );
+                self.router
+                    .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                        response.recipient.into(),
                         vec![],
-                        _self.router.keypair().subkey_proof().cloned(),
-                    );
-                    _self.router
-                        .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                            response.recipient.into(),
-                            vec![],
-                            approve,
-                        )))
-                        .await?;
-                } else {
-                    // TODO: send explicit rejection
-                }
-
-                Ok::<(), AppError>(())
-            });
+                        approve,
+                    )))
+                    .await?;
+            } else {
+                // TODO: send explicit rejection
+            }
         }
 
         Ok(())
     }
 
     pub async fn listen_for_payment_request(
-        self: Arc<Self>,
+        &self,
         evt: Arc<dyn PaymentRequestListener>,
     ) -> Result<(), AppError> {
         let inner = PaymentRequestListenerConversation::new(self.router.keypair().public_key());
@@ -302,50 +296,45 @@ impl PortalApp {
             .await?;
 
         while let Ok(response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            let _self = self.clone();
-            let evt = evt.clone();
-            tokio::task::spawn(async move {
-                match &response.content {
-                    PaymentRequestContent::Single(content) => {
-                        let req = SinglePaymentRequest {
-                            service_key: response.service_key,
-                            recipient: response.recipient,
-                            expires_at: response.expires_at,
-                            content: content.clone(),
-                            event_id: response.event_id.clone(),
-                        };
-                        let status = evt.on_single_payment_request(req).await?;
-                        let conv = PaymentStatusSenderConversation::new(response.clone(), status);
-                        _self.router
-                            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                                response.recipient.into(),
-                                vec![],
-                                conv,
-                            )))
-                            .await?;
-                    }
-                    PaymentRequestContent::Recurring(content) => {
-                        let req = RecurringPaymentRequest {
-                            service_key: response.service_key,
-                            recipient: response.recipient,
-                            expires_at: response.expires_at,
-                            content: content.clone(),
-                            event_id: response.event_id.clone(),
-                        };
-                        let status = evt.on_recurring_payment_request(req).await?;
-                        let conv =
-                            RecurringPaymentStatusSenderConversation::new(response.clone(), status);
-                        _self.router
-                            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                                response.recipient.into(),
-                                vec![],
-                                conv,
-                            )))
-                            .await?;
-                    }
+            match &response.content {
+                PaymentRequestContent::Single(content) => {
+                    let req = SinglePaymentRequest {
+                        service_key: response.service_key,
+                        recipient: response.recipient,
+                        expires_at: response.expires_at,
+                        content: content.clone(),
+                        event_id: response.event_id.clone(),
+                    };
+                    let status = evt.on_single_payment_request(req).await?;
+                    let conv = PaymentStatusSenderConversation::new(response.clone(), status);
+                    self.router
+                        .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                            response.recipient.into(),
+                            vec![],
+                            conv,
+                        )))
+                        .await?;
                 }
-                Ok::<(), AppError>(())
-            });
+                PaymentRequestContent::Recurring(content) => {
+                    let req = RecurringPaymentRequest {
+                        service_key: response.service_key,
+                        recipient: response.recipient,
+                        expires_at: response.expires_at,
+                        content: content.clone(),
+                        event_id: response.event_id.clone(),
+                    };
+                    let status = evt.on_recurring_payment_request(req).await?;
+                    let conv =
+                        RecurringPaymentStatusSenderConversation::new(response.clone(), status);
+                    self.router
+                        .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                            response.recipient.into(),
+                            vec![],
+                            conv,
+                        )))
+                        .await?;
+                }
+            }
         }
 
         Ok(())
