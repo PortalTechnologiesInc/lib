@@ -1,5 +1,9 @@
 package cc.getportal.sdk
 
+import cc.getportal.sdk.command.Command
+import cc.getportal.sdk.command.CommandWithId
+import cc.getportal.sdk.command.Response
+import cc.getportal.sdk.command.ResponseData
 import cc.getportal.sdk.exception.PortalException
 import cc.getportal.sdk.json.JsonUtils
 import command.*

@@ -1,4 +1,4 @@
-package command
+package cc.getportal.sdk.command
 
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.databind.JsonSerializer

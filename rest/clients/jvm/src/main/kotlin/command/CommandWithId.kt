@@ -1,7 +1,7 @@
-package command
+package cc.getportal.sdk.command
 
 import com.fasterxml.jackson.annotation.*
-import model.Profile
+import cc.getportal.sdk.model.Profile
 
 // ---------- CommandWithId wrapper ----------
 data class CommandWithId(
