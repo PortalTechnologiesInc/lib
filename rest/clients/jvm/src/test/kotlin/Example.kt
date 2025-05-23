@@ -1,14 +1,18 @@
 import cc.getportal.sdk.Portal
 import cc.getportal.sdk.command.Command
 import cc.getportal.sdk.model.Profile
+import kotlin.system.exitProcess
 
 
 fun main() {
 
     val portal = Portal(
-        hostAddress = "http://localhost:2000",
-        authToken = "authToken",
-        nostrKey = "nostrKey"
+        hostAddress = "http://127.0.0.1:3000",
+        authToken = "test",
+        onClose = { code, reason ->
+            System.err.println("Connection closed($code): $reason")
+            exitProcess(code)
+        }
     )
 
     portal.sendCommand(Command.NewAuthInitUrl, onError = {}) { (url, stream_id) ->
@@ -24,6 +28,15 @@ fun main() {
     portal.sendCommand(Command.SetProfile(profile), onError = {}) { profileData ->
         val p = profileData.profile
         // logic
+    }
+
+
+    while (true) {
+        portal.sendCommand(Command.SetProfile(profile), onError = {}) { profileData ->
+            val p = profileData.profile
+            // logic
+        }
+        Thread.sleep(3000)
     }
 
 }

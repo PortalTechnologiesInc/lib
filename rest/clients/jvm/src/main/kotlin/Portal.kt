@@ -6,12 +6,12 @@ import cc.getportal.sdk.command.Response
 import cc.getportal.sdk.command.ResponseData
 import cc.getportal.sdk.exception.PortalException
 import cc.getportal.sdk.json.JsonUtils
-import command.*
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.slf4j.LoggerFactory
+import java.net.SocketException
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -20,15 +20,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 class Portal(
     val hostAddress: String,
     val authToken: String,
-    val nostrKey: String,
-    val onClose: () -> Unit = {}
+    val onClose: (Int, String) -> Unit = { code, reason -> }
 ) {
 
     private data class InternalTask<R : ResponseData>(val onSuccess : (R) -> Unit, val onError: (String) -> Unit)
 
     private val httpClient: OkHttpClient = OkHttpClient()
     private lateinit var socket: WebSocket
-    private var authenticated = AtomicBoolean(false)
 
     private val commands: MutableMap<String, InternalTask<ResponseData>> = ConcurrentHashMap()
 
@@ -47,7 +45,9 @@ class Portal(
         val response = httpClient.newCall(request).execute()
 
         val body = response.body ?: return false
-        return body.string() == "OK"
+        val bodyStr = body.string()
+        response.close()
+        return bodyStr == "OK"
 
     }
 
@@ -86,21 +86,32 @@ class Portal(
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                onClose()
+                // not working on server closed
             }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) {
+
+                if(t is SocketException && t.message == "Connection reset") {
+                    closed.set(true)
+                    onClose.invoke(1000, "Connection reset")
+                }
+            }
+
         })
 
         sendCommand(Command.Auth(token = authToken), onError = {
             logger.error("Authentication failed: {}", it)
         }) {
-            authenticated.set(true)
+            // Authenticated
         }
     }
 
     fun <R : ResponseData> sendCommand(command: Command<R>, onError: (String) -> Unit, onSuccess: (R) -> Unit,) {
-        if(!authenticated.get()) {
-            throw PortalException("Not authenticated")
+        if(closed.get()) {
+            throw PortalException("Connection already closed")
         }
+
+
         val id = UUID.randomUUID().toString()
         val msg = JsonUtils.serialize(CommandWithId(id = id, params = command))
         logger.info("Sending {}", msg)
