@@ -20,8 +20,10 @@ It provides a typed command/response system using sealed classes for safe and cl
 
 ## Installation
 
-**Work in progress** – The library is currently under development and not yet published to any package repository.
-Installation instructions will be provided soon.
+The library is currently under development and not yet published to any package repository.
+
+In the meantime, you can import the library as a JAR by running the build with `gradlew clean build`.
+
 
 ---
 
