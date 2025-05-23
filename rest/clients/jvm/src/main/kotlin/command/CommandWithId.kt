@@ -25,7 +25,7 @@ data class CommandWithId(
 sealed interface Command<R : ResponseData> {
     // --- Command implementations ---
     data class Auth(val token: String) : Command<ResponseData.AuthSuccess>
-    object NewAuthInitUrl : Command<ResponseData.AuthInitUrl>
+    data object NewAuthInitUrl : Command<ResponseData.AuthInitUrl>
     data class AuthenticateKey(val main_key: String, val subkeys: List<String>) : Command<ResponseData.AuthResponse>
 
     @Deprecated("Not fully implemented")

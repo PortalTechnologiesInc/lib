@@ -6,8 +6,8 @@ import cc.getportal.sdk.model.Profile
 fun main() {
 
     val portal = Portal(
-        hostAddress = "http://localhost:2000",
-        authToken = "authToken",
+        hostAddress = "http://127.0.0.1:3000",
+        authToken = "test",
         nostrKey = "nostrKey"
     )
 
@@ -24,6 +24,11 @@ fun main() {
     portal.sendCommand(Command.SetProfile(profile), onError = {}) { profileData ->
         val p = profileData.profile
         // logic
+    }
+
+
+    while (true) {
+        Thread.sleep(1000 * 20)
     }
 
 }
