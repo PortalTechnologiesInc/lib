@@ -30,13 +30,9 @@ fun main() {
         // logic
     }
 
+    portal.sendCommand(Command.RequestPaymentRaw("", emptyList(), Any()), onError = {}) {
 
-    while (true) {
-        portal.sendCommand(Command.SetProfile(profile), onError = {}) { profileData ->
-            val p = profileData.profile
-            // logic
-        }
-        Thread.sleep(3000)
     }
+
 
 }

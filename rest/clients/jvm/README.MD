@@ -13,8 +13,13 @@ It provides a typed command/response system using sealed classes for safe and cl
 * Typed responses using `sealed class Response` and `ResponseData`
 * WebSocket client with authentication and asynchronous command handling
 * JSON serialization/deserialization with Jackson
-* Support for notifications and payment/status updates (extendable)
 * JVM-compatible, usable from Kotlin, Java, Scala, Groovy, and other JVM languages
+
+---
+
+## To-Do
+
+* Support for notifications **(In progress)** 
 
 ---
 
@@ -23,7 +28,6 @@ It provides a typed command/response system using sealed classes for safe and cl
 The library is currently under development and not yet published to any package repository.
 
 In the meantime, you can import the library as a JAR by running the build with `gradlew clean build`.
-
 
 ---
 

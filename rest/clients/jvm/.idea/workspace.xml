@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e90ef899-e81a-47dd-b949-d5f35a8a6d44" name="Changes" comment="jvm client working with rest service" />
+    <list default="true" id="e90ef899-e81a-47dd-b949-d5f35a8a6d44" name="Changes" comment="jvm client working with rest service">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/kotlin/Portal.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/Portal.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/kotlin/Example.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/kotlin/Example.kt" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
