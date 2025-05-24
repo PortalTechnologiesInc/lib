@@ -17,6 +17,8 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::{info, Level};
 
+mod command;
+mod response;
 mod ws;
 
 // Re-export the portal types that we need
@@ -60,8 +62,6 @@ impl From<ApiError> for (StatusCode, Json<ErrorResponse>) {
         )
     }
 }
-
-type Result<T> = std::result::Result<T, ApiError>;
 
 #[derive(Clone)]
 struct AppState {

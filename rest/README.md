@@ -31,17 +31,6 @@ All REST API endpoints require a Bearer token for authentication:
 Authorization: Bearer <AUTH_TOKEN>
 ```
 
-For WebSocket connections, the first message must be an authentication command:
-
-```json
-{
-  "cmd": "Auth",
-  "params": {
-    "token": "<AUTH_TOKEN>"
-  }
-}
-```
-
 ## API Endpoints
 
 ### REST Endpoints
@@ -51,39 +40,29 @@ For WebSocket connections, the first message must be an authentication command:
 
 ### WebSocket Commands
 
-All WebSocket messages use the following format:
+The WebSocket API is a command-based system: a command is sent, and a response is received.
+
+Each command must be assigned a unique ID, generated on the client side, which is used to match the response to the corresponding command.
+
+The first command **must** be an authentication command.
+
+
+### Available Commands
+
+#### `Auth`
+
+Authentication command.
 
 **Request:**
 ```json
 {
-  "cmd": "CommandName",
+  "id": "unique-id",
+  "cmd": "Auth",
   "params": {
-    // Command-specific parameters
+    "token": "<AUTH_TOKEN>"
   }
 }
 ```
-
-**Success Response:**
-```json
-{
-  "type": "success",
-  "id": "request-uuid",
-  "data": {
-    // Command-specific response data
-  }
-}
-```
-
-**Error Response:**
-```json
-{
-  "type": "error",
-  "id": "request-uuid",
-  "message": "Error message"
-}
-```
-
-### Available Commands
 
 #### `NewAuthInitUrl`
 
@@ -92,6 +71,7 @@ Generate a new authentication initialization URL.
 **Request:**
 ```json
 {
+  "id": "unique-id",
   "cmd": "NewAuthInitUrl"
 }
 ```
@@ -103,6 +83,7 @@ Authenticate a key.
 **Request:**
 ```json
 {
+  "id": "unique-id",
   "cmd": "AuthenticateKey",
   "params": {
     "main_key": "hex_encoded_pub_key",
@@ -118,6 +99,7 @@ Request a recurring payment.
 **Request:**
 ```json
 {
+  "id": "unique-id",
   "cmd": "RequestRecurringPayment",
   "params": {
     "main_key": "hex_encoded_pub_key",
@@ -136,6 +118,7 @@ Request a single payment.
 **Request:**
 ```json
 {
+  "id": "unique-id",
   "cmd": "RequestSinglePayment",
   "params": {
     "main_key": "hex_encoded_pub_key",
@@ -154,6 +137,7 @@ Fetch a profile for a public key.
 **Request:**
 ```json
 {
+  "id": "unique-id",
   "cmd": "FetchProfile",
   "params": {
     "main_key": "hex_encoded_pub_key"
@@ -161,42 +145,3 @@ Fetch a profile for a public key.
 }
 ```
 
-## Example Integration (JavaScript)
-
-```javascript
-// Connect to WebSocket
-const ws = new WebSocket('ws://localhost:3000/ws');
-
-// Send authentication when connection opens
-ws.onopen = () => {
-  ws.send(JSON.stringify({
-    cmd: 'Auth',
-    params: {
-      token: 'your-auth-token'
-    }
-  }));
-};
-
-// Handle messages
-ws.onmessage = (event) => {
-  const response = JSON.parse(event.data);
-  console.log('Received:', response);
-  
-  if (response.type === 'success' && response.data.message === 'Authenticated successfully') {
-    // Now authenticated, can send commands
-    ws.send(JSON.stringify({
-      cmd: 'NewAuthInitUrl'
-    }));
-  }
-};
-
-// Handle errors
-ws.onerror = (error) => {
-  console.error('WebSocket error:', error);
-};
-
-// Handle disconnection
-ws.onclose = () => {
-  console.log('WebSocket connection closed');
-};
-``` 
