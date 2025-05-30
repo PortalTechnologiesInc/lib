@@ -11,8 +11,7 @@ use portal::{
             AuthResponseConversation,
         },
         payments::{
-            PaymentRequestContent, PaymentRequestListenerConversation,
-            PaymentStatusSenderConversation, RecurringPaymentStatusSenderConversation,
+            CloseRecurringPaymentConversation, PaymentRequestContent, PaymentRequestListenerConversation, PaymentStatusSenderConversation, RecurringPaymentStatusSenderConversation
         },
     },
     nostr::nips::nip19::ToBech32,
@@ -22,7 +21,7 @@ use portal::{
         auth_init::AuthInitUrl,
         model::{
             auth::SubkeyProof, bindings::PublicKey, payment::{
-                PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
+                CloseRecurringPaymentContent, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, RecurringPaymentStatus, SinglePaymentRequestContent
             }, Timestamp
         },
     },
@@ -307,7 +306,7 @@ impl PortalApp {
                         event_id: response.event_id.clone(),
                     };
                     let status = evt.on_single_payment_request(req).await?;
-                    let conv = PaymentStatusSenderConversation::new(response.clone(), status);
+                    let conv = PaymentStatusSenderConversation::new(response.service_key.into(), response.recipient.into(), status);
                     self.router
                         .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
                             response.recipient.into(),
@@ -326,7 +325,7 @@ impl PortalApp {
                     };
                     let status = evt.on_recurring_payment_request(req).await?;
                     let conv =
-                        RecurringPaymentStatusSenderConversation::new(response.clone(), status);
+                        RecurringPaymentStatusSenderConversation::new(response.service_key.into(), response.recipient.into(), status);
                     self.router
                         .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
                             response.recipient.into(),
@@ -385,6 +384,28 @@ impl PortalApp {
     pub async fn connection_status(&self) -> HashMap<RelayUrl, RelayStatus> {
         let relays = self.router.channel().relays().await;
         relays.into_iter().map(|(u, r)| (RelayUrl(u), RelayStatus::from(r.status()))).collect()
+    }
+
+    pub async fn close_recurring_payment(
+        &self,
+        service_key: PublicKey,
+        subscription_id: String,
+    ) -> Result<(), AppError> {
+        let content = CloseRecurringPaymentContent{
+            subscription_id,
+            reason: None,
+        };
+
+        let recipient = self.router.keypair().public_key();
+        let conv = CloseRecurringPaymentConversation::new(service_key.into(), recipient, content);
+        self.router
+            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                recipient,
+                vec![],
+                conv,
+            )))
+            .await?;
+        Ok(())
     }
 }
 #[derive(Hash, Eq, PartialEq)]

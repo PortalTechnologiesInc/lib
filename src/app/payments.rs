@@ -9,11 +9,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     protocol::model::{
-        bindings, event_kinds::{
-            PAYMENT_REQUEST, PAYMENT_RESPONSE, RECURRING_PAYMENT_REQUEST,
-            RECURRING_PAYMENT_RESPONSE,
+        bindings::{self}, event_kinds::{
+            PAYMENT_REQUEST, PAYMENT_RESPONSE, RECURRING_PAYMENT_CANCEL, RECURRING_PAYMENT_REQUEST, RECURRING_PAYMENT_RESPONSE
         }, payment::{
-            PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
+            CloseRecurringPaymentContent, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, RecurringPaymentStatus, SinglePaymentRequestContent
         }, Timestamp
     },
     router::{
@@ -123,13 +122,18 @@ impl PaymentRequestContent {
 }
 
 pub struct PaymentStatusSenderConversation {
-    event: PaymentRequestEvent,
+    service_key: PublicKey,
+    recipient: PublicKey,
     response: PaymentResponseContent,
 }
 
 impl PaymentStatusSenderConversation {
-    pub fn new(event: PaymentRequestEvent, status: PaymentResponseContent) -> Self {
-        Self { event, response: status }
+    pub fn new(service_key: PublicKey, recipient: PublicKey, response: PaymentResponseContent) -> Self {
+        Self {
+            service_key,
+            recipient,
+            response,
+        }
     }
 }
 
@@ -140,13 +144,13 @@ impl OneShotSender for PaymentStatusSenderConversation {
         state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
     ) -> Result<Response, Self::Error> {
         let mut keys = HashSet::new();
-        keys.insert(state.event.service_key);
-        keys.insert(state.event.recipient);
+        keys.insert(state.service_key);
+        keys.insert(state.recipient);
 
         let tags = keys.iter().map(|k| Tag::public_key(*k.deref())).collect();
         let response = Response::new()
             .reply_to(
-                state.event.recipient.into(),
+                state.recipient,
                 Kind::from(PAYMENT_RESPONSE),
                 tags,
                 state.response.clone(),
@@ -158,13 +162,18 @@ impl OneShotSender for PaymentStatusSenderConversation {
 }
 
 pub struct RecurringPaymentStatusSenderConversation {
-    event: PaymentRequestEvent,
+    service_key: PublicKey,
+    recipient: PublicKey,
     response: RecurringPaymentResponseContent,
 }
 
 impl RecurringPaymentStatusSenderConversation {
-    pub fn new(event: PaymentRequestEvent, response: RecurringPaymentResponseContent) -> Self {
-        Self { event, response }
+    pub fn new(service_key: PublicKey, recipient: PublicKey, response: RecurringPaymentResponseContent) -> Self {
+        Self {
+            service_key,
+            recipient,
+            response,
+        }
     }
 }
 
@@ -175,13 +184,14 @@ impl OneShotSender for RecurringPaymentStatusSenderConversation {
         state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
     ) -> Result<Response, Self::Error> {
         let mut keys = HashSet::new();
-        keys.insert(state.event.service_key);
-        keys.insert(state.event.recipient);
+        keys.insert(state.service_key);
+        keys.insert(state.recipient);
 
         let tags = keys.iter().map(|k| Tag::public_key(*k.deref())).collect();
+    
         let response = Response::new()
             .reply_to(
-                state.event.recipient.into(),
+                state.recipient,
                 Kind::from(RECURRING_PAYMENT_RESPONSE),
                 tags,
                 state.response.clone(),
@@ -191,3 +201,47 @@ impl OneShotSender for RecurringPaymentStatusSenderConversation {
         Ok(response)
     }
 }
+
+
+
+pub struct CloseRecurringPaymentConversation {
+    service_key: PublicKey,
+    recipient: PublicKey,
+    content: CloseRecurringPaymentContent,
+}
+
+impl CloseRecurringPaymentConversation {
+    pub fn new(service_key: PublicKey, recipient: PublicKey, content: CloseRecurringPaymentContent) -> Self {
+        Self {
+            service_key,
+            recipient,
+            content,
+        }
+    }
+}
+
+impl OneShotSender for CloseRecurringPaymentConversation {
+    type Error = ConversationError;
+
+    fn send(
+        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+    ) -> Result<Response, Self::Error> {
+        let mut keys = HashSet::new();
+        keys.insert(state.service_key);
+        keys.insert(state.recipient);
+
+        let tags = keys.iter().map(|k| Tag::public_key(*k.deref())).collect();
+    
+        let response = Response::new()
+            .reply_to(
+                state.recipient,
+                Kind::from(RECURRING_PAYMENT_CANCEL),
+                tags,
+                state.content.clone(),
+            )
+            .finish();
+
+        Ok(response)
+    }
+}
+

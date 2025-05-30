@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use portal::{
-    nostr::{key::PublicKey},
+    nostr::key::PublicKey,
     nostr_relay_pool::{RelayOptions, RelayPool},
     profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
     protocol::{
         auth_init::AuthInitUrl, model::payment::{
-            PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
+            CloseRecurringPaymentContent, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
         }, LocalKeypair
     },
     router::{
@@ -18,7 +18,7 @@ use portal::{
             AuthResponseEvent,
         },
         payments::{
-            RecurringPaymentRequestSenderConversation, SinglePaymentRequestSenderConversation,
+            CloseRecurringPaymentReceiverConversation, RecurringPaymentRequestSenderConversation, SinglePaymentRequestSenderConversation
         },
     },
 };
@@ -182,6 +182,21 @@ impl PortalSDK {
 
         Ok(())
     }
+
+    pub async fn listen_closed_subscriptions(
+        &self,
+    ) -> Result<NotificationStream<CloseRecurringPaymentContent>, PortalSDKError> {
+        let inner = CloseRecurringPaymentReceiverConversation::new(self.router.keypair().public_key());
+        let event = self
+            .router
+            .add_and_subscribe(MultiKeyListenerAdapter::new(
+                inner,
+                self.router.keypair().subkey_proof().cloned(),
+            ))
+            .await?;
+        Ok(event)
+    }
+
 }
 
 #[derive(Debug, thiserror::Error)]

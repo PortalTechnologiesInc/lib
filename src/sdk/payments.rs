@@ -4,11 +4,11 @@ use crate::{
         auth::SubkeyProof,
         event_kinds::*,
         payment::{
-            PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
+            CloseRecurringPaymentContent, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
         },
     },
     router::{
-        adapters::ConversationWithNotification, ConversationError, MultiKeySender, MultiKeySenderAdapter, Response
+        adapters::ConversationWithNotification, ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender, MultiKeySenderAdapter, Response
     },
 };
 use nostr::{
@@ -16,6 +16,52 @@ use nostr::{
     event::{Kind, Tag},
     key::PublicKey,
 };
+
+pub struct CloseRecurringPaymentReceiverConversation {
+    local_key: PublicKey,
+}
+
+impl CloseRecurringPaymentReceiverConversation {
+    pub fn new(local_key: PublicKey) -> Self {
+        Self { local_key }
+    }
+}
+
+
+impl MultiKeyListener for CloseRecurringPaymentReceiverConversation {
+    const VALIDITY_SECONDS: u64 = 60 * 5;
+
+    type Error = ConversationError;
+    type Message = CloseRecurringPaymentContent;
+
+    fn init(state: &crate::router::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+        let mut filter = Filter::new()
+            .kinds(vec![Kind::from(RECURRING_PAYMENT_CANCEL)])
+            //.pubkey(state.user.ok_or(ConversationError::UserNotSet)?);
+            .pubkey(state.local_key);
+        
+        if let Some(subkey_proof) = &state.subkey_proof {
+            filter = filter.pubkey(subkey_proof.main_key.into());
+        }
+
+        Ok(Response::new().filter(filter))
+    }
+
+    fn on_message(
+        state: &mut crate::router::MultiKeyListenerAdapter<Self>,
+        event: &crate::router::CleartextEvent,
+        message: &Self::Message,
+    ) -> Result<Response, Self::Error> {
+        Ok(Response::new()
+            .notify(message.clone())
+            .finish())
+    }
+}
+
+impl ConversationWithNotification for MultiKeyListenerAdapter<CloseRecurringPaymentReceiverConversation> {
+    type Notification = CloseRecurringPaymentContent;
+}
+
 
 pub struct RecurringPaymentRequestSenderConversation {
     local_key: PublicKey,
