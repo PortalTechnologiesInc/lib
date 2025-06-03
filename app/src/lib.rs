@@ -1,9 +1,10 @@
 pub mod db;
 pub mod nwc;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use bitcoin::bip32;
+use futures::FutureExt;
 use portal::{
     app::{
         auth::{
@@ -44,6 +45,7 @@ pub fn init_logger() {
 }
 
 pub use portal::app::*;
+use tokio::sync::{mpsc::{self, Receiver, Sender}, Mutex, RwLock};
 
 #[uniffi::export]
 pub fn generate_mnemonic() -> Result<Mnemonic, MnemonicError> {
@@ -143,7 +145,14 @@ pub enum KeypairError {
 
 #[derive(uniffi::Object)]
 pub struct PortalApp {
-    router: Arc<MessageRouter<RelayPool>>,
+    keypair: Arc<Keypair>,
+    profiles: RwLock<HashMap<PublicKey, Profile>>,
+    auth_challenge_sender: Sender<AuthChallengeEvent>,
+    auth_challenge_receiver: Mutex<Receiver<AuthChallengeEvent>>,
+    single_payment_sender: Sender<SinglePaymentRequest>,
+    single_payment_receiver: Mutex<Receiver<SinglePaymentRequest>>,
+    recurring_payment_sender: Sender<RecurringPaymentRequest>,
+    recurring_payment_receiver: Mutex<Receiver<RecurringPaymentRequest>>,
 }
 
 #[uniffi::export]
@@ -201,45 +210,30 @@ pub trait PaymentRequestListener: Send + Sync {
 #[uniffi::export]
 impl PortalApp {
     #[uniffi::constructor]
-    pub async fn new(keypair: Arc<Keypair>, relays: Vec<String>) -> Result<Arc<Self>, AppError> {
-        let relay_pool = RelayPool::new();
-        for relay in &relays {
-            relay_pool.add_relay(relay, RelayOptions::default()).await?;
-        }
-        relay_pool.connect().await;
+    pub async fn new(keypair: Arc<Keypair>, _relays: Vec<String>) -> Result<Arc<Self>, AppError> {
+        let (auth_challenge_sender, auth_challenge_receiver) = mpsc::channel(100);
+        let (single_payment_sender, single_payment_receiver) = mpsc::channel(100);
+        let (recurring_payment_sender, recurring_payment_receiver) = mpsc::channel(100);
 
-        let keypair = &keypair.inner;
-        let router = Arc::new(MessageRouter::new(relay_pool, keypair.clone()));
-
-        Ok(Arc::new(Self { router }))
+        Ok(Arc::new(Self {
+            keypair,
+            profiles: RwLock::new(HashMap::new()),
+            auth_challenge_sender,
+            auth_challenge_receiver: Mutex::new(auth_challenge_receiver),
+            single_payment_sender,
+            single_payment_receiver: Mutex::new(single_payment_receiver),
+            recurring_payment_sender,
+            recurring_payment_receiver: Mutex::new(recurring_payment_receiver),
+        }))
     }
 
-
     pub async fn listen(&self) -> Result<(), AppError> {
-        self.router.listen().await.unwrap();
-        Ok(())
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        }
     }
 
     pub async fn send_auth_init(&self, url: AuthInitUrl) -> Result<(), AppError> {
-        let relays = self
-            .router
-            .channel()
-            .relays()
-            .await
-            .keys()
-            .map(|r| r.to_string())
-            .collect();
-        let _id = self
-            .router
-            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                url.send_to(),
-                url.subkey.map(|s| vec![s.into()]).unwrap_or_default(),
-                AuthInitConversation { url, relays },
-            )))
-            .await?;
-        // let rx = self.router.subscribe_to_service_request(id).await?;
-        // let response = rx.await_reply().await.map_err(AppError::ConversationError)?;
-
         Ok(())
     }
 
@@ -247,37 +241,9 @@ impl PortalApp {
         &self,
         evt: Arc<dyn AuthChallengeListener>,
     ) -> Result<(), AppError> {
-        let inner = AuthChallengeListenerConversation::new(self.router.keypair().public_key());
-        let mut rx = self
-            .router
-            .add_and_subscribe(MultiKeyListenerAdapter::new(
-                inner,
-                self.router.keypair().subkey_proof().cloned(),
-            ))
-            .await?;
-
-        while let Ok(response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            log::debug!("Received auth challenge: {:?}", response);
-
-            let result = evt.on_auth_challenge(response.clone()).await?;
-            log::debug!("Auth challenge callback result: {:?}", result);
-
-            if result {
-                let approve = AuthResponseConversation::new(
-                    response.clone(),
-                    vec![],
-                    self.router.keypair().subkey_proof().cloned(),
-                );
-                self.router
-                    .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                        response.recipient.into(),
-                        vec![],
-                        approve,
-                    )))
-                    .await?;
-            } else {
-                // TODO: send explicit rejection
-            }
+        let mut receiver = self.auth_challenge_receiver.lock().await;
+        while let Some(event) = receiver.recv().await {
+            evt.on_auth_challenge(event).await?;
         }
 
         Ok(())
@@ -287,106 +253,64 @@ impl PortalApp {
         &self,
         evt: Arc<dyn PaymentRequestListener>,
     ) -> Result<(), AppError> {
-        let inner = PaymentRequestListenerConversation::new(self.router.keypair().public_key());
-        let mut rx = self
-            .router
-            .add_and_subscribe(MultiKeyListenerAdapter::new(
-                inner,
-                self.router.keypair().subkey_proof().cloned(),
-            ))
-            .await?;
+        let mut receiver_single = self.single_payment_receiver.lock().await;
+        let mut receiver_recurring = self.recurring_payment_receiver.lock().await;
 
-        while let Ok(response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            match &response.content {
-                PaymentRequestContent::Single(content) => {
-                    let req = SinglePaymentRequest {
-                        service_key: response.service_key,
-                        recipient: response.recipient,
-                        expires_at: response.expires_at,
-                        content: content.clone(),
-                        event_id: response.event_id.clone(),
-                    };
-                    let status = evt.on_single_payment_request(req).await?;
-                    let conv = PaymentStatusSenderConversation::new(response.clone(), status);
-                    self.router
-                        .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                            response.recipient.into(),
-                            vec![],
-                            conv,
-                        )))
-                        .await?;
+        loop {
+            futures::select! {
+                request = receiver_single.recv().fuse() => {
+                    evt.on_single_payment_request(request.unwrap()).await?;
                 }
-                PaymentRequestContent::Recurring(content) => {
-                    let req = RecurringPaymentRequest {
-                        service_key: response.service_key,
-                        recipient: response.recipient,
-                        expires_at: response.expires_at,
-                        content: content.clone(),
-                        event_id: response.event_id.clone(),
-                    };
-                    let status = evt.on_recurring_payment_request(req).await?;
-                    let conv =
-                        RecurringPaymentStatusSenderConversation::new(response.clone(), status);
-                    self.router
-                        .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                            response.recipient.into(),
-                            vec![],
-                            conv,
-                        )))
-                        .await?;
+                request = receiver_recurring.recv().fuse() => {
+                    evt.on_recurring_payment_request(request.unwrap()).await?;
                 }
             }
         }
-
-        Ok(())
     }
 
     pub async fn fetch_profile(&self, pubkey: PublicKey) -> Result<Option<Profile>, AppError> {
-        let conv = FetchProfileInfoConversation::new(pubkey.into());
-        let mut notification = self.router.add_and_subscribe(conv).await?;
-        let metadata = notification
-            .next()
-            .await
-            .ok_or(AppError::ListenerDisconnected)?;
-
-        match metadata {
-            Ok(Some(profile)) => {
-                // if let Some(nip05) = &profile.nip05 {
-                //     let verified = portal::nostr::nips::nip05::verify(&pubkey.into(), &nip05, None).await;
-                //     if verified.ok() != Some(true) {
-                //         profile.nip05 = None;
-                //     }
-                // }
-
-                Ok(Some(profile))
-            }
-            _ => Ok(None),
-        }
+        Ok(self.profiles.read().await.get(&pubkey).cloned())
     }
 
     pub async fn set_profile(&self, profile: Profile) -> Result<(), AppError> {
-        if self.router.keypair().subkey_proof().is_some() {
-            return Err(AppError::MasterKeyRequired);
-        }
-
-        let conv = SetProfileConversation::new(profile);
-        let _ = self
-            .router
-            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                self.router.keypair().public_key().into(),
-                vec![],
-                conv,
-            )))
-            .await?;
-
+        self.profiles.write().await.insert(self.keypair.public_key(), profile);
         Ok(())
     }
 
     pub async fn connection_status(&self) -> HashMap<RelayUrl, RelayStatus> {
-        let relays = self.router.channel().relays().await;
-        relays.into_iter().map(|(u, r)| (RelayUrl(u), RelayStatus::from(r.status()))).collect()
+        let relays = vec![
+            (RelayUrl(nostr::types::RelayUrl::from_str("wss://relay.damus.io").unwrap()), RelayStatus::Connected),
+            (RelayUrl(nostr::types::RelayUrl::from_str("wss://relay.nostr.band").unwrap()), RelayStatus::Pending),
+            (RelayUrl(nostr::types::RelayUrl::from_str("wss://relay.snort.net").unwrap()), RelayStatus::Disconnected),
+        ];
+        relays.into_iter().collect()
+    }
+
+    pub async fn schedule(&self, action: ScheduledAction) -> Result<(), AppError> {
+        tokio::time::sleep(std::time::Duration::from_secs(delay_seconds)).await;
+
+        match action {
+            ScheduledAction::SendAuthChallenge(event) => {
+                self.auth_challenge_sender.send(event).await.unwrap();
+            }
+            ScheduledAction::SendPaymentRequest(request) => {
+                self.single_payment_sender.send(request).await.unwrap();
+            }
+            ScheduledAction::SendRecurringPaymentRequest(request) => {
+                self.recurring_payment_sender.send(request).await.unwrap();
+            }
+        }
+        Ok(())
     }
 }
+
+#[derive(Debug, uniffi::Enum)]
+pub enum ScheduledAction {
+    SendAuthChallenge(AuthChallengeEvent),
+    SendPaymentRequest(SinglePaymentRequest),
+    SendRecurringPaymentRequest(RecurringPaymentRequest),
+}
+
 #[derive(Hash, Eq, PartialEq)]
 pub struct RelayUrl(pub nostr::types::RelayUrl);
 

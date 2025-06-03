@@ -144,6 +144,7 @@ dependencies = [
  "async-trait",
  "bip39",
  "bitcoin",
+ "futures",
  "log",
  "nostr",
  "nostr-relay-pool",
