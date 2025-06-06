@@ -15,7 +15,8 @@ use nostr::{
     filter::Filter,
     key::PublicKey,
     message::{RelayMessage, SubscriptionId},
-    nips::nip44, types::TryIntoUrl,
+    nips::nip44,
+    types::TryIntoUrl,
 };
 
 use crate::{
@@ -49,9 +50,10 @@ pub struct MessageRouter<C: Channel> {
     conversation_relays: Mutex<HashMap<String, Vec<String>>>,
 }
 
-impl<C: Channel> MessageRouter<C> 
-where 
-<C as Channel>::Error: From<nostr::types::url::Error> {
+impl<C: Channel> MessageRouter<C>
+where
+    <C as Channel>::Error: From<nostr::types::url::Error>,
+{
     /// Creates a new `MessageRouter` with the given channel and keypair.
     ///
     /// The router will use the provided channel for all network communication and the keypair
@@ -147,15 +149,17 @@ where
                             event,
                         },
                     ..
-                } => (subscription_id.into_owned(), LocalEvent::Message(event.into_owned())),
+                } => (
+                    subscription_id.into_owned(),
+                    LocalEvent::Message(event.into_owned()),
+                ),
                 RelayPoolNotification::Event {
                     event,
                     subscription_id,
                     ..
                 } => (subscription_id, LocalEvent::Message(*event)),
                 RelayPoolNotification::Message {
-                    message:
-                        RelayMessage::EndOfStoredEvents(subscription_id),
+                    message: RelayMessage::EndOfStoredEvents(subscription_id),
                     ..
                 } => {
                     // TODO: we should only send this event when we know all the relays have replied with EndOfStoredEvents. There's another
@@ -195,7 +199,9 @@ where
                         log::trace!("Decrypted event: {:?}", cleartext);
 
                         ConversationMessage::Cleartext(cleartext)
-                    } else if let Ok(cleartext) = serde_json::from_str::<serde_json::Value>(&event.content) {
+                    } else if let Ok(cleartext) =
+                        serde_json::from_str::<serde_json::Value>(&event.content)
+                    {
                         log::trace!("Unencrypted event: {:?}", cleartext);
                         ConversationMessage::Cleartext(CleartextEvent::new_json(&event, cleartext))
                     } else {
@@ -203,12 +209,11 @@ where
                         ConversationMessage::Encrypted(event.clone())
                     }
                 }
-                LocalEvent::EndOfStoredEvents => {
-                    ConversationMessage::EndOfStoredEvents
-                }
+                LocalEvent::EndOfStoredEvents => ConversationMessage::EndOfStoredEvents,
             };
 
-            self.dispatch_event(subscription_id.clone(), message.clone()).await?;
+            self.dispatch_event(subscription_id.clone(), message.clone())
+                .await?;
 
             let mut to_cleanup = vec![];
             let mut other_conversations = vec![];
@@ -241,7 +246,8 @@ where
 
             for id in other_conversations {
                 log::warn!("Dispatching event to {:?}", id);
-                self.dispatch_event(SubscriptionId::new(id.clone()), message.clone()).await?;
+                self.dispatch_event(SubscriptionId::new(id.clone()), message.clone())
+                    .await?;
                 log::warn!("Finished dispatching event to {:?}", id);
             }
         }
@@ -249,7 +255,11 @@ where
         Ok(())
     }
 
-    async fn dispatch_event(&self, subscription_id: SubscriptionId, message: ConversationMessage) -> Result<(), ConversationError> {
+    async fn dispatch_event(
+        &self,
+        subscription_id: SubscriptionId,
+        message: ConversationMessage,
+    ) -> Result<(), ConversationError> {
         let conversation_id = subscription_id.as_str();
         let conversation_id = if let Some((id, _)) = conversation_id.split_once("_") {
             id
@@ -292,27 +302,31 @@ where
 
 
         if !response.filter.is_empty() {
-
             if let Some(selected_relays) = response.selected_relays.clone() {
                 log::trace!("Subscribing to relays = {:?}", selected_relays);
                 self.channel
                     .subscribe_to(selected_relays, id.to_string(), response.filter.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-                self.filters.write().await.insert(id.to_string(), response.filter.clone());
+                self.filters
+                    .write()
+                    .await
+                    .insert(id.to_string(), response.filter.clone());
             } else {
                 log::trace!("Subscribing to all relays");
                 self.channel
                     .subscribe(id.to_string(), response.filter.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-                self.filters.write().await.insert(id.to_string(), response.filter.clone());
+                self.filters
+                    .write()
+                    .await
+                    .insert(id.to_string(), response.filter.clone());
             }
         }
 
         let mut events_to_broadcast = vec![];
         for response_entry in response.responses.iter() {
-
             log::trace!(
                 "Sending event of kind {:?} to {:?}",
                 response_entry.kind,
@@ -336,13 +350,13 @@ where
             } else {
                 for pubkey in response_entry.recepient_keys.iter() {
                     let content = nip44::encrypt(
-                            &self.keypair.secret_key(),
-                            &pubkey,
-                            serde_json::to_string(&response_entry.content)
-                                .map_err(|e| ConversationError::Inner(Box::new(e)))?,
-                            nip44::Version::V2,
-                        )
-                        .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                        &self.keypair.secret_key(),
+                        &pubkey,
+                        serde_json::to_string(&response_entry.content)
+                            .map_err(|e| ConversationError::Inner(Box::new(e)))?,
+                        nip44::Version::V2,
+                    )
+                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
                     let event = build_event(&content)?;
                     log::trace!("Encrypted event: {:?}", event);
@@ -376,7 +390,10 @@ where
 
             let alias = format!("{}_{}", id, alias_num);
             if let Some(selected_relays) = response.selected_relays.clone() {
-                log::trace!("Subscribing 'subkey proof' to relays = {:?}", selected_relays);
+                log::trace!(
+                    "Subscribing 'subkey proof' to relays = {:?}",
+                    selected_relays
+                );
                 self.channel
                     .subscribe_to(selected_relays, alias.clone(), filter.clone())
                     .await
@@ -384,19 +401,18 @@ where
                 self.filters.write().await.insert(alias, filter);
             } else {
                 log::trace!("Subscribing 'subkey proof' to all relays");
-                // Subscribe to subkey proofs to all 
-                
+                // Subscribe to subkey proofs to all
+
                 self.channel
                     .subscribe(alias.clone(), filter.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
                 self.filters.write().await.insert(alias, filter);
-            }   
+            }
         }
 
         // check if Response has selected relays
         if let Some(selected_relays) = response.selected_relays {
-            
             for event in events_to_broadcast {
                 // if selected relays, broadcast to selected relays
                 self.channel
@@ -404,18 +420,14 @@ where
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
- 
         } else {
-
             for event in events_to_broadcast {
-
                 // if not selected relays, broadcast to all relays
                 self.channel
                     .broadcast(event)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
-
 
             // TODO: wait for confirmation from relays
         }
@@ -583,7 +595,7 @@ pub struct Response {
     notifications: Vec<serde_json::Value>,
     finished: bool,
     subscribe_to_subkey_proofs: bool,
-    selected_relays : Option<Vec<String>>,
+    selected_relays: Option<Vec<String>>,
 }
 
 impl Response {
@@ -604,14 +616,13 @@ impl Response {
     }
 
     /// Sets the selected relays for this response.
-    /// 
+    ///
     ///  # Arguments
     /// * `relays` - The list of relays to select
     pub fn selected_relays(mut self, relays: Vec<String>) -> Self {
         self.selected_relays = Some(relays);
         self
     }
-
 
     /// Adds a reply to be sent to all recipients.
     ///
@@ -681,7 +692,12 @@ impl Response {
     }
 
     // Broadcast an unencrypted event
-    pub fn broadcast_unencrypted<S: serde::Serialize>(mut self, kind: Kind, tags: Tags, content: S) -> Self {
+    pub fn broadcast_unencrypted<S: serde::Serialize>(
+        mut self,
+        kind: Kind,
+        tags: Tags,
+        content: S,
+    ) -> Self {
         let content = serde_json::to_value(&content).unwrap();
         self.responses.push(ResponseEntry {
             recepient_keys: vec![],
@@ -764,7 +780,7 @@ impl CleartextEvent {
             created_at: event.created_at,
             kind: event.kind,
             tags: event.tags.clone(),
-            content
+            content,
         }
     }
 }

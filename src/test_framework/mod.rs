@@ -60,7 +60,6 @@ pub enum SimulatedChannelError {
     UrlError(#[from] nostr::types::url::Error),
 }
 
-
 impl Channel for SimulatedChannel {
     type Error = SimulatedChannelError;
 
@@ -98,7 +97,8 @@ impl Channel for SimulatedChannel {
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,
         U: nostr::types::TryIntoUrl,
-        Self::Error: From<<U as nostr::types::TryIntoUrl>::Err> {
+        Self::Error: From<<U as nostr::types::TryIntoUrl>::Err>,
+    {
         // TODO: use the urls to create a filter
         self.subscribers
             .write()
@@ -133,12 +133,7 @@ impl Channel for SimulatedChannel {
         Ok(())
     }
 
-
-    async fn broadcast_to<I, U>(
-        &self,
-        urls: I,
-        event: Event,
-    ) -> Result<(), Self::Error>
+    async fn broadcast_to<I, U>(&self, urls: I, event: Event) -> Result<(), Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,
@@ -181,9 +176,6 @@ pub struct SimulatedNetwork {
     channel: SimulatedChannel,
     nodes: HashMap<String, Arc<MessageRouter<SimulatedChannel>>>,
 }
-
-
-
 
 impl SimulatedNetwork {
     pub fn new() -> Self {

@@ -161,6 +161,21 @@ Fetch a profile for a public key.
 }
 ```
 
+#### `CloseSubscription`
+
+Close a recurring payment for a recipient.
+
+**Request:**
+```json
+{
+  "cmd": "CloseSubscription",
+  "params": {
+    "recipient_key": "hex_encoded_pub_key",
+    "subscription_id": ""
+  }
+}
+```
+
 ## Example Integration (JavaScript)
 
 ```javascript

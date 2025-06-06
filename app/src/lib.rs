@@ -15,20 +15,24 @@ use portal::{
             PaymentStatusSenderConversation, RecurringPaymentStatusSenderConversation,
         },
     },
+    close_subscription::CloseRecurringPaymentConversation,
     nostr::nips::nip19::ToBech32,
     nostr_relay_pool::{RelayOptions, RelayPool},
     profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
     protocol::{
         auth_init::AuthInitUrl,
         model::{
-            auth::SubkeyProof, bindings::PublicKey, payment::{
-                PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
-            }, Timestamp
+            Timestamp,
+            auth::SubkeyProof,
+            bindings::PublicKey,
+            payment::{
+                CloseRecurringPaymentContent, PaymentResponseContent,
+                RecurringPaymentRequestContent, RecurringPaymentResponseContent,
+                RecurringPaymentStatus, SinglePaymentRequestContent,
+            },
         },
     },
-    router::{
-        adapters::one_shot::OneShotSenderAdapter, MessageRouter, MultiKeyListenerAdapter
-    },
+    router::{MessageRouter, MultiKeyListenerAdapter, adapters::one_shot::OneShotSenderAdapter},
 };
 
 uniffi::setup_scaffolding!();
@@ -214,7 +218,6 @@ impl PortalApp {
         Ok(Arc::new(Self { router }))
     }
 
-
     pub async fn listen(&self) -> Result<(), AppError> {
         self.router.listen().await.unwrap();
         Ok(())
@@ -307,7 +310,11 @@ impl PortalApp {
                         event_id: response.event_id.clone(),
                     };
                     let status = evt.on_single_payment_request(req).await?;
-                    let conv = PaymentStatusSenderConversation::new(response.clone(), status);
+                    let conv = PaymentStatusSenderConversation::new(
+                        response.service_key.into(),
+                        response.recipient.into(),
+                        status,
+                    );
                     self.router
                         .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
                             response.recipient.into(),
@@ -325,8 +332,11 @@ impl PortalApp {
                         event_id: response.event_id.clone(),
                     };
                     let status = evt.on_recurring_payment_request(req).await?;
-                    let conv =
-                        RecurringPaymentStatusSenderConversation::new(response.clone(), status);
+                    let conv = RecurringPaymentStatusSenderConversation::new(
+                        response.service_key.into(),
+                        response.recipient.into(),
+                        status,
+                    );
                     self.router
                         .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
                             response.recipient.into(),
@@ -384,7 +394,33 @@ impl PortalApp {
 
     pub async fn connection_status(&self) -> HashMap<RelayUrl, RelayStatus> {
         let relays = self.router.channel().relays().await;
-        relays.into_iter().map(|(u, r)| (RelayUrl(u), RelayStatus::from(r.status()))).collect()
+        relays
+            .into_iter()
+            .map(|(u, r)| (RelayUrl(u), RelayStatus::from(r.status())))
+            .collect()
+    }
+
+    pub async fn close_recurring_payment(
+        &self,
+        service_key: PublicKey,
+        subscription_id: String,
+    ) -> Result<(), AppError> {
+        let content = CloseRecurringPaymentContent {
+            subscription_id,
+            reason: None,
+            by_service: false,
+        };
+
+        let recipient = self.router.keypair().public_key();
+        let conv = CloseRecurringPaymentConversation::new(service_key.into(), recipient, content);
+        self.router
+            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                recipient,
+                vec![],
+                conv,
+            )))
+            .await?;
+        Ok(())
     }
 
     pub async fn add_relay(&self, url: String) -> Result<(), AppError> {
@@ -417,7 +453,6 @@ uniffi::custom_type!(RelayUrl, String, {
     lower: |obj| obj.0.as_str().to_string(),
 });
 
-
 #[derive(uniffi::Enum)]
 pub enum RelayStatus {
     Initialized,
@@ -443,7 +478,6 @@ impl From<nostr_relay_pool::relay::RelayStatus> for RelayStatus {
     }
 }
 
-
 #[derive(Debug, uniffi::Record)]
 pub struct SinglePaymentRequest {
     pub service_key: PublicKey,
@@ -461,10 +495,6 @@ pub struct RecurringPaymentRequest {
     pub content: RecurringPaymentRequestContent,
     pub event_id: String,
 }
-
-
-
-
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum AppError {

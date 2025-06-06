@@ -313,10 +313,20 @@ pub mod payment {
         Rejected {
             reason: Option<String>,
         },
+        /* Use RecurringPaymentStatusSenderConversation
         Cancelled {
             subscription_id: String,
             reason: Option<String>,
         },
+        */
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
+    pub struct CloseRecurringPaymentContent {
+        pub subscription_id: String,
+        pub reason: Option<String>,
+        pub by_service: bool,
     }
 }
 

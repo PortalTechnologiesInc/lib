@@ -116,7 +116,10 @@ export type Command =
   | { cmd: 'AuthenticateKey', params: { main_key: string, subkeys: string[] } }
   | { cmd: 'RequestRecurringPayment', params: { main_key: string, subkeys: string[], payment_request: RecurringPaymentRequestContent } }
   | { cmd: 'RequestSinglePayment', params: { main_key: string, subkeys: string[], payment_request: SinglePaymentRequestContent } }
-  | { cmd: 'FetchProfile', params: { main_key: string } };
+  | { cmd: 'FetchProfile', params: { main_key: string } }
+  | { cmd: 'CloseSubscription', params: { recipient_key: string, subscription_id: string } }
+  | { cmd: 'ListenClosedSubscriptions', params: {} }
+  ;
 
 // Response types
 export type ResponseData = 
@@ -125,7 +128,10 @@ export type ResponseData =
   | { type: 'auth_response', event: AuthResponseData }
   | { type: 'recurring_payment', status: RecurringPaymentStatusContent }
   | { type: 'single_payment', status: PaymentStatusContent, stream_id: string | null }
-  | { type: 'profile', profile: Profile | null };
+  | { type: 'profile', profile: Profile | null }
+  | { type: 'close_subscription_success', message: string }
+  | { type: 'listen_closed_subscriptions', message: string }
+  ;
 
 export type Response = 
   | { type: 'error', id: string, message: string }
@@ -135,7 +141,9 @@ export type Response =
 // Notification data types
 export type NotificationData = 
   | { type: 'auth_init', main_key: string }
-  | { type: 'payment_status_update', status: PaymentStatusContent };
+  | { type: 'payment_status_update', status: PaymentStatusContent }
+  | { type: 'closed_subscription', reason: string | null, subscription_id: string }
+  ;
 
 // Events 
 export interface EventCallbacks {

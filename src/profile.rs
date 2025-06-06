@@ -2,7 +2,10 @@ use nostr::{event::Kind, filter::Filter, key::PublicKey, nips::nip01::Metadata};
 
 use crate::{
     protocol::model::Timestamp,
-    router::{adapters::{one_shot::OneShotSender, ConversationWithNotification}, Conversation, ConversationError, ConversationMessage, Response},
+    router::{
+        Conversation, ConversationError, ConversationMessage, Response,
+        adapters::{ConversationWithNotification, one_shot::OneShotSender},
+    },
 };
 
 pub struct FetchProfileInfoConversation {
@@ -67,9 +70,13 @@ impl SetProfileConversation {
 impl OneShotSender for SetProfileConversation {
     type Error = ConversationError;
 
-    fn send(state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>) -> Result<Response, Self::Error> {
+    fn send(
+        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+    ) -> Result<Response, Self::Error> {
         let metadata: Metadata = state.profile.clone().into();
-        Ok(Response::new().broadcast_unencrypted(Kind::Metadata, Default::default(), metadata).finish())
+        Ok(Response::new()
+            .broadcast_unencrypted(Kind::Metadata, Default::default(), metadata)
+            .finish())
     }
 }
 
@@ -103,4 +110,3 @@ impl Into<nostr::nips::nip01::Metadata> for Profile {
         }
     }
 }
-

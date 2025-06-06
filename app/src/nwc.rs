@@ -20,7 +20,8 @@ impl NWC {
     }
 
     pub async fn pay_invoice(&self, invoice: String) -> Result<String, AppError> {
-        let response = self.inner
+        let response = self
+            .inner
             .pay_invoice(portal::nostr::nips::nip47::PayInvoiceRequest::new(invoice))
             .await?;
 
@@ -28,7 +29,8 @@ impl NWC {
     }
 
     pub async fn lookup_invoice(&self, invoice: String) -> Result<LookupInvoiceResponse, AppError> {
-        let response = self.inner
+        let response = self
+            .inner
             .lookup_invoice(portal::nostr::nips::nip47::LookupInvoiceRequest {
                 invoice: None,
                 payment_hash: Some(invoice),
@@ -39,12 +41,20 @@ impl NWC {
     }
 
     pub async fn get_info(&self) -> Result<GetInfoResponse, AppError> {
-        let resp = self.inner.get_info().await.map_err(|e| AppError::NWC(e.to_string()))?;
+        let resp = self
+            .inner
+            .get_info()
+            .await
+            .map_err(|e| AppError::NWC(e.to_string()))?;
         Ok(GetInfoResponse::from(resp))
     }
 
     pub async fn get_balance(&self) -> Result<u64, AppError> {
-        let balance = self.inner.get_balance().await.map_err(|e| AppError::NWC(e.to_string()))?;
+        let balance = self
+            .inner
+            .get_balance()
+            .await
+            .map_err(|e| AppError::NWC(e.to_string()))?;
         Ok(balance)
     }
 }
@@ -82,7 +92,6 @@ impl From<portal::nostr::nips::nip47::LookupInvoiceResponse> for LookupInvoiceRe
     }
 }
 
-
 #[derive(Debug, uniffi::Enum)]
 pub enum TransactionType {
     Incoming,
@@ -97,7 +106,6 @@ impl From<portal::nostr::nips::nip47::TransactionType> for TransactionType {
         }
     }
 }
-
 
 /// Get Info Response
 #[derive(Debug, uniffi::Record)]
