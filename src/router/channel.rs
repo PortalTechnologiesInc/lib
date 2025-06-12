@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use nostr::{message::SubscriptionId, types::TryIntoUrl};
-use nostr_relay_pool::{RelayPool, RelayPoolNotification, SubscribeOptions};
+use nostr_relay_pool::{RelayOptions, RelayPool, RelayPoolNotification, SubscribeOptions};
 
 /// A trait for an abstract channel
 ///
@@ -50,6 +50,16 @@ pub trait Channel: Send + 'static {
     fn receive(
         &self,
     ) -> impl std::future::Future<Output = Result<RelayPoolNotification, Self::Error>> + Send;
+
+    fn add_relay(
+        &self,
+        url: String,
+    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
+
+    fn remove_relay(
+        &self,
+        url: String,
+    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
 }
 
 impl Channel for RelayPool {
@@ -108,5 +118,16 @@ impl Channel for RelayPool {
             .recv()
             .await
             .map_err(|_| nostr_relay_pool::pool::Error::Shutdown)
+    }
+
+    async fn add_relay(&self, url: String) -> Result<(), Self::Error> {
+        self.add_relay(&url, RelayOptions::default()).await?;
+        self.connect_relay(url).await?;
+        Ok(())
+    }
+
+    async fn remove_relay(&self, url: String) -> Result<(), Self::Error> {
+        self.remove_relay(url).await?;
+        Ok(())
     }
 }
