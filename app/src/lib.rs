@@ -404,11 +404,11 @@ impl PortalApp {
         Ok(())
     }
 
-    pub async fn connection_status(&self) -> HashMap<RelayUrl, RelayStatus> {
+    pub async fn connection_status(&self) -> HashMap<String, RelayStatus> {
         let relays = self.router.channel().relays().await;
         relays
             .into_iter()
-            .map(|(u, r)| (RelayUrl(u), RelayStatus::from(r.status())))
+            .map(|(u, r)| (u.as_str().to_string(), RelayStatus::from(r.status())))
             .collect()
     }
 
