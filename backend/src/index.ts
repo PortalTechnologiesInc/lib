@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { AuthResponseData, Currency, PaymentStatusContent, PortalSDK, Profile, RecurringPaymentStatusContent, Timestamp } from 'portal-sdk';
 import { DatabaseManager, Payment } from './session';
 import { bech32 } from 'bech32';
+import { CloseRecurringPaymentNotification } from 'portal-sdk/dist/src/types';
 
 interface LoginStatus {
   type: 'waiting' | 'sending_challenge' | 'approved' | 'timeout';
@@ -51,14 +52,18 @@ function mainFunction() {
   portalClient.authenticate(authToken)
     .then(() => {
         console.log('Authentication successful');
-        portalClient.setProfile({
-            id: '',
-            pubkey: '',
-            name: 'Portal Demo',
-            display_name: 'Portal Demo',
-            picture: 'https://getportal.cc/logo-nip05.png',
-            nip05: 'demo@getportal.cc',
-        });
+
+        return Promise.all([
+          portalClient.setProfile({
+              id: '',
+              pubkey: '',
+              name: 'Portal Demo',
+              display_name: 'Portal Demo',
+              picture: 'https://getportal.cc/logo-nip05.png',
+              nip05: 'demo@getportal.cc',
+          }),
+          listenCloseSubscriptions(portalClient),
+        ]);
     })
     .catch(error => {
         console.error('Error authenticating:', error);
@@ -117,7 +122,33 @@ function mainFunction() {
         ws.on('message', async (message: Buffer) => {
           try {
             const data = JSON.parse(message.toString());
-            console.log('Received payment request:', data);
+            console.log('Received message:', data);
+
+            // Handle delete subscription action
+            if (data.action === 'delete_subscription' && data.subscription_id) {
+              console.log('Deleting subscription:', data.subscription_id);
+
+              const subscription = db.getSubscription(data.subscription_id);
+              if (subscription && subscription.publicKey === session.publicKey) {
+                // Update subscription status to cancelled
+                db.updateSubscriptionStatus(data.subscription_id, 'cancelled');
+
+                if (subscription.portalSubscriptionId) {
+                  await portalClient.closeRecurringPayment(session.publicKey, [], subscription.portalSubscriptionId!);
+                }
+
+                console.log('Subscription cancelled:', data.subscription_id);
+                // Send updated history to all connected clients for this user
+                const connections = connectionMap.get(session.publicKey) || [];
+                for (const conn of connections) {
+                  sendHistory(conn, session.publicKey);
+                }
+              } else {
+                console.log('Subscription not found or not owned by user');
+                ws.send(JSON.stringify({ error: 'Subscription not found or not authorized' }));
+              }
+              return;
+            }
 
             const payment = data as PaymentRequest;
             payment.amount = parseInt(data.amount);
@@ -321,6 +352,27 @@ function mainFunction() {
   }); 
 }
 
+async function listenCloseSubscriptions(portalClient: PortalSDK) {
+  await portalClient.listenClosedRecurringPayment((data: CloseRecurringPaymentNotification) => {
+    const subscription = db.getSubscriptionPortalId(data.subscription_id);
+    if (subscription && subscription.publicKey === data.main_key) {
+      // Update subscription status to cancelled
+      db.updateSubscriptionStatus(subscription.id, 'cancelled');
+
+      console.log(db.getSubscription(subscription.id));
+
+      console.log('Subscription cancelled:', data.subscription_id);
+      // Send updated history to all connected clients for this user
+      const connections = connectionMap.get(subscription.publicKey) || [];
+      for (const conn of connections) {
+        sendHistory(conn, subscription.publicKey);
+      }
+    } else {
+      console.log('Subscription not found or not owned by user');
+    }
+  });
+}
+
 async function authenticateKey(portalClient: PortalSDK, ws: WebSocket, loginUrl: string, mainKey: string) {
     let authResponse: AuthResponseData | null = null;
     let timeout: NodeJS.Timeout | null = null;
@@ -346,17 +398,21 @@ async function authenticateKey(portalClient: PortalSDK, ws: WebSocket, loginUrl:
     const sessionId = uuidv4();
     
     const current = loginTokens.get(loginUrl);
-    console.log(current);
     let name = null;
     if (current) {
       name = current.displayName;
+    }
+
+    if (authResponse!.status.status !== 'approved') {
+      ws.send(`<div id="status" class="status timeout">Rejected: ${authResponse!.status.reason}</div>`);
+      return;
     }
 
     loginTokens.set(loginUrl, {
       type: 'approved',
       displayName: name || mainKey,
       publicKey: mainKey,
-      authToken: authResponse!.session_token,
+      authToken: authResponse!.status.session_token!,
     });
     
     // Create session
@@ -364,7 +420,7 @@ async function authenticateKey(portalClient: PortalSDK, ws: WebSocket, loginUrl:
       id: sessionId,
       publicKey: mainKey,
       displayName: name || formatNpub(mainKey),
-      authToken: authResponse!.session_token,
+      authToken: authResponse!.status.session_token!,
     });
     
     ws.send(`
@@ -400,6 +456,11 @@ function sendHistory(ws: WebSocket, publicKey: string) {
                 <span class="amount">${s.amount} sats</span>
                 <span class="frequency">${s.frequency}</span>
                 <span class="next-payment">Next: ${new Date(s.nextPaymentAt * 1000).toLocaleString()}</span>
+                <button class="delete-button" 
+                  hx-ws="send" 
+                  hx-vals='{"action": "delete_subscription", "subscription_id": "${s.id}"}'>
+                  Cancel
+                </button>
             </div>
             `).join('')}
         </div>
@@ -508,7 +569,7 @@ setInterval(() => {
   const now = Math.floor(Date.now() / 1000);
   const subscriptions = db.getDueSubscriptions(now);
   for (const subscription of subscriptions) {
-    if (!subscription.portalSubscriptionId) {
+    if (!subscription.portalSubscriptionId || subscription.status !== 'active') {
       continue;
     }
 

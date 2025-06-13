@@ -199,6 +199,7 @@ pub mod auth {
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Enum)]
+    #[serde(rename_all = "snake_case", tag = "status")]
     pub enum AuthResponseStatus {
         Approved {
             granted_permissions: Vec<String>,
@@ -343,7 +344,8 @@ pub mod payment {
     #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
     pub struct CloseRecurringPaymentResponse {
         pub content: CloseRecurringPaymentContent,
-        pub public_key: PublicKey,
+        pub main_key: PublicKey,
+        pub recipient: PublicKey,
     }
 }
 

@@ -1,66 +1,79 @@
 use std::{collections::HashSet, ops::Deref};
 
 use nostr::{
-    event::{Kind, Tag},
+    event::{EventId, Kind, Tag},
     filter::Filter,
     key::PublicKey,
 };
-use serde::{Deserialize, Serialize};
 
 use crate::{
     protocol::model::{
-        bindings::{self},
         event_kinds::RECURRING_PAYMENT_CANCEL,
         payment::{CloseRecurringPaymentContent, CloseRecurringPaymentResponse},
     },
     router::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, Response,
+        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender, Response,
         adapters::{ConversationWithNotification, one_shot::OneShotSender},
     },
 };
 
 pub struct CloseRecurringPaymentConversation {
-    service_key: PublicKey,
-    recipient: PublicKey,
     content: CloseRecurringPaymentContent,
 }
 
 impl CloseRecurringPaymentConversation {
-    pub fn new(
-        service_key: PublicKey,
-        recipient: PublicKey,
-        content: CloseRecurringPaymentContent,
-    ) -> Self {
-        Self {
-            service_key,
-            recipient,
-            content,
-        }
+    pub fn new(content: CloseRecurringPaymentContent) -> Self {
+        Self { content }
     }
 }
 
-impl OneShotSender for CloseRecurringPaymentConversation {
+impl MultiKeySender for CloseRecurringPaymentConversation {
+    const VALIDITY_SECONDS: u64 = 60 * 5;
+
     type Error = ConversationError;
+    type Message = ();
 
-    fn send(
-        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+    fn get_filter(
+        _state: &crate::router::MultiKeySenderAdapter<Self>,
+    ) -> Result<Filter, Self::Error> {
+        // Empty filter that will not match any events
+        // TODO: we should avoid subscribing to relays for empty filters
+        Ok(Filter::new().id(EventId::all_zeros()))
+    }
+
+    fn build_initial_message(
+        state: &mut crate::router::MultiKeySenderAdapter<Self>,
+        new_key: Option<PublicKey>,
     ) -> Result<Response, Self::Error> {
-        let mut keys = HashSet::new();
-        keys.insert(state.service_key);
-        keys.insert(state.recipient);
+        let tags = state
+            .subkeys
+            .iter()
+            .chain([&state.user])
+            .map(|k| Tag::public_key(*k))
+            .collect();
 
-        let tags = keys.iter().map(|k| Tag::public_key(*k.deref())).collect();
-
-        let response = Response::new()
-            .reply_to(
-                state.recipient,
-                Kind::from(RECURRING_PAYMENT_CANCEL),
+        if let Some(new_key) = new_key {
+            Ok(Response::new().subscribe_to_subkey_proofs().reply_to(
+                new_key,
+                Kind::Custom(RECURRING_PAYMENT_CANCEL),
                 tags,
                 state.content.clone(),
-            )
-            .finish();
+            ))
+        } else {
+            Ok(Response::new().subscribe_to_subkey_proofs().reply_all(
+                Kind::Custom(RECURRING_PAYMENT_CANCEL),
+                tags,
+                state.content.clone(),
+            ))
+        }
+    }
 
-        Ok(response)
+    fn on_message(
+        _state: &mut crate::router::MultiKeySenderAdapter<Self>,
+        _event: &crate::router::CleartextEvent,
+        _message: &Self::Message,
+    ) -> Result<Response, Self::Error> {
+        Ok(Response::default())
     }
 }
 
@@ -100,12 +113,19 @@ impl MultiKeyListener for CloseRecurringPaymentReceiverConversation {
         event: &crate::router::CleartextEvent,
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
-        let res = CloseRecurringPaymentResponse {
-            content: message.clone(),
-            public_key: event.pubkey.into(),
+        let main_key = match &state.subkey_proof {
+            Some(subkey_proof) => subkey_proof.main_key.into(),
+            None => event.pubkey.into(),
         };
 
-        Ok(Response::new().notify(res).finish())
+        let res = CloseRecurringPaymentResponse {
+            content: message.clone(),
+            main_key,
+            recipient: event.pubkey.into(),
+        };
+
+        // Note: we never call "finish" here, because we want to keep listening for events
+        Ok(Response::new().notify(res))
     }
 }
 

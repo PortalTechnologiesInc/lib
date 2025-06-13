@@ -23,7 +23,7 @@ export interface Subscription {
   publicKey: string;
   amount: number;
   frequency: string;
-  status: 'active' | 'cancelled' | 'failed';
+  status: 'pending' |'active' | 'cancelled' | 'failed';
   lastPaymentAt: number | null;
   nextPaymentAt: number;
   createdAt: number;
@@ -188,6 +188,26 @@ export class DatabaseManager {
   public getSubscription(id: string): Subscription | undefined {
     const stmt = this.db.prepare('SELECT * FROM subscriptions WHERE id = ?');
     const row = stmt.get(id) as any;
+    
+    if (!row) return undefined;
+    
+    return {
+      id: row.id,
+      publicKey: row.public_key,
+      amount: row.amount,
+      frequency: row.frequency,
+      status: row.status,
+      lastPaymentAt: row.last_payment_at,
+      nextPaymentAt: row.next_payment_at,
+      createdAt: row.created_at,
+      authToken: row.auth_token,
+      portalSubscriptionId: row.portal_subscription_id
+    };
+  }
+
+  public getSubscriptionPortalId(portalSubscriptionId: string): Subscription | undefined {
+    const stmt = this.db.prepare('SELECT * FROM subscriptions WHERE status = \'active\' AND portal_subscription_id = ?');
+    const row = stmt.get(portalSubscriptionId) as any;
     
     if (!row) return undefined;
     

@@ -136,7 +136,7 @@
       }
       .subscription-item {
         display: grid;
-        grid-template-columns: 100px 100px 1fr;
+        grid-template-columns: 100px 100px 1fr auto;
         gap: 15px;
         padding: 15px;
         border-radius: 4px;
@@ -161,6 +161,18 @@
         color: #666;
         font-size: 0.9rem;
       }
+      .delete-button {
+        background-color: #f44336;
+        color: white;
+        padding: 5px 10px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+      .delete-button:hover {
+        background-color: #d32f2f;
+      }
       @media (max-width: 900px) {
         .dashboard-container {
           width: 90%;
@@ -170,8 +182,12 @@
           gap: 5px;
         }
         .subscription-item {
-          grid-template-columns: 1fr;
+          grid-template-columns: 1fr 1fr;
           gap: 5px;
+        }
+        .delete-button {
+          grid-column: 2;
+          justify-self: end;
         }
       }
     </style>

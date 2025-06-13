@@ -30,12 +30,14 @@ use portal::{
             payment::{
                 CloseRecurringPaymentContent, CloseRecurringPaymentResponse,
                 PaymentResponseContent, RecurringPaymentRequestContent,
-                RecurringPaymentResponseContent, RecurringPaymentStatus,
-                SinglePaymentRequestContent,
+                RecurringPaymentResponseContent, SinglePaymentRequestContent,
             },
         },
     },
-    router::{MessageRouter, MultiKeyListenerAdapter, adapters::one_shot::OneShotSenderAdapter},
+    router::{
+        MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter,
+        adapters::one_shot::OneShotSenderAdapter,
+    },
 };
 
 uniffi::setup_scaffolding!();
@@ -211,8 +213,8 @@ pub trait PaymentRequestListener: Send + Sync {
 
 #[uniffi::export(with_foreign)]
 #[async_trait::async_trait]
-pub trait ClosedSubscriptionListener: Send + Sync {
-    async fn on_closed_subscription(
+pub trait ClosedRecurringPaymentListener: Send + Sync {
+    async fn on_closed_recurring_payment(
         &self,
         event: CloseRecurringPaymentResponse,
     ) -> Result<(), CallbackError>;
@@ -423,11 +425,10 @@ impl PortalApp {
             by_service: false,
         };
 
-        let recipient = self.router.keypair().public_key();
-        let conv = CloseRecurringPaymentConversation::new(service_key.into(), recipient, content);
+        let conv = CloseRecurringPaymentConversation::new(content);
         self.router
-            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                recipient,
+            .add_conversation(Box::new(MultiKeySenderAdapter::new_with_user(
+                service_key.into(),
                 vec![],
                 conv,
             )))
@@ -435,9 +436,9 @@ impl PortalApp {
         Ok(())
     }
 
-    pub async fn listen_closed_subscriptions(
+    pub async fn listen_closed_recurring_payment(
         &self,
-        evt: Arc<dyn ClosedSubscriptionListener>,
+        evt: Arc<dyn ClosedRecurringPaymentListener>,
     ) -> Result<(), AppError> {
         let inner =
             CloseRecurringPaymentReceiverConversation::new(self.router.keypair().public_key());
@@ -450,9 +451,9 @@ impl PortalApp {
             .await?;
 
         while let Ok(response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            log::debug!("Received closed subscription: {:?}", response);
+            log::debug!("Received closed recurring payment: {:?}", response);
 
-            let _ = evt.on_closed_subscription(response).await?;
+            let _ = evt.on_closed_recurring_payment(response).await?;
         }
         Ok(())
     }

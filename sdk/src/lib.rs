@@ -197,7 +197,7 @@ impl PortalSDK {
         Ok(())
     }
 
-    pub async fn listen_closed_subscriptions(
+    pub async fn listen_closed_recurring_payment(
         &self,
     ) -> Result<NotificationStream<CloseRecurringPaymentResponse>, PortalSDKError> {
         let inner =
@@ -214,7 +214,8 @@ impl PortalSDK {
 
     pub async fn close_recurring_payment(
         &self,
-        recipient: PublicKey,
+        main_key: PublicKey,
+        subkeys: Vec<PublicKey>,
         subscription_id: String,
     ) -> Result<(), PortalSDKError> {
         let content = CloseRecurringPaymentContent {
@@ -223,13 +224,10 @@ impl PortalSDK {
             by_service: true,
         };
 
-        let service_key = self.router.keypair().public_key();
-        let conv = CloseRecurringPaymentConversation::new(service_key, recipient, content);
+        let conv = CloseRecurringPaymentConversation::new(content);
         self.router
-            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                service_key,
-                vec![],
-                conv,
+            .add_conversation(Box::new(MultiKeySenderAdapter::new_with_user(
+                main_key, subkeys, conv,
             )))
             .await?;
         Ok(())

@@ -669,8 +669,8 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                     .await;
             }
         },
-        Command::ListenClosedSubscriptions => {
-            match ctx.sdk.listen_closed_subscriptions().await {
+        Command::ListenClosedRecurringPayment => {
+            match ctx.sdk.listen_closed_recurring_payment().await {
                 Ok(notification_stream) => {
                     // Generate a unique stream ID
                     let stream_id = Uuid::new_v4().to_string();
@@ -685,27 +685,28 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
                         // Process notifications from the stream
                         while let Some(Ok(event)) = stream.next().await {
-                            debug!("Got close subscription event: {:?}", event);
+                            debug!("Got close recurring payment event: {:?}", event);
 
                             // Convert the event to a notification response
                             let notification = Response::Notification {
                                 id: stream_id_clone.clone(),
-                                data: NotificationData::ClosedSubscription {
+                                data: NotificationData::ClosedRecurringPayment {
                                     reason: event.content.reason,
                                     subscription_id: event.content.subscription_id,
-                                    recipient_key: event.public_key.to_string(),
+                                    main_key: event.main_key.to_string(),
+                                    recipient: event.recipient.to_string(),
                                 },
                             };
 
                             // Send the notification to the client
                             if let Err(e) = tx_clone.send(notification).await {
-                                error!("Failed to forward close subscription event: {}", e);
+                                error!("Failed to forward close recurring payment event: {}", e);
                                 break;
                             }
                         }
 
                         debug!(
-                            "Closed Subscriptions stream ended for stream_id: {}",
+                            "Closed Recurring Payment stream ended for stream_id: {}",
                             stream_id_clone
                         );
                     });
@@ -716,7 +717,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                     // Convert the URL to a proper response struct
                     let response = Response::Success {
                         id: command.id,
-                        data: ResponseData::ListenClosedSubscriptions,
+                        data: ResponseData::ListenClosedRecurringPayment { stream_id },
                     };
 
                     let _ = ctx.send_message(response).await;
@@ -725,22 +726,33 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                     let _ = ctx
                         .send_error_message(
                             &command.id,
-                            &format!("Failed to create closed subscriptions listener: {}", e),
+                            &format!("Failed to create closed recurring payment listener: {}", e),
                         )
                         .await;
                 }
             }
         }
-        Command::CLoseSubscription {
-            recipient_key,
+        Command::CloseRecurringPayment {
+            main_key,
+            subkeys,
             subscription_id,
         } => {
             // Parse keys
-            let key_parsed = match hex_to_pubkey(&recipient_key) {
+            let main_key = match hex_to_pubkey(&main_key) {
                 Ok(key) => key,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid recipient key: {}", e))
+                        .send_error_message(&command.id, &format!("Invalid main key: {}", e))
+                        .await;
+                    return;
+                }
+            };
+
+            let subkeys = match parse_subkeys(&subkeys) {
+                Ok(keys) => keys,
+                Err(e) => {
+                    let _ = ctx
+                        .send_error_message(&command.id, &format!("Invalid subkeys: {}", e))
                         .await;
                     return;
                 }
@@ -748,13 +760,13 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
             match ctx
                 .sdk
-                .close_recurring_payment(key_parsed, subscription_id)
+                .close_recurring_payment(main_key, subkeys, subscription_id)
                 .await
             {
                 Ok(()) => {
                     let response = Response::Success {
                         id: command.id,
-                        data: ResponseData::CloseSubscriptionSuccess {
+                        data: ResponseData::CloseRecurringPaymentSuccess {
                             message: String::from("Recurring payment closed"),
                         },
                     };

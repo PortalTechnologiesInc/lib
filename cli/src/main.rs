@@ -1,8 +1,9 @@
 use std::{io::Write, str::FromStr, sync::Arc};
 
 use app::{
-    AuthChallengeListener, CallbackError, Mnemonic, PaymentRequestListener, PortalApp,
-    RecurringPaymentRequest, SinglePaymentRequest, auth::AuthChallengeEvent, db::PortalDB,
+    AuthChallengeListener, CallbackError, ClosedRecurringPaymentListener, Mnemonic,
+    PaymentRequestListener, PortalApp, RecurringPaymentRequest, SinglePaymentRequest,
+    auth::AuthChallengeEvent, db::PortalDB,
 };
 use portal::{
     nostr::nips::{nip19::ToBech32, nip47::PayInvoiceRequest},
@@ -12,8 +13,8 @@ use portal::{
         model::{
             auth::AuthResponseStatus,
             payment::{
-                PaymentResponseContent, PaymentStatus, RecurringPaymentResponseContent,
-                RecurringPaymentStatus,
+                CloseRecurringPaymentResponse, PaymentResponseContent, PaymentStatus,
+                RecurringPaymentResponseContent, RecurringPaymentStatus,
             },
         },
     },
@@ -77,6 +78,19 @@ impl PaymentRequestListener for ApprovePayment {
             },
             request_id: event.content.request_id,
         })
+    }
+}
+
+struct LogClosedRecurringPayment;
+
+#[async_trait::async_trait]
+impl ClosedRecurringPaymentListener for LogClosedRecurringPayment {
+    async fn on_closed_recurring_payment(
+        &self,
+        event: CloseRecurringPaymentResponse,
+    ) -> Result<(), CallbackError> {
+        log::warn!("Received closed recurring payment: {:?}", event);
+        Ok(())
     }
 }
 
@@ -156,6 +170,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
             .unwrap();
     });
+
+    let _app = Arc::clone(&app);
+    tokio::spawn(async move {
+        _app.listen_closed_recurring_payment(Arc::new(LogClosedRecurringPayment))
+            .await
+            .unwrap();
+    });
+
+    // app.close_recurring_payment(
+    //     portal::protocol::model::bindings::PublicKey(
+    //         portal::nostr::PublicKey::from_str(
+    //             "npub1ek206p7gwgqzgc6s7sfedmlu87cz9894jzzq0283t72lhz3uuxwsgn9stz",
+    //         )
+    //         .unwrap(),
+    //     ),
+    //     "randomid".to_string(),
+    // )
+    // .await?;
 
     println!("\nEnter the auth init URL:");
     std::io::stdout().flush()?;
