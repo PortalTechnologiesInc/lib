@@ -30,6 +30,18 @@ pub mod channel;
 pub use adapters::multi_key_listener::{MultiKeyListener, MultiKeyListenerAdapter};
 pub use adapters::multi_key_sender::{MultiKeySender, MultiKeySenderAdapter};
 
+pub struct RelayNode {
+    conversations: HashSet<String>,
+}
+
+impl RelayNode {
+    fn new() -> Self {
+        RelayNode {
+            conversations: HashSet::new(),
+        }
+    }
+}
+
 // TODO: update expiry at every message
 
 /// A router that manages conversations over a Nostr channel.
@@ -47,7 +59,8 @@ pub struct MessageRouter<C: Channel> {
     filters: RwLock<HashMap<String, Filter>>,
     subscribers: Mutex<HashMap<String, Vec<mpsc::Sender<serde_json::Value>>>>,
 
-    conversation_relays: Mutex<HashMap<String, Vec<String>>>,
+    relay_nodes: Mutex<HashMap<String, RelayNode>>,
+    global_relay_node: Mutex<RelayNode>,
 }
 
 impl<C: Channel> MessageRouter<C>
@@ -70,25 +83,77 @@ where
             aliases: Mutex::new(HashMap::new()),
             subscribers: Mutex::new(HashMap::new()),
             filters: RwLock::new(HashMap::new()),
-            conversation_relays: Mutex::new(HashMap::new()),
+            relay_nodes: Mutex::new(HashMap::new()),
+            global_relay_node: Mutex::new(RelayNode::new()),
         }
     }
 
-    /// Get all conversations that are subscribed to a specific relay.
-    pub async fn get_conversations_by_relay(
-        &self,
-        relay: String,
-    ) -> Result<Vec<String>, ConversationError> {
-        let conversations = self.conversation_relays.lock().await;
-        let mut result = Vec::new();
+    pub async fn add_relay(&self, url: String) -> Result<(), <C as Channel>::Error> {
+        self.channel().add_relay(url.clone()).await?;
 
-        for (id, relays) in conversations.iter() {
-            if relays.contains(&relay) {
-                result.push(id.clone());
+        let mut relay_nodes = self.relay_nodes.lock().await;
+
+        relay_nodes.insert(
+            url.clone(),
+            RelayNode {
+                conversations: HashSet::new(),
+            },
+        );
+        Ok(())
+    }
+
+    pub async fn remove_relay(&self, url: String) -> Result<(), ConversationError> {
+        self.channel()
+            .remove_relay(url.clone())
+            .await
+            .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+
+        // Acquire the lock and remove the node, but collect conversations before dropping the lock
+        let conversations = {
+            let mut relay_nodes = self.relay_nodes.lock().await;
+            relay_nodes
+                .remove(&url)
+                .map(|node| node.conversations.into_iter().collect::<Vec<_>>())
+        };
+
+        if let Some(conversations) = conversations {
+            for conv in conversations.iter() {
+                let relays_of_conversation = self.get_relays_by_conversation(conv).await?;
+                match relays_of_conversation {
+                    Some(urls) => {
+                        // If conversation it not present in other relays, clean it
+                        if urls.is_empty() {
+                            self.cleanup_conversation(conv).await?;
+                        }
+                    }
+                    None => {
+                        // If conversation is present also on the global node relay, should'nt happen, dont clean it
+                    }
+                }
             }
         }
 
-        Ok(result)
+        Ok(())
+    }
+
+    async fn get_relays_by_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> Result<Option<HashSet<String>>, ConversationError> {
+        let global_relay_node = self.global_relay_node.lock().await;
+        if global_relay_node.conversations.contains(conversation_id) {
+            return Result::Ok(None);
+        }
+
+        let mut relays = HashSet::new();
+        let relay_nodes = self.relay_nodes.lock().await;
+
+        for (url, node) in relay_nodes.iter() {
+            if node.conversations.contains(conversation_id) {
+                relays.insert(url.clone());
+            }
+        }
+        Result::Ok(Some(relays))
     }
 
     pub async fn cleanup_conversation(&self, conversation: &str) -> Result<(), ConversationError> {
@@ -97,7 +162,16 @@ where
         self.subscribers.lock().await.remove(conversation);
         self.filters.write().await.remove(conversation);
         let aliases = self.aliases.lock().await.remove(conversation);
-        self.conversation_relays.lock().await.remove(conversation);
+
+        // Remove from global relay node
+        let mut global_relay_node = self.global_relay_node.lock().await;
+        global_relay_node.conversations.remove(conversation);
+
+        // Remove from specific relay node
+        let mut relay_nodes = self.relay_nodes.lock().await;
+        for (_, relay_node) in relay_nodes.iter_mut() {
+            relay_node.conversations.remove(conversation);
+        }
 
         // Remove filters from relays
         self.channel
@@ -121,7 +195,7 @@ where
         self.subscribers.lock().await.clear();
         self.aliases.lock().await.clear();
         self.filters.write().await.clear();
-        self.conversation_relays.lock().await.clear();
+        self.relay_nodes.lock().await.clear();
     }
 
     /// Starts listening for incoming messages and routes them to the appropriate conversations.
@@ -297,8 +371,10 @@ where
     ) -> Result<(), ConversationError> {
         log::trace!("Processing response builder for {} = {:?}", id, response);
 
+        let selected_relays_optional = self.get_relays_by_conversation(id).await?;
+
         if !response.filter.is_empty() {
-            if let Some(selected_relays) = response.selected_relays.clone() {
+            if let Some(selected_relays) = selected_relays_optional.clone() {
                 log::trace!("Subscribing to relays = {:?}", selected_relays);
                 self.channel
                     .subscribe_to(selected_relays, id.to_string(), response.filter.clone())
@@ -385,7 +461,7 @@ where
                 .events(events_to_broadcast.iter().map(|e| e.id));
 
             let alias = format!("{}_{}", id, alias_num);
-            if let Some(selected_relays) = response.selected_relays.clone() {
+            if let Some(selected_relays) = selected_relays_optional.clone() {
                 log::trace!(
                     "Subscribing 'subkey proof' to relays = {:?}",
                     selected_relays
@@ -408,7 +484,7 @@ where
         }
 
         // check if Response has selected relays
-        if let Some(selected_relays) = response.selected_relays {
+        if let Some(selected_relays) = selected_relays_optional {
             for event in events_to_broadcast {
                 // if selected relays, broadcast to selected relays
                 self.channel
@@ -447,13 +523,6 @@ where
             .await
             .insert(id.to_string(), conversation);
 
-        if let Some(selected_relays) = response.selected_relays.clone() {
-            self.conversation_relays
-                .lock()
-                .await
-                .insert(id.to_string(), selected_relays);
-        }
-
         Ok(response)
     }
 
@@ -472,6 +541,37 @@ where
         conversation: Box<dyn Conversation + Send>,
     ) -> Result<String, ConversationError> {
         let conversation_id = random_string(32);
+
+        // Update Global Relay Node
+        let mut global_relay_node = self.global_relay_node.lock().await;
+        global_relay_node
+            .conversations
+            .insert(conversation_id.clone());
+
+        let response = self
+            .internal_add_with_id(&conversation_id, conversation)
+            .await?;
+        self.process_response(&conversation_id, response).await?;
+
+        Ok(conversation_id)
+    }
+
+    pub async fn add_conversation_with_relays(
+        &self,
+        conversation: Box<dyn Conversation + Send>,
+        relays: Vec<String>,
+    ) -> Result<String, ConversationError> {
+        let conversation_id = random_string(32);
+
+        // Update relays node
+        let mut relay_nodes = self.relay_nodes.lock().await;
+        // for each relay parameter
+        for relay in relays {
+            // get relay node associated
+            let found_node = relay_nodes.entry(relay).or_insert(RelayNode::new());
+
+            found_node.conversations.insert(conversation_id.clone());
+        }
 
         let response = self
             .internal_add_with_id(&conversation_id, conversation)
@@ -590,7 +690,6 @@ pub struct Response {
     notifications: Vec<serde_json::Value>,
     finished: bool,
     subscribe_to_subkey_proofs: bool,
-    selected_relays: Option<Vec<String>>,
 }
 
 impl Response {
@@ -607,15 +706,6 @@ impl Response {
     /// * `filter` - The filter to set
     pub fn filter(mut self, filter: Filter) -> Self {
         self.filter = filter;
-        self
-    }
-
-    /// Sets the selected relays for this response.
-    ///
-    ///  # Arguments
-    /// * `relays` - The list of relays to select
-    pub fn selected_relays(mut self, relays: Vec<String>) -> Self {
-        self.selected_relays = Some(relays);
         self
     }
 
@@ -736,6 +826,9 @@ pub enum ConversationError {
 
     #[error("Inner error: {0}")]
     Inner(Box<dyn std::error::Error + Send + Sync>),
+
+    #[error("Relay '{0}' is not added")]
+    RelayNotPresent(String),
 }
 
 pub trait Conversation {
