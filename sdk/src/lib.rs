@@ -4,6 +4,7 @@ use portal::{
     close_subscription::{
         CloseRecurringPaymentConversation, CloseRecurringPaymentReceiverConversation,
     },
+    invoice::InvoiceRequestConversation,
     nostr::key::PublicKey,
     nostr_relay_pool::{RelayOptions, RelayPool},
     profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
@@ -11,7 +12,8 @@ use portal::{
         LocalKeypair,
         auth_init::AuthInitUrl,
         model::payment::{
-            CloseRecurringPaymentContent, CloseRecurringPaymentResponse, PaymentResponseContent,
+            CloseRecurringPaymentContent, CloseRecurringPaymentResponse, InvoiceRequestContent,
+            InvoiceRequestContentWithKey, InvoiceResponse, PaymentResponseContent,
             RecurringPaymentRequestContent, RecurringPaymentResponseContent,
             SinglePaymentRequestContent,
         },
@@ -231,6 +233,31 @@ impl PortalSDK {
             )))
             .await?;
         Ok(())
+    }
+
+    pub async fn send_invoice_payment(
+        &self,
+        content: InvoiceRequestContentWithKey,
+    ) -> Result<Option<InvoiceResponse>, PortalSDKError> {
+        let conv = InvoiceRequestConversation::new(
+            self.router.keypair().public_key(),
+            self.router.keypair().subkey_proof().cloned(),
+            content.inner,
+        );
+        let mut rx = self
+            .router
+            .add_and_subscribe(MultiKeySenderAdapter::new_with_user(
+                content.key.into(),
+                vec![],
+                conv,
+            ))
+            .await?;
+
+        if let Ok(invoice_response) = rx.next().await.ok_or(PortalSDKError::Timeout)? {
+            return Ok(Some(invoice_response));
+        }
+
+        Ok(None)
     }
 }
 

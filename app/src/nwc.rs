@@ -60,6 +60,7 @@ impl NWC {
         Ok(balance)
     }
 
+
     pub async fn connection_status(&self) -> HashMap<RelayUrl, RelayStatus> {
         self.inner
             .status()
@@ -67,6 +68,18 @@ impl NWC {
             .into_iter()
             .map(|(u, s)| (RelayUrl(u), RelayStatus::from(s)))
             .collect()
+    }
+    
+    pub async fn make_invoice(
+        &self,
+        request: MakeInvoiceRequest,
+    ) -> Result<MakeInvoiceResponse, AppError> {
+        let invoice = self
+            .inner
+            .make_invoice(request.into())
+            .await
+            .map_err(|e| AppError::NWC(e.to_string()))?;
+        Ok(MakeInvoiceResponse::from(invoice))
     }
 }
 
@@ -142,6 +155,48 @@ impl From<portal::nostr::nips::nip47::GetInfoResponse> for GetInfoResponse {
             block_hash: response.block_hash,
             methods: response.methods,
             notifications: response.notifications,
+        }
+    }
+}
+
+/// Make Invoice Request
+#[derive(Debug, uniffi::Record)]
+pub struct MakeInvoiceRequest {
+    /// Amount in millisatoshis
+    pub amount: u64,
+    /// Invoice description
+    pub description: Option<String>,
+    /// Invoice description hash
+    pub description_hash: Option<String>,
+    /// Invoice expiry in seconds
+    pub expiry: Option<u64>,
+}
+
+impl Into<portal::nostr::nips::nip47::MakeInvoiceRequest> for MakeInvoiceRequest {
+    fn into(self) -> portal::nostr::nips::nip47::MakeInvoiceRequest {
+        portal::nostr::nips::nip47::MakeInvoiceRequest {
+            amount: self.amount,
+            description: self.description,
+            description_hash: self.description_hash,
+            expiry: self.expiry,
+        }
+    }
+}
+
+/// Make Invoice Response
+#[derive(Debug, uniffi::Record)]
+pub struct MakeInvoiceResponse {
+    /// Bolt 11 invoice
+    pub invoice: String,
+    /// Invoice's payment hash
+    pub payment_hash: String,
+}
+
+impl From<portal::nostr::nips::nip47::MakeInvoiceResponse> for MakeInvoiceResponse {
+    fn from(response: portal::nostr::nips::nip47::MakeInvoiceResponse) -> Self {
+        Self {
+            invoice: response.invoice,
+            payment_hash: response.payment_hash,
         }
     }
 }

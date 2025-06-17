@@ -19,6 +19,7 @@ use portal::{
     close_subscription::{
         CloseRecurringPaymentConversation, CloseRecurringPaymentReceiverConversation,
     },
+    invoice::{InvoiceReceiverConversation, InvoiceRequestConversation, InvoiceSenderConversation},
     nostr::nips::nip19::ToBech32,
     nostr_relay_pool::{RelayOptions, RelayPool},
     profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
@@ -29,9 +30,10 @@ use portal::{
             auth::{AuthResponseStatus, SubkeyProof},
             bindings::PublicKey,
             payment::{
-                CloseRecurringPaymentContent, CloseRecurringPaymentResponse,
-                PaymentResponseContent, RecurringPaymentRequestContent,
-                RecurringPaymentResponseContent, SinglePaymentRequestContent,
+                CloseRecurringPaymentContent, CloseRecurringPaymentResponse, InvoiceRequestContent,
+                InvoiceRequestContentWithKey, InvoiceResponse, PaymentResponseContent,
+                RecurringPaymentRequestContent, RecurringPaymentResponseContent,
+                SinglePaymentRequestContent,
             },
         },
     },
@@ -56,6 +58,7 @@ pub fn init_logger() {
 pub use portal::app::*;
 
 use crate::runtime::BindingsRuntime;
+use crate::nwc::MakeInvoiceResponse;
 
 #[uniffi::export]
 pub fn generate_mnemonic() -> Result<Mnemonic, MnemonicError> {
@@ -222,6 +225,21 @@ pub trait ClosedRecurringPaymentListener: Send + Sync {
         &self,
         event: CloseRecurringPaymentResponse,
     ) -> Result<(), CallbackError>;
+}
+
+#[uniffi::export(with_foreign)]
+#[async_trait::async_trait]
+pub trait InvoiceRequestListener: Send + Sync {
+    async fn on_invoice_requests(
+        &self,
+        event: InvoiceRequestContentWithKey,
+    ) -> Result<MakeInvoiceResponse, CallbackError>;
+}
+
+#[uniffi::export(with_foreign)]
+#[async_trait::async_trait]
+pub trait InvoiceResponseListener: Send + Sync {
+    async fn on_invoice_response(&self, event: InvoiceResponse) -> Result<(), CallbackError>;
 }
 
 #[uniffi::export]
@@ -491,6 +509,77 @@ impl PortalApp {
 
     pub async fn remove_relay(&self, url: String) -> Result<(), AppError> {
         self.router.remove_relay(url).await?;
+        Ok(())
+    }
+
+    pub async fn listen_invoice_requests(
+        &self,
+        evt: Arc<dyn InvoiceRequestListener>,
+    ) -> Result<(), AppError> {
+        let inner = InvoiceReceiverConversation::new(self.router.keypair().public_key());
+        let mut rx = self
+            .router
+            .add_and_subscribe(MultiKeyListenerAdapter::new(
+                inner,
+                self.router.keypair().subkey_proof().cloned(),
+            ))
+            .await?;
+
+        while let Ok(request) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
+            log::debug!("Received invoice request payment: {:?}", request);
+
+            let recipient: nostr::key::PublicKey = request.key.into();
+
+            let invoice = evt.on_invoice_requests(request.clone()).await?;
+
+            let invoice_response = InvoiceResponse {
+                request: request,
+                invoice: invoice.invoice,
+                payment_hash: invoice.payment_hash,
+            };
+
+            let conv = InvoiceSenderConversation::new(
+                invoice_response,
+                self.router.keypair().public_key(),
+                recipient,
+            );
+
+            self.router
+                .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                    recipient.to_owned(),
+                    vec![],
+                    conv,
+                )))
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn send_invoice_payment(
+        &self,
+        content: InvoiceRequestContentWithKey,
+        evt: Arc<dyn InvoiceResponseListener>,
+    ) -> Result<(), AppError> {
+        let conv = InvoiceRequestConversation::new(
+            self.router.keypair().public_key(),
+            self.router.keypair().subkey_proof().cloned(),
+            content.inner,
+        );
+
+        let mut rx = self
+            .router
+            .add_and_subscribe(MultiKeySenderAdapter::new_with_user(
+                content.key.into(),
+                vec![],
+                conv,
+            ))
+            .await?;
+
+        if let Ok(invoice_response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
+            let _ = evt.on_invoice_response(invoice_response.clone()).await?;
+        }
+
         Ok(())
     }
 }

@@ -783,6 +783,47 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 }
             }
         }
+        Command::SendInvoicePayment { inner } => {
+            let recipient = inner.key.0;
+
+            match ctx.sdk.send_invoice_payment(inner).await {
+                Ok(invoice_response) => {
+                    match invoice_response {
+                        Some(invoice_response) => {
+                            let response = Response::Success {
+                                id: command.id,
+                                data: ResponseData::InvoicePayment {
+                                    invoice: invoice_response.invoice,
+                                    payment_hash: invoice_response.payment_hash,
+                                },
+                            };
+
+                            let _ = ctx.send_message(response).await;
+                        }
+                        None => {
+                            // Recipient did not reply with a invoice
+                            let _ = ctx
+                                .send_error_message(
+                                    &command.id,
+                                    &format!(
+                                        "Recipient '{:?}' did not reply with a invoice",
+                                        recipient
+                                    ),
+                                )
+                                .await;
+                        }
+                    }
+                }
+                Err(e) => {
+                    let _ = ctx
+                        .send_error_message(
+                            &command.id,
+                            &format!("Failed to send invoice payment: {}", e),
+                        )
+                        .await;
+                }
+            }
+        }
     }
 }
 

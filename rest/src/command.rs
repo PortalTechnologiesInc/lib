@@ -1,6 +1,7 @@
 use portal::profile::Profile;
 use portal::protocol::model::payment::{
-    Currency, RecurringPaymentRequestContent, SinglePaymentRequestContent,
+    Currency, InvoiceRequestContentWithKey, RecurringPaymentRequestContent,
+    SinglePaymentRequestContent,
 };
 use serde::Deserialize;
 
@@ -53,6 +54,9 @@ pub enum Command {
         subscription_id: String,
     },
     ListenClosedRecurringPayment,
+    SendInvoicePayment {
+        inner: InvoiceRequestContentWithKey,
+    },
 }
 
 #[derive(Debug, Deserialize)]
