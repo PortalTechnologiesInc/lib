@@ -1,0 +1,1 @@
+RUST_LOG=portal=trace,info cargo run --bin invoic
