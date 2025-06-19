@@ -78,17 +78,15 @@ async fn main() -> Result<(), CliError> {
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
         _sender
-            .send_invoice_payment(
-                InvoiceRequestContentWithKey {
-                    inner: InvoiceRequestContent {
-                        request_id: String::from("my_id"),
-                        amount: 5000,
-                        currency: portal::protocol::model::payment::Currency::Millisats,
-                        current_exchange_rate: None,
-                        expires_at: Timestamp::now_plus_seconds(120),
-                        description: Some(String::from("Dinner")),
-                    },
-                    key: receiver_key,
+            .request_invoice(
+                receiver_key, 
+                InvoiceRequestContent {
+                    request_id: String::from("my_id"),
+                    amount: 5000,
+                    currency: portal::protocol::model::payment::Currency::Millisats,
+                    current_exchange_rate: None,
+                    expires_at: Timestamp::now_plus_seconds(120),
+                    description: Some(String::from("Dinner")),
                 },
                 Arc::new(LogInvoiceResponseListener),
             )

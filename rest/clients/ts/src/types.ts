@@ -115,6 +115,27 @@ export interface Profile {
   nip05?: string;
 }
 
+// Invoice related types
+export interface InvoiceRequestContent {
+  request_id: string;
+  amount: number;
+  currency: Currency;
+  current_exchange_rate?: ExchangeRate;
+  expires_at: Timestamp; 
+  description?: string;
+}
+
+export interface InvoiceResponseContent {
+  invoice: string;
+  payment_hash: string;
+}
+
+export interface ExchangeRate {
+  rate: number;
+  source: string;
+  time: Timestamp; 
+}
+
 // Command/Request types
 export type Command = 
   | { cmd: 'Auth', params: { token: string } }
@@ -125,6 +146,7 @@ export type Command =
   | { cmd: 'FetchProfile', params: { main_key: string } }
   | { cmd: 'CloseRecurringPayment', params: { main_key: string, subkeys: string[], subscription_id: string } }
   | { cmd: 'ListenClosedRecurringPayment', params: {} }
+  | { cmd: 'RequestInvoice', params: { recipient_key: string, content: InvoiceRequestContent } }
   ;
 
 // Response types
@@ -137,6 +159,7 @@ export type ResponseData =
   | { type: 'profile', profile: Profile | null }
   | { type: 'close_recurring_payment_success', message: string }
   | { type: 'listen_closed_recurring_payment', stream_id: string }
+  | { type: 'invoice_payment', invoice: string, payment_hash: string }
   ;
 
 export type Response = 

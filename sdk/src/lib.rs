@@ -235,7 +235,7 @@ impl PortalSDK {
         Ok(())
     }
 
-    pub async fn send_invoice_payment(
+    pub async fn request_invoice(
         &self,
         content: InvoiceRequestContentWithKey,
     ) -> Result<Option<InvoiceResponse>, PortalSDKError> {

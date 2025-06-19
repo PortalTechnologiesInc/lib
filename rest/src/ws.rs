@@ -8,7 +8,7 @@ use axum::extract::ws::{Message, WebSocket};
 use dashmap::DashMap;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
-use portal::protocol::model::payment::SinglePaymentRequestContent;
+use portal::protocol::model::payment::{InvoiceRequestContentWithKey, SinglePaymentRequestContent};
 use portal::protocol::model::Timestamp;
 use sdk::PortalSDK;
 use tokio::sync::mpsc;
@@ -783,10 +783,22 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 }
             }
         }
-        Command::SendInvoicePayment { inner } => {
-            let recipient = inner.key.0;
+        Command::RequestInvoice { recipient_key, content } => {
+            // Parse keys
+            let recipient_key = match hex_to_pubkey(&recipient_key) {
+                Ok(key) => key,
+                Err(e) => {
+                    let _ = ctx
+                        .send_error_message(&command.id, &format!("Invalid recipient key: {}", e))
+                        .await;
+                    return;
+                }
+            };
 
-            match ctx.sdk.send_invoice_payment(inner).await {
+            match ctx.sdk.request_invoice(InvoiceRequestContentWithKey {
+                key: recipient_key.into(),
+                inner: content,
+            }).await {
                 Ok(invoice_response) => {
                     match invoice_response {
                         Some(invoice_response) => {
@@ -807,7 +819,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                                     &command.id,
                                     &format!(
                                         "Recipient '{:?}' did not reply with a invoice",
-                                        recipient
+                                        recipient_key
                                     ),
                                 )
                                 .await;

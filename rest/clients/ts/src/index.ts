@@ -20,5 +20,7 @@ export {
   ClientConfig,
   Event,
   PaymentRequest,
-  AuthInitUrlResponse
+  AuthInitUrlResponse,
+  InvoicePaymentRequestContent,
+  InvoiceResponseContent
 } from './types'; 
