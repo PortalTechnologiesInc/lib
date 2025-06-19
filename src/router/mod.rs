@@ -92,7 +92,7 @@ where
             .add_relay(url.clone())
             .await
             .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-
+        
         // Subscribe existing conversations to new relays
         {
             let global_relay_node = self.global_relay_node.read().await;
@@ -171,7 +171,6 @@ where
         }
 
         let mut relays = HashSet::new();
-
         for (url, node) in relay_nodes_guard.iter() {
             if node.conversations.contains(conversation_id) {
                 relays.insert(url.clone());
@@ -225,7 +224,6 @@ where
         self.aliases.lock().await.clear();
         self.filters.write().await.clear();
         self.global_relay_node.write().await.conversations.clear();
-        self.relay_nodes.write().await.clear();
     }
 
     /// Starts listening for incoming messages and routes them to the appropriate conversations.
@@ -601,7 +599,7 @@ where
         conversation: Box<dyn Conversation + Send>,
     ) -> Result<String, ConversationError> {
         let conversation_id = random_string(32);
-
+        
         let response = self
             .internal_add_with_id(&conversation_id, conversation, None)
             .await?;
@@ -677,6 +675,16 @@ where
         conversation: Conv,
     ) -> Result<NotificationStream<Conv::Notification>, ConversationError> {
         let conversation_id = random_string(32);
+
+        // Update Global Relay Node
+
+        {
+            let mut global_relay_node = self.global_relay_node.write().await;
+            global_relay_node
+                .conversations
+                .insert(conversation_id.clone());
+        }
+
         let delayed_reply = self
             .subscribe_to_service_request::<Conv::Notification>(conversation_id.clone())
             .await?;

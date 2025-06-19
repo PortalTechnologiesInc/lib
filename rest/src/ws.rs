@@ -8,7 +8,7 @@ use axum::extract::ws::{Message, WebSocket};
 use dashmap::DashMap;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
-use portal::protocol::model::payment::SinglePaymentRequestContent;
+use portal::protocol::model::payment::{InvoiceRequestContentWithKey, SinglePaymentRequestContent};
 use portal::protocol::model::Timestamp;
 use sdk::PortalSDK;
 use tokio::sync::mpsc;
@@ -778,6 +778,59 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                         .send_error_message(
                             &command.id,
                             &format!("Failed to close recurring payment: {}", e),
+                        )
+                        .await;
+                }
+            }
+        }
+        Command::RequestInvoice { recipient_key, content } => {
+            // Parse keys
+            let recipient_key = match hex_to_pubkey(&recipient_key) {
+                Ok(key) => key,
+                Err(e) => {
+                    let _ = ctx
+                        .send_error_message(&command.id, &format!("Invalid recipient key: {}", e))
+                        .await;
+                    return;
+                }
+            };
+
+            match ctx.sdk.request_invoice(InvoiceRequestContentWithKey {
+                key: recipient_key.into(),
+                inner: content,
+            }).await {
+                Ok(invoice_response) => {
+                    match invoice_response {
+                        Some(invoice_response) => {
+                            let response = Response::Success {
+                                id: command.id,
+                                data: ResponseData::InvoicePayment {
+                                    invoice: invoice_response.invoice,
+                                    payment_hash: invoice_response.payment_hash,
+                                },
+                            };
+
+                            let _ = ctx.send_message(response).await;
+                        }
+                        None => {
+                            // Recipient did not reply with a invoice
+                            let _ = ctx
+                                .send_error_message(
+                                    &command.id,
+                                    &format!(
+                                        "Recipient '{:?}' did not reply with a invoice",
+                                        recipient_key
+                                    ),
+                                )
+                                .await;
+                        }
+                    }
+                }
+                Err(e) => {
+                    let _ = ctx
+                        .send_error_message(
+                            &command.id,
+                            &format!("Failed to send invoice payment: {}", e),
                         )
                         .await;
                 }

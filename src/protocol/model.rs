@@ -30,6 +30,9 @@ pub mod event_kinds {
     pub const RECURRING_PAYMENT_RESPONSE: u16 = 28006;
     pub const RECURRING_PAYMENT_CANCEL: u16 = 28007;
 
+    pub const INVOICE_REQUEST: u16 = 28008;
+    pub const INVOICE_RESPONSE: u16 = 28009;
+
     // Identity events (29000-29999)
     pub const CERTIFICATE_REQUEST: u16 = 29000;
     pub const CERTIFICATE_RESPONSE: u16 = 29001;
@@ -346,6 +349,32 @@ pub mod payment {
         pub content: CloseRecurringPaymentContent,
         pub main_key: PublicKey,
         pub recipient: PublicKey,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
+    pub struct InvoiceRequestContent {
+        pub request_id: String,
+        pub amount: u64,
+        pub currency: Currency,
+        pub current_exchange_rate: Option<ExchangeRate>,
+        pub expires_at: Timestamp,
+        pub description: Option<String>,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
+    pub struct InvoiceRequestContentWithKey {
+        pub inner: InvoiceRequestContent,
+        pub key: PublicKey,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
+    pub struct InvoiceResponse {
+        pub request: InvoiceRequestContentWithKey,
+        pub invoice: String,
+        pub payment_hash: String,
     }
 }
 

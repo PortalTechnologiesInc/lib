@@ -48,6 +48,12 @@ pub enum ResponseData {
 
     #[serde(rename = "listen_closed_recurring_payment")]
     ListenClosedRecurringPayment { stream_id: String },
+
+    #[serde(rename = "invoice_payment")]
+    InvoicePayment {
+        invoice: String,
+        payment_hash: String,
+    },
 }
 
 #[derive(Debug, Serialize)]

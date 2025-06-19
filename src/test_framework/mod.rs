@@ -169,6 +169,14 @@ impl Channel for SimulatedChannel {
             Err(SimulatedChannelError::ChannelClosed)
         }
     }
+
+    async fn add_relay(&self, url: String) -> Result<(), Self::Error> {
+        todo!()
+    }
+
+    async fn remove_relay(&self, url: String) -> Result<(), Self::Error> {
+        todo!()
+    }
 }
 
 /// A simulated network of Nostr nodes
