@@ -17,7 +17,7 @@ use crate::router::{
 const MAX_CLIENTS: usize = 8;
 
 pub trait MultiKeySender: Sized + Send + 'static {
-    const VALIDITY_SECONDS: u64;
+    const VALIDITY_SECONDS: Option<u64>;
 
     type Error: std::error::Error + Send + Sync + 'static;
     type Message: DeserializeOwned;
@@ -48,7 +48,7 @@ pub trait MultiKeySender: Sized + Send + 'static {
 pub struct MultiKeySenderAdapter<Inner> {
     pub user: PublicKey,
     pub subkeys: HashSet<PublicKey>,
-    pub expires_at: SystemTime,
+    pub expires_at: Option<SystemTime>,
     pub inner: Inner,
 }
 
@@ -145,7 +145,10 @@ impl<T: MultiKeySender> Conversation for MultiKeySenderAdapter<T> {
     }
 
     fn is_expired(&self) -> bool {
-        self.expires_at < SystemTime::now()
+        match self.expires_at {
+            Some(expires_at) => expires_at < SystemTime::now(),
+            None => false,
+        }
     }
 }
 
@@ -154,7 +157,8 @@ impl<Inner: MultiKeySender> MultiKeySenderAdapter<Inner> {
         Self {
             user,
             subkeys: subkeys.into_iter().collect(),
-            expires_at: SystemTime::now() + Duration::from_secs(Inner::VALIDITY_SECONDS),
+            expires_at: Inner::VALIDITY_SECONDS
+                .map(|seconds| SystemTime::now() + Duration::from_secs(seconds)),
             inner,
         }
     }

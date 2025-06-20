@@ -38,7 +38,7 @@ pub struct AuthInitEvent {
 }
 
 impl MultiKeyListener for AuthInitReceiverConversation {
-    const VALIDITY_SECONDS: u64 = 60 * 5;
+    const VALIDITY_SECONDS: Option<u64> = None;
 
     type Error = ConversationError;
     type Message = AuthInitContent;
@@ -102,7 +102,7 @@ pub struct AuthResponseEvent {
 }
 
 impl MultiKeySender for AuthChallengeSenderConversation {
-    const VALIDITY_SECONDS: u64 = 60 * 5;
+    const VALIDITY_SECONDS: Option<u64> = Some(60 * 5);
 
     type Error = ConversationError;
     type Message = AuthResponseContent;

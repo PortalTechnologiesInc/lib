@@ -77,7 +77,7 @@ pub struct AuthChallengeEvent {
 }
 
 impl MultiKeyListener for AuthChallengeListenerConversation {
-    const VALIDITY_SECONDS: u64 = 60 * 5;
+    const VALIDITY_SECONDS: Option<u64> = None;
 
     type Error = ConversationError;
     type Message = AuthChallengeContent;

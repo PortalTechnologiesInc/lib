@@ -41,7 +41,7 @@ impl RecurringPaymentRequestSenderConversation {
 }
 
 impl MultiKeySender for RecurringPaymentRequestSenderConversation {
-    const VALIDITY_SECONDS: u64 = 60 * 5;
+    const VALIDITY_SECONDS: Option<u64> = Some(60 * 5);
 
     type Error = ConversationError;
     type Message = RecurringPaymentResponseContent;
@@ -131,7 +131,7 @@ impl SinglePaymentRequestSenderConversation {
 }
 
 impl MultiKeySender for SinglePaymentRequestSenderConversation {
-    const VALIDITY_SECONDS: u64 = 60 * 5;
+    const VALIDITY_SECONDS: Option<u64> = Some(60 * 5);
 
     type Error = ConversationError;
     type Message = PaymentResponseContent;

@@ -18,7 +18,7 @@ use crate::router::{
 };
 
 pub trait MultiKeyListener: Sized + Send + 'static {
-    const VALIDITY_SECONDS: u64;
+    const VALIDITY_SECONDS: Option<u64>;
 
     type Error: std::error::Error + Send + Sync + 'static;
     type Message: DeserializeOwned;
@@ -42,7 +42,7 @@ pub trait MultiKeyListener: Sized + Send + 'static {
 pub struct MultiKeyListenerAdapter<Inner> {
     pub user: Option<PublicKey>,
     pub subkey_proof: Option<SubkeyProof>,
-    pub expires_at: SystemTime,
+    pub expires_at: Option<SystemTime>,
     pub inner: Inner,
 }
 
@@ -98,7 +98,10 @@ where
     }
 
     fn is_expired(&self) -> bool {
-        self.expires_at < SystemTime::now()
+        match self.expires_at {
+            Some(expires_at) => expires_at < SystemTime::now(),
+            None => false,
+        }
     }
 }
 
@@ -107,7 +110,8 @@ impl<Inner: MultiKeyListener> MultiKeyListenerAdapter<Inner> {
         Self {
             user: None,
             subkey_proof,
-            expires_at: SystemTime::now() + Duration::from_secs(Inner::VALIDITY_SECONDS),
+            expires_at: Inner::VALIDITY_SECONDS
+                .map(|seconds| SystemTime::now() + Duration::from_secs(seconds)),
             inner,
         }
     }
