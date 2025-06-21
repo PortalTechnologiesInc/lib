@@ -35,7 +35,7 @@ export class DatabaseManager {
   private db: Database.Database;
 
   constructor() {
-    this.db = new Database(path.join(__dirname, process.env.DATABASE_PATH || '../sessions.db'));
+    this.db = new Database(process.env.DATABASE_PATH || path.join(__dirname, '../sessions.db'));
     this.initDatabase();
   }
 

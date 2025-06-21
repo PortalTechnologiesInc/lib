@@ -9,7 +9,8 @@
     "test": "jest",
     "lint": "eslint src --ext .ts",
     "start": "node dist/example.js",
-    "dev": "tsc && node dist/example.js"
+    "dev": "tsc && node dist/example.js",
+    "nix-build": "tsc && npm pack"
   },
   "keywords": [
     "nostr",
