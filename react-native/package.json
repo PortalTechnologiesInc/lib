@@ -1,6 +1,6 @@
 {
   "name": "portal-app-lib",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "React Native bindings for the Portal App library",
   "source": "./src/index.tsx",
   "main": "./lib/module/index.js",
