@@ -91,3 +91,7 @@ src/
 cpp/
 android/
 ios/
+
+# envrc
+.direnv
+.envrc

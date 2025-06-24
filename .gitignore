@@ -1,5 +1,9 @@
 .direnv
+.envrc
+.env
 
 # Added by cargo
 
 /target
+node_modules
+react-native/portal-app-lib-0.2.3.tgz
