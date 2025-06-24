@@ -407,15 +407,24 @@ impl PortalApp {
             .ok_or(AppError::ListenerDisconnected)?;
 
         match metadata {
-            Ok(Some(profile)) => {
-                // if let Some(nip05) = &profile.nip05 {
-                //     let verified = portal::nostr::nips::nip05::verify(&pubkey.into(), &nip05, None).await;
-                //     if verified.ok() != Some(true) {
-                //         profile.nip05 = None;
-                //     }
-                // }
+            Ok(Some(mut profile)) => {
+                let checked_profile = async_utility::task::spawn(async move {
+                    if let Some(nip05) = &profile.nip05 {
+                        let verified =
+                            portal::nostr::nips::nip05::verify(&pubkey.into(), &nip05, None).await;
+                        if verified.ok() != Some(true) {
+                            profile.nip05 = None;
+                        }
+                    }
+                    profile
+                })
+                .join()
+                .await
+                .map_err(|_| {
+                    AppError::ProfileFetchingError("Failed to send request".to_string())
+                })?;
 
-                Ok(Some(profile))
+                Ok(Some(checked_profile))
             }
             _ => Ok(None),
         }
