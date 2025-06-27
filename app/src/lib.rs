@@ -619,6 +619,12 @@ impl PortalApp {
     }
 }
 
+impl Drop for PortalApp {
+    fn drop(&mut self) {
+        log::warn!("PortalApp dropped");
+    }
+}
+
 impl PortalApp {
     async fn post_request_profile_service(&self, content: EventContent) -> Result<(), AppError> {
         let event = EventBuilder::text_note(serde_json::to_string(&content).unwrap())
