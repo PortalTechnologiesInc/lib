@@ -426,15 +426,24 @@ impl PortalApp {
             .ok_or(AppError::ListenerDisconnected)?;
 
         match metadata {
-            Ok(Some(profile)) => {
-                // if let Some(nip05) = &profile.nip05 {
-                //     let verified = portal::nostr::nips::nip05::verify(&pubkey.into(), &nip05, None).await;
-                //     if verified.ok() != Some(true) {
-                //         profile.nip05 = None;
-                //     }
-                // }
+            Ok(Some(mut profile)) => {
+                let checked_profile = async_utility::task::spawn(async move {
+                    if let Some(nip05) = &profile.nip05 {
+                        let verified =
+                            portal::nostr::nips::nip05::verify(&pubkey.into(), &nip05, None).await;
+                        if verified.ok() != Some(true) {
+                            profile.nip05 = None;
+                        }
+                    }
+                    profile
+                })
+                .join()
+                .await
+                .map_err(|_| {
+                    AppError::ProfileFetchingError("Failed to send request".to_string())
+                })?;
 
-                Ok(Some(profile))
+                Ok(Some(checked_profile))
             }
             _ => Ok(None),
         }
@@ -644,9 +653,13 @@ impl PortalApp {
                 })
         });
 
-        let _ = task.join().await.map_err(|_| {
+        let response = task.join().await.map_err(|_| {
             AppError::ProfileRegistrationError("Failed to send request".to_string())
         })??;
+
+        if let Err(e) = response.error_for_status() {
+            return Err(AppError::ProfileRegistrationError(e.to_string()));
+        }
 
         Ok(())
     }
@@ -747,6 +760,9 @@ pub enum AppError {
 
     #[error("{0}")]
     ProfileRegistrationStatusError(u16),
+
+    #[error("Profile fetching error: {0}")]
+    ProfileFetchingError(String),
 }
 
 impl From<portal::router::ConversationError> for AppError {
