@@ -6,10 +6,6 @@ use std::{
 use adapters::ConversationWithNotification;
 use channel::Channel;
 use futures::{Stream, StreamExt};
-use nostr_relay_pool::RelayPoolNotification;
-use serde::{Serialize, de::DeserializeOwned};
-use tokio::sync::{Mutex, RwLock, RwLockReadGuard, mpsc};
-
 use nostr::{
     event::{Event, EventBuilder, EventId, Kind, Tags},
     filter::Filter,
@@ -17,20 +13,26 @@ use nostr::{
     message::{RelayMessage, SubscriptionId},
     nips::nip44,
 };
+use nostr_relay_pool::RelayPoolNotification;
+use serde::{Serialize, de::DeserializeOwned};
+use tokio::sync::{Mutex, RwLock, RwLockReadGuard, mpsc};
 
 use crate::{
     protocol::{LocalKeypair, model::event_kinds::SUBKEY_PROOF},
+    router::conversation::ConversationId,
     utils::random_string,
 };
 
 pub mod adapters;
 pub mod channel;
+pub mod conversation;
 
 pub use adapters::multi_key_listener::{MultiKeyListener, MultiKeyListenerAdapter};
 pub use adapters::multi_key_sender::{MultiKeySender, MultiKeySenderAdapter};
+pub use conversation::{Conversation, ConversationError, ConversationMessage, DynConversation};
 
 pub struct RelayNode {
-    conversations: HashSet<String>,
+    conversations: HashSet<ConversationId>,
 }
 
 impl RelayNode {
@@ -53,10 +55,10 @@ impl RelayNode {
 pub struct MessageRouter<C: Channel> {
     channel: C,
     keypair: LocalKeypair,
-    conversations: Mutex<HashMap<String, Box<dyn Conversation + Send>>>,
-    aliases: Mutex<HashMap<String, Vec<u64>>>,
-    filters: RwLock<HashMap<String, Filter>>,
-    subscribers: Mutex<HashMap<String, Vec<mpsc::Sender<serde_json::Value>>>>,
+    conversations: Mutex<HashMap<ConversationId, DynConversation>>,
+    aliases: Mutex<HashMap<ConversationId, Vec<u64>>>,
+    filters: RwLock<HashMap<ConversationId, Filter>>,
+    subscribers: Mutex<HashMap<ConversationId, Vec<mpsc::Sender<serde_json::Value>>>>,
     end_of_stored_events: Mutex<HashMap<String, usize>>,
 
     relay_nodes: RwLock<HashMap<String, RelayNode>>,
@@ -108,27 +110,23 @@ where
                         &url
                     );
                     self.channel
-                        .subscribe_to(
-                            vec![url.clone()],
-                            conversation_id.to_string(),
-                            filter.clone(),
-                        )
+                        .subscribe_to(vec![url.clone()], conversation_id, filter.clone())
                         .await
                         .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
                     self.end_of_stored_events
                         .lock()
                         .await
-                        .get_mut(conversation_id)
+                        .get_mut(conversation_id.as_str())
                         .and_then(|v| Some(*v += 1));
                 }
 
                 if let Some(aliases) = aliases.get(conversation_id) {
                     for alias in aliases {
-                        let alias = format!("{}_{}", conversation_id, alias);
+                        let alias = ConversationId::from_alias(conversation_id.as_str(), *alias);
                         if let Some(filter) = filters.get(&alias) {
                             self.channel
-                                .subscribe_to(vec![url.clone()], alias, filter.clone())
+                                .subscribe_to(vec![url.clone()], &alias, filter.clone())
                                 .await
                                 .map_err(|e| ConversationError::Inner(Box::new(e)))?;
                         }
@@ -179,7 +177,7 @@ where
                 self.end_of_stored_events
                     .lock()
                     .await
-                    .get_mut(conv)
+                    .get_mut(conv.as_str())
                     .and_then(|v| Some(*v = v.saturating_sub(1)));
             }
         }
@@ -189,7 +187,7 @@ where
 
     async fn get_relays_by_conversation<'g>(
         &self,
-        conversation_id: &str,
+        conversation_id: &ConversationId,
         global_relay_guard: &RwLockReadGuard<'g, RelayNode>,
         relay_nodes_guard: &RwLockReadGuard<'g, HashMap<String, RelayNode>>,
     ) -> Result<Option<HashSet<String>>, ConversationError> {
@@ -207,12 +205,18 @@ where
         Ok(Some(relays))
     }
 
-    pub async fn cleanup_conversation(&self, conversation: &str) -> Result<(), ConversationError> {
+    pub async fn cleanup_conversation(
+        &self,
+        conversation: &ConversationId,
+    ) -> Result<(), ConversationError> {
         // Remove conversation state
         self.conversations.lock().await.remove(conversation);
         self.subscribers.lock().await.remove(conversation);
         self.filters.write().await.remove(conversation);
-        self.end_of_stored_events.lock().await.remove(conversation);
+        self.end_of_stored_events
+            .lock()
+            .await
+            .remove(conversation.as_str());
         let aliases = self.aliases.lock().await.remove(conversation);
 
         // Remove from global relay node
@@ -231,14 +235,14 @@ where
 
         // Remove filters from relays
         self.channel
-            .unsubscribe(conversation.to_string())
+            .unsubscribe(conversation.into())
             .await
             .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
         if let Some(aliases) = aliases {
             for alias in aliases {
                 self.channel
-                    .unsubscribe(format!("{}_{}", conversation, alias))
+                    .unsubscribe(&ConversationId::from_alias(conversation.as_str(), alias).into())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
@@ -310,7 +314,6 @@ where
                 }
                 _ => continue,
             };
-
             let message = match &event {
                 LocalEvent::Message(event) => {
                     if event.pubkey == self.keypair.public_key() && event.kind != Kind::Metadata {
@@ -360,7 +363,7 @@ where
 
             // Check if there are other potential conversations to dispatch to
             for (id, filter) in self.filters.read().await.iter() {
-                if id == subscription_id.as_str() {
+                if id.as_str() == subscription_id.as_str() {
                     continue;
                 }
 
@@ -384,7 +387,7 @@ where
             }
 
             for id in other_conversations {
-                self.dispatch_event(SubscriptionId::new(id.clone()), message.clone())
+                self.dispatch_event(SubscriptionId::new(id.as_str()), message.clone())
                     .await?;
             }
         }
@@ -404,18 +407,20 @@ where
             conversation_id
         };
 
-        let response = match self.conversations.lock().await.get_mut(conversation_id) {
+        let conversation_id = ConversationId::from(conversation_id);
+
+        let response = match self.conversations.lock().await.get_mut(&conversation_id) {
             Some(conv) => match conv.on_message(message) {
                 Ok(response) => response,
                 Err(e) => {
-                    log::warn!("Error in conversation id {:?}: {:?}", conversation_id, e);
+                    log::warn!("Error in conversation id {}: {}", conversation_id, e);
                     Response::new().finish()
                 }
             },
             None => {
                 log::warn!("No conversation found for id: {:?}", conversation_id);
                 self.channel
-                    .unsubscribe(conversation_id.to_string())
+                    .unsubscribe(&conversation_id)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
@@ -423,14 +428,14 @@ where
             }
         };
 
-        self.process_response(conversation_id, response).await?;
+        self.process_response(&conversation_id, response).await?;
 
         Ok(())
     }
 
     async fn process_response(
         &self,
-        id: &str,
+        id: &ConversationId,
         response: Response,
     ) -> Result<(), ConversationError> {
         log::trace!("Processing response builder for {} = {:?}", id, response);
@@ -447,14 +452,14 @@ where
             self.filters
                 .write()
                 .await
-                .insert(id.to_string(), response.filter.clone());
+                .insert(id.clone(), response.filter.clone());
 
             let num_relays = if let Some(selected_relays) = selected_relays_optional.clone() {
                 let num_relays = selected_relays.len();
 
                 log::trace!("Subscribing to relays = {:?}", selected_relays);
                 self.channel
-                    .subscribe_to(selected_relays, id.to_string(), response.filter.clone())
+                    .subscribe_to(selected_relays, id, response.filter.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
@@ -462,7 +467,7 @@ where
             } else {
                 log::trace!("Subscribing to all relays");
                 self.channel
-                    .subscribe(id.to_string(), response.filter.clone())
+                    .subscribe(id, response.filter.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
@@ -533,7 +538,7 @@ where
             self.aliases
                 .lock()
                 .await
-                .entry(id.to_string())
+                .entry(id.clone())
                 .or_default()
                 .push(alias_num);
 
@@ -541,7 +546,7 @@ where
                 .kinds(vec![Kind::Custom(SUBKEY_PROOF)])
                 .events(events_to_broadcast.iter().map(|e| e.id));
 
-            let alias = format!("{}_{}", id, alias_num);
+            let alias = ConversationId::from_alias(id.as_str(), alias_num);
             self.filters
                 .write()
                 .await
@@ -553,7 +558,7 @@ where
                     selected_relays
                 );
                 self.channel
-                    .subscribe_to(selected_relays, alias, filter)
+                    .subscribe_to(selected_relays, &alias, filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             } else {
@@ -561,7 +566,7 @@ where
                 // Subscribe to subkey proofs to all
 
                 self.channel
-                    .subscribe(alias, filter)
+                    .subscribe(&alias, filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
@@ -597,12 +602,13 @@ where
 
     async fn internal_add_with_id(
         &self,
-        id: &str,
-        mut conversation: Box<dyn Conversation + Send>,
+        id: &ConversationId,
+        mut conversation: DynConversation,
         relays: Option<Vec<String>>,
     ) -> Result<Response, ConversationError> {
         let response = conversation.init()?;
 
+        let owned_id = id.clone();
         if let Some(relays) = relays {
             // Update relays node
             let mut relay_nodes = self.relay_nodes.write().await;
@@ -612,7 +618,7 @@ where
 
                 match relay_nodes.get_mut(&relay) {
                     Some(found_node) => {
-                        found_node.conversations.insert(id.to_string());
+                        found_node.conversations.insert(owned_id.clone());
                     }
                     None => {
                         return Err(ConversationError::RelayNotConnected(relay));
@@ -625,13 +631,13 @@ where
                 .write()
                 .await
                 .conversations
-                .insert(id.to_string());
+                .insert(owned_id.clone());
         }
 
         self.conversations
             .lock()
             .await
-            .insert(id.to_string(), conversation);
+            .insert(owned_id, conversation);
 
         Ok(response)
     }
@@ -648,9 +654,9 @@ where
     /// * `Err(ConversationError)` if an error occurs during initialization
     pub async fn add_conversation(
         &self,
-        conversation: Box<dyn Conversation + Send>,
-    ) -> Result<String, ConversationError> {
-        let conversation_id = random_string(32);
+        conversation: DynConversation,
+    ) -> Result<ConversationId, ConversationError> {
+        let conversation_id = ConversationId::generate();
 
         let response = self
             .internal_add_with_id(&conversation_id, conversation, None)
@@ -662,10 +668,10 @@ where
 
     pub async fn add_conversation_with_relays(
         &self,
-        conversation: Box<dyn Conversation + Send>,
+        conversation: DynConversation,
         relays: Vec<String>,
-    ) -> Result<String, ConversationError> {
-        let conversation_id = random_string(32);
+    ) -> Result<ConversationId, ConversationError> {
+        let conversation_id = ConversationId::generate();
 
         let response = self
             .internal_add_with_id(&conversation_id, conversation, Some(relays))
@@ -688,7 +694,7 @@ where
     /// * `Err(ConversationError)` if an error occurs during subscription
     pub async fn subscribe_to_service_request<T: DeserializeOwned + Serialize>(
         &self,
-        id: String,
+        id: ConversationId,
     ) -> Result<NotificationStream<T>, ConversationError> {
         let (tx, rx) = mpsc::channel(8);
         self.subscribers
@@ -726,7 +732,7 @@ where
         &self,
         conversation: Conv,
     ) -> Result<NotificationStream<Conv::Notification>, ConversationError> {
-        let conversation_id = random_string(32);
+        let conversation_id = ConversationId::generate();
 
         // Update Global Relay Node
 
@@ -910,36 +916,6 @@ impl Response {
     fn extend(&mut self, response: Response) {
         self.responses.extend(response.responses);
         self.subscribe_to_subkey_proofs |= response.subscribe_to_subkey_proofs;
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum ConversationMessage {
-    Cleartext(CleartextEvent),
-    Encrypted(Event),
-    EndOfStoredEvents,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum ConversationError {
-    #[error("Encrypted messages not supported")]
-    Encrypted,
-
-    #[error("User not set")]
-    UserNotSet,
-
-    #[error("Inner error: {0}")]
-    Inner(Box<dyn std::error::Error + Send + Sync>),
-
-    #[error("Relay '{0}' is not connected")]
-    RelayNotConnected(String),
-}
-
-pub trait Conversation {
-    fn on_message(&mut self, message: ConversationMessage) -> Result<Response, ConversationError>;
-    fn is_expired(&self) -> bool;
-    fn init(&mut self) -> Result<Response, ConversationError> {
-        Ok(Response::default())
     }
 }
 

@@ -6,7 +6,10 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 
 use crate::{
     protocol::LocalKeypair,
-    router::{Conversation, ConversationError, MessageRouter, channel::Channel},
+    router::{
+        Conversation, ConversationError, MessageRouter, channel::Channel,
+        conversation::ConversationId,
+    },
 };
 
 pub mod logger;
@@ -63,12 +66,12 @@ pub enum SimulatedChannelError {
 impl Channel for SimulatedChannel {
     type Error = SimulatedChannelError;
 
-    async fn subscribe(&self, id: String, filter: Filter) -> Result<(), Self::Error> {
+    async fn subscribe(&self, id: &ConversationId, filter: Filter) -> Result<(), Self::Error> {
         // Use the first sender for subscribers
         self.subscribers
             .write()
             .await
-            .insert(id.clone(), (filter, self.my_sender.clone()));
+            .insert(id.to_string(), (filter, self.my_sender.clone()));
 
         // Send any existing messages that match the filter
         // let messages = self.messages.lock().await;
@@ -90,7 +93,7 @@ impl Channel for SimulatedChannel {
     async fn subscribe_to<I, U>(
         &self,
         urls: I,
-        id: String,
+        id: &ConversationId,
         filter: nostr::Filter,
     ) -> Result<(), Self::Error>
     where
@@ -103,12 +106,12 @@ impl Channel for SimulatedChannel {
         self.subscribers
             .write()
             .await
-            .insert(id.clone(), (filter, self.my_sender.clone()));
+            .insert(id.to_string(), (filter, self.my_sender.clone()));
         Ok(())
     }
 
-    async fn unsubscribe(&self, id: String) -> Result<(), Self::Error> {
-        self.subscribers.write().await.remove(&id);
+    async fn unsubscribe(&self, id: &ConversationId) -> Result<(), Self::Error> {
+        self.subscribers.write().await.remove(id.as_str());
         Ok(())
     }
 
@@ -176,6 +179,10 @@ impl Channel for SimulatedChannel {
 
     async fn remove_relay(&self, url: String) -> Result<(), Self::Error> {
         todo!()
+    }
+
+    async fn num_relays(&self) -> Result<usize, Self::Error> {
+        Ok(1000)
     }
 }
 
