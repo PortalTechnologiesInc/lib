@@ -3,7 +3,7 @@ use std::error::Error;
 use nostr::{message::SubscriptionId, types::TryIntoUrl};
 use nostr_relay_pool::{RelayOptions, RelayPool, RelayPoolNotification, SubscribeOptions};
 
-use crate::router::conversation::ConversationId;
+use crate::router::conversation::{ConversationFilter, ConversationId};
 
 /// A trait for an abstract channel
 ///
@@ -14,14 +14,14 @@ pub trait Channel: Send + 'static {
     fn subscribe(
         &self,
         id: &ConversationId,
-        filter: nostr::Filter,
+        filter: &ConversationFilter,
     ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
 
     fn subscribe_to<I, U>(
         &self,
         urls: I,
         id: &ConversationId,
-        filter: nostr::Filter,
+        filter: &ConversationFilter,
     ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send
     where
         <I as IntoIterator>::IntoIter: Send,
@@ -72,11 +72,11 @@ impl Channel for RelayPool {
     async fn subscribe(
         &self,
         id: &ConversationId,
-        filter: nostr::Filter,
+        filter: &ConversationFilter,
     ) -> Result<(), Self::Error> {
         self.subscribe_with_id(
             SubscriptionId::new(id.as_str()),
-            filter,
+            filter.inner.clone(),
             SubscribeOptions::default(),
         )
         .await?;
@@ -87,7 +87,7 @@ impl Channel for RelayPool {
         &self,
         urls: I,
         id: &ConversationId,
-        filter: nostr::Filter,
+        filter: &ConversationFilter,
     ) -> Result<(), Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
@@ -98,7 +98,7 @@ impl Channel for RelayPool {
         self.subscribe_with_id_to(
             urls,
             SubscriptionId::new(id.as_str()),
-            filter,
+            filter.inner.clone(),
             SubscribeOptions::default(),
         )
         .await?;

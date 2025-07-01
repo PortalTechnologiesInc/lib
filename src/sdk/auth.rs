@@ -17,6 +17,7 @@ use crate::{
     router::{
         ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender,
         MultiKeySenderAdapter, Response, adapters::ConversationWithNotification,
+        conversation::ConversationFilter,
     },
     utils::random_string,
 };
@@ -104,7 +105,7 @@ impl MultiKeySender for AuthChallengeSenderConversation {
 
     fn get_filter(
         state: &crate::router::MultiKeySenderAdapter<Self>,
-    ) -> Result<Filter, Self::Error> {
+    ) -> Result<ConversationFilter, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::from(AUTH_RESPONSE)])
             .authors(state.subkeys.iter().chain([&state.user]).cloned())
@@ -114,7 +115,7 @@ impl MultiKeySender for AuthChallengeSenderConversation {
             filter = filter.pubkey(subkey_proof.main_key.into());
         }
 
-        Ok(filter)
+        Ok(filter.into())
     }
 
     fn build_initial_message(

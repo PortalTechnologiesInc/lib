@@ -8,7 +8,10 @@ use serde::de::DeserializeOwned;
 
 use nostr::{event::Kind, filter::Filter, key::PublicKey};
 
-use crate::protocol::model::{auth::SubkeyProof, event_kinds::SUBKEY_PROOF};
+use crate::{
+    protocol::model::{auth::SubkeyProof, event_kinds::SUBKEY_PROOF},
+    router::conversation::ConversationFilter,
+};
 
 use crate::router::{
     CleartextEvent, Conversation, ConversationError, ConversationMessage, Response,
@@ -22,7 +25,7 @@ pub trait MultiKeySender: Sized + Send + 'static {
     type Error: std::error::Error + Send + Sync + 'static;
     type Message: DeserializeOwned;
 
-    fn get_filter(_state: &MultiKeySenderAdapter<Self>) -> Result<Filter, Self::Error>;
+    fn get_filter(_state: &MultiKeySenderAdapter<Self>) -> Result<ConversationFilter, Self::Error>;
 
     fn build_initial_message(
         _state: &mut MultiKeySenderAdapter<Self>,
@@ -58,12 +61,12 @@ impl<T: MultiKeySender> Conversation for MultiKeySenderAdapter<T> {
         let filter = <T as MultiKeySender>::get_filter(self)
             .map_err(|e| ConversationError::Inner(Box::new(e)))?;
         // Also listen for SUBKEY_PROOF messages
-        let filter = filter.kind(Kind::Custom(SUBKEY_PROOF));
+        let filter = filter.inner.kind(Kind::Custom(SUBKEY_PROOF));
 
         // Then build the initial message, this will be sent to the user
         let mut response = <T as MultiKeySender>::build_initial_message(self, None)
             .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-        response.filter = filter;
+        response.filter.inner = filter;
 
         response.set_recepient_keys(self.user, &self.subkeys);
 
@@ -132,7 +135,10 @@ impl<T: MultiKeySender> Conversation for MultiKeySenderAdapter<T> {
                     response.filter = <T as MultiKeySender>::get_filter(self)
                         .map_err(|e| ConversationError::Inner(Box::new(e)))?;
                     // Add the SUBKEY_PROOF kind to the filter
-                    response.filter = response.filter.kinds(vec![Kind::Custom(SUBKEY_PROOF)]);
+                    response.filter.inner = response
+                        .filter
+                        .inner
+                        .kinds(vec![Kind::Custom(SUBKEY_PROOF)]);
 
                     Ok(response)
                 } else {

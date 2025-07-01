@@ -14,6 +14,7 @@ use crate::{
     router::{
         ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender, Response,
         adapters::{ConversationWithNotification, one_shot::OneShotSender},
+        conversation::ConversationFilter,
     },
 };
 
@@ -35,10 +36,10 @@ impl MultiKeySender for CloseRecurringPaymentConversation {
 
     fn get_filter(
         _state: &crate::router::MultiKeySenderAdapter<Self>,
-    ) -> Result<Filter, Self::Error> {
+    ) -> Result<ConversationFilter, Self::Error> {
         // Empty filter that will not match any events
         // TODO: we should avoid subscribing to relays for empty filters
-        Ok(Filter::new().id(EventId::all_zeros()))
+        Ok(Filter::new().id(EventId::all_zeros()).into())
     }
 
     fn build_initial_message(

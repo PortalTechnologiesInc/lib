@@ -10,7 +10,7 @@ use crate::{
     },
     router::{
         ConversationError, MultiKeySender, MultiKeySenderAdapter, Response,
-        adapters::ConversationWithNotification,
+        adapters::ConversationWithNotification, conversation::ConversationFilter,
     },
 };
 use nostr::{
@@ -48,7 +48,7 @@ impl MultiKeySender for RecurringPaymentRequestSenderConversation {
 
     fn get_filter(
         state: &crate::router::MultiKeySenderAdapter<Self>,
-    ) -> Result<Filter, Self::Error> {
+    ) -> Result<ConversationFilter, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::Custom(RECURRING_PAYMENT_RESPONSE)])
             .authors(state.subkeys.iter().chain([&state.user]).cloned())
@@ -58,7 +58,7 @@ impl MultiKeySender for RecurringPaymentRequestSenderConversation {
             filter = filter.pubkey(subkey_proof.main_key.into());
         }
 
-        Ok(filter)
+        Ok(filter.into())
     }
 
     fn build_initial_message(
@@ -138,7 +138,7 @@ impl MultiKeySender for SinglePaymentRequestSenderConversation {
 
     fn get_filter(
         state: &crate::router::MultiKeySenderAdapter<Self>,
-    ) -> Result<Filter, Self::Error> {
+    ) -> Result<ConversationFilter, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![
                 Kind::Custom(PAYMENT_RESPONSE),
@@ -151,7 +151,7 @@ impl MultiKeySender for SinglePaymentRequestSenderConversation {
             filter = filter.pubkey(subkey_proof.main_key.into());
         }
 
-        Ok(filter)
+        Ok(filter.into())
     }
 
     fn build_initial_message(

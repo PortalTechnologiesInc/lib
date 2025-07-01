@@ -7,8 +7,9 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 use crate::{
     protocol::LocalKeypair,
     router::{
-        Conversation, ConversationError, MessageRouter, channel::Channel,
-        conversation::ConversationId,
+        Conversation, ConversationError, MessageRouter,
+        channel::Channel,
+        conversation::{ConversationFilter, ConversationId},
     },
 };
 
@@ -66,12 +67,16 @@ pub enum SimulatedChannelError {
 impl Channel for SimulatedChannel {
     type Error = SimulatedChannelError;
 
-    async fn subscribe(&self, id: &ConversationId, filter: Filter) -> Result<(), Self::Error> {
+    async fn subscribe(
+        &self,
+        id: &ConversationId,
+        filter: &ConversationFilter,
+    ) -> Result<(), Self::Error> {
         // Use the first sender for subscribers
-        self.subscribers
-            .write()
-            .await
-            .insert(id.to_string(), (filter, self.my_sender.clone()));
+        self.subscribers.write().await.insert(
+            id.to_string(),
+            (filter.inner.clone(), self.my_sender.clone()),
+        );
 
         // Send any existing messages that match the filter
         // let messages = self.messages.lock().await;
@@ -94,7 +99,7 @@ impl Channel for SimulatedChannel {
         &self,
         urls: I,
         id: &ConversationId,
-        filter: nostr::Filter,
+        filter: &ConversationFilter,
     ) -> Result<(), Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
@@ -103,10 +108,10 @@ impl Channel for SimulatedChannel {
         Self::Error: From<<U as nostr::types::TryIntoUrl>::Err>,
     {
         // TODO: use the urls to create a filter
-        self.subscribers
-            .write()
-            .await
-            .insert(id.to_string(), (filter, self.my_sender.clone()));
+        self.subscribers.write().await.insert(
+            id.to_string(),
+            (filter.inner.clone(), self.my_sender.clone()),
+        );
         Ok(())
     }
 
