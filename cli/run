@@ -1,1 +1,1 @@
-RUST_LOG=portal=trace,info cargo run --bin invoic
+RUST_LOG=info cargo run --bin invoices

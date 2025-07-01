@@ -1,11 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
-    ops::{Deref, DerefMut},
 };
 
 use adapters::ConversationWithNotification;
 use channel::Channel;
-use futures::{Stream, StreamExt};
+use futures::StreamExt;
 use nostr::{
     event::{Event, EventBuilder, EventId, Kind, Tags},
     filter::Filter,
@@ -18,30 +17,24 @@ use serde::{Serialize, de::DeserializeOwned};
 use tokio::sync::{Mutex, RwLock, RwLockReadGuard, mpsc};
 
 use crate::{
-    protocol::{LocalKeypair, model::event_kinds::SUBKEY_PROOF},
-    router::conversation::ConversationId,
+    protocol::{model::event_kinds::SUBKEY_PROOF, LocalKeypair},
+    router::{conversation::{
+        ConversationFilterId, ConversationId, ConversationRelaysContext, ConversationState
+    }, node::{FilterNode, RelayNode}, notification::NotificationStream, response::Response, filter_merge::{can_merge_filters, merge_filters}},
     utils::random_string,
 };
 
 pub mod adapters;
 pub mod channel;
 pub mod conversation;
+pub mod notification;
+pub mod response;
+pub mod node;
+pub mod filter_merge;
 
 pub use adapters::multi_key_listener::{MultiKeyListener, MultiKeyListenerAdapter};
 pub use adapters::multi_key_sender::{MultiKeySender, MultiKeySenderAdapter};
 pub use conversation::{Conversation, ConversationError, ConversationMessage, DynConversation};
-
-pub struct RelayNode {
-    conversations: HashSet<ConversationId>,
-}
-
-impl RelayNode {
-    fn new() -> Self {
-        RelayNode {
-            conversations: HashSet::new(),
-        }
-    }
-}
 
 // TODO: update expiry at every message
 
@@ -52,17 +45,18 @@ impl RelayNode {
 /// - Routing incoming messages to the appropriate conversations
 /// - Broadcasting outgoing messages to the network
 /// - Managing subscriptions to conversation notifications
+///
 pub struct MessageRouter<C: Channel> {
     channel: C,
     keypair: LocalKeypair,
-    conversations: Mutex<HashMap<ConversationId, DynConversation>>,
-    aliases: Mutex<HashMap<ConversationId, Vec<u64>>>,
-    filters: RwLock<HashMap<ConversationId, Filter>>,
+
+    conversations: Mutex<HashMap<ConversationId, ConversationState>>,
     subscribers: Mutex<HashMap<ConversationId, Vec<mpsc::Sender<serde_json::Value>>>>,
-    end_of_stored_events: Mutex<HashMap<String, usize>>,
 
     relay_nodes: RwLock<HashMap<String, RelayNode>>,
     global_relay_node: RwLock<RelayNode>,
+
+    filters: RwLock<HashMap<ConversationFilterId, FilterNode>>,
 }
 
 impl<C: Channel> MessageRouter<C>
@@ -82,12 +76,23 @@ where
             channel,
             keypair,
             conversations: Mutex::new(HashMap::new()),
-            aliases: Mutex::new(HashMap::new()),
             subscribers: Mutex::new(HashMap::new()),
-            end_of_stored_events: Mutex::new(HashMap::new()),
-            filters: RwLock::new(HashMap::new()),
             relay_nodes: RwLock::new(HashMap::new()),
             global_relay_node: RwLock::new(RelayNode::new()),
+            filters: RwLock::new(HashMap::new()),
+        }
+    }
+
+    /// Get filter from ConversationState
+    fn get_filter<'g>(
+        filters_guard: &'g RwLockReadGuard<'g, HashMap<ConversationFilterId, FilterNode>>,
+        conv: &ConversationState
+    ) -> Result<&'g Filter, ConversationError> {
+        let filter_id = conv.filter.as_ref().ok_or(ConversationError::FilterNotFound("No filter set".to_string()))?;
+
+        match filters_guard.get(filter_id) {
+            Some(filter_node) => Ok(&filter_node.filter),
+            None => Err(ConversationError::FilterNotFound(filter_id.clone())),
         }
     }
 
@@ -97,50 +102,76 @@ where
             .await
             .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
-        // Subscribe existing conversations to new relays
-        {
+        // Collect unique filters to subscribe to and update EOSE counts atomically
+        let filter_subscription_tasks = {
             let global_relay_node = self.global_relay_node.read().await;
             let filters = self.filters.read().await;
-            let aliases = self.aliases.lock().await;
+            let mut conversations = self.conversations.lock().await;
+            
+            // Collect unique filters used by conversations on global relays
+            let mut unique_filters: HashMap<ConversationFilterId, Filter> = HashMap::new();
+            
+            // Process all conversation IDs first, then process aliases in a separate pass
+            let mut conversation_ids_to_process = Vec::new();
+            let mut alias_ids_to_process = Vec::new();
+            
             for conversation_id in global_relay_node.conversations.iter() {
-                if let Some(filter) = filters.get(conversation_id) {
-                    log::trace!(
-                        "Subscribing {:?} to new relay = {:?}",
-                        conversation_id,
-                        &url
-                    );
-                    self.channel
-                        .subscribe_to(vec![url.clone()], conversation_id, filter.clone())
-                        .await
-                        .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-
-                    self.end_of_stored_events
-                        .lock()
-                        .await
-                        .get_mut(conversation_id.as_str())
-                        .and_then(|v| Some(*v += 1));
-                }
-
-                if let Some(aliases) = aliases.get(conversation_id) {
-                    for alias in aliases {
-                        let alias = ConversationId::from_alias(conversation_id.as_str(), *alias);
-                        if let Some(filter) = filters.get(&alias) {
-                            self.channel
-                                .subscribe_to(vec![url.clone()], &alias, filter.clone())
-                                .await
-                                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                conversation_ids_to_process.push(conversation_id.clone());
+            }
+            
+            // First pass: process main conversations
+            for conversation_id in &conversation_ids_to_process {
+                if let Some(conversation_state) = conversations.get_mut(conversation_id) {
+                    // Update EOSE count immediately while we have the lock
+                    conversation_state.increment_eose();
+                    
+                    if let Some(filter_id) = &conversation_state.filter {
+                        if let Some(filter_node) = filters.get(filter_id) {
+                            unique_filters.insert(filter_id.clone(), filter_node.filter.clone());
+                        }
+                    }
+                    
+                    // Collect alias IDs for second pass
+                    if let Some(aliases) = &conversation_state.aliases {
+                        for alias in aliases {
+                            let alias_id = ConversationId::from_alias(conversation_id.as_str(), *alias);
+                            alias_ids_to_process.push(alias_id);
                         }
                     }
                 }
             }
+            
+            // Second pass: process aliases
+            for alias_id in alias_ids_to_process {
+                if let Some(alias_state) = conversations.get_mut(&alias_id) {
+                    // Update EOSE count for alias as well
+                    alias_state.increment_eose();
+                    
+                    if let Some(alias_filter_id) = &alias_state.filter {
+                        if let Some(alias_filter_node) = filters.get(alias_filter_id) {
+                            unique_filters.insert(alias_filter_id.clone(), alias_filter_node.filter.clone());
+                        }
+                    }
+                }
+            }
+            
+            unique_filters
+        };
+
+        // Execute subscriptions without holding any locks - subscribe using filter IDs
+        for (filter_id, filter) in filter_subscription_tasks {
+            log::trace!("Subscribing filter {:?} to new relay = {:?}", filter_id, &url);
+            
+            self.channel
+                .subscribe_to(vec![url.clone()], &filter_id, &filter)
+                .await
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
         }
 
+        // Add the new relay node
         {
             let mut relay_nodes = self.relay_nodes.write().await;
-
-            relay_nodes
-                .entry(url.clone())
-                .or_insert_with(|| RelayNode::new());
+            relay_nodes.entry(url).or_insert_with(|| RelayNode::new());
         }
 
         Ok(())
@@ -157,42 +188,46 @@ where
 
         if let Some(node) = relay_nodes_guard.remove(&url) {
             let relay_nodes_guard = relay_nodes_guard.downgrade();
+            let mut conversations = self.conversations.lock().await;
 
             for conv in node.conversations.iter() {
                 let relays_of_conversation = self
                     .get_relays_by_conversation(conv, &global_relay_guard, &relay_nodes_guard)
                     .await?;
                 match relays_of_conversation {
-                    Some(urls) => {
-                        // If conversation it not present in other relays, clean it
+                    ConversationRelaysContext::Targeted(urls) => {
+                        // If conversation is not present in other relays, clean it
                         if urls.is_empty() {
+                            // Need to drop the lock before calling cleanup_conversation to avoid deadlock
+                            drop(conversations);
                             self.cleanup_conversation(conv).await?;
+                            conversations = self.conversations.lock().await;
                         }
                     }
-                    None => {
-                        // If conversation is present also on the global node relay, should'nt happen, dont clean it
+                    ConversationRelaysContext::Global => {
+                        // If conversation is present on the global relay node, don't clean it
+                        // This can happen legitimately when a conversation is on both global and specific relays
                     }
                 }
 
-                self.end_of_stored_events
-                    .lock()
-                    .await
-                    .get_mut(conv.as_str())
-                    .and_then(|v| Some(*v = v.saturating_sub(1)));
+                if let Some(state) = conversations.get_mut(conv) {
+                    state.increment_eose();
+                }
             }
         }
 
         Ok(())
     }
 
+
     async fn get_relays_by_conversation<'g>(
         &self,
         conversation_id: &ConversationId,
         global_relay_guard: &RwLockReadGuard<'g, RelayNode>,
         relay_nodes_guard: &RwLockReadGuard<'g, HashMap<String, RelayNode>>,
-    ) -> Result<Option<HashSet<String>>, ConversationError> {
+    ) -> Result<ConversationRelaysContext, ConversationError> {
         if global_relay_guard.conversations.contains(conversation_id) {
-            return Ok(None);
+            return Ok(ConversationRelaysContext::Global);
         }
 
         let mut relays = HashSet::new();
@@ -201,62 +236,101 @@ where
                 relays.insert(url.clone());
             }
         }
-
-        Ok(Some(relays))
+        Ok(ConversationRelaysContext::Targeted(relays))
     }
 
     pub async fn cleanup_conversation(
         &self,
         conversation: &ConversationId,
     ) -> Result<(), ConversationError> {
-        // Remove conversation state
-        self.conversations.lock().await.remove(conversation);
-        self.subscribers.lock().await.remove(conversation);
-        self.filters.write().await.remove(conversation);
-        self.end_of_stored_events
+        // Remove conversation state and collect cleanup data
+        let conversation_state = self
+            .conversations
             .lock()
             .await
-            .remove(conversation.as_str());
-        let aliases = self.aliases.lock().await.remove(conversation);
+            .remove(conversation)
+            .ok_or(ConversationError::ConversationNotFound)?;
 
-        // Remove from global relay node
+        let mut filter_ids_to_unsubscribe = Vec::new();
+
+        // Batch all cleanup operations that require locks
         {
+            let mut filters_guard = self.filters.write().await;
             let mut global_relay_node = self.global_relay_node.write().await;
-            global_relay_node.conversations.remove(conversation);
-        }
-
-        // Remove from specific relay node
-        {
             let mut relay_nodes = self.relay_nodes.write().await;
+
+            // Remove from filter node if it exists
+            if let Some(filter_id) = &conversation_state.filter {
+                if let Some(filter_node) = filters_guard.get_mut(filter_id) {
+                    filter_node.conversations.remove(conversation);
+                    
+                    // If no conversations left using this filter, mark it for unsubscription and removal
+                    if filter_node.conversations.is_empty() {
+                        filter_ids_to_unsubscribe.push(filter_id.clone());
+                        filters_guard.remove(filter_id);
+                    }
+                }
+            }
+
+            // Remove from global relay node
+            global_relay_node.conversations.remove(conversation);
+
+            // Remove from all specific relay nodes
             for (_, relay_node) in relay_nodes.iter_mut() {
                 relay_node.conversations.remove(conversation);
             }
         }
 
-        // Remove filters from relays
-        self.channel
-            .unsubscribe(conversation.into())
-            .await
-            .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        // Unsubscribe from filters that are no longer needed (done without locks to avoid holding them during network calls)
+        for filter_id in filter_ids_to_unsubscribe {
+            self.channel
+                .unsubscribe(&filter_id)
+                .await
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        }
 
-        if let Some(aliases) = aliases {
+        // Handle aliases - unsubscribe their filters if they're no longer needed
+        if let Some(aliases) = conversation_state.aliases {
             for alias in aliases {
-                self.channel
-                    .unsubscribe(&ConversationId::from_alias(conversation.as_str(), alias).into())
-                    .await
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                let alias_id = ConversationId::from_alias(conversation.as_str(), alias);
+                
+                // Remove alias conversation and check if its filter should be unsubscribed
+                let alias_state = self.conversations.lock().await.remove(&alias_id);
+                if let Some(alias_state) = alias_state {
+                    if let Some(alias_filter_id) = alias_state.filter {
+                        let should_unsubscribe = {
+                            let mut filters_guard = self.filters.write().await;
+                            if let Some(filter_node) = filters_guard.get_mut(&alias_filter_id) {
+                                filter_node.conversations.remove(&alias_id);
+                                
+                                let is_empty = filter_node.conversations.is_empty();
+                                if is_empty {
+                                    filters_guard.remove(&alias_filter_id);
+                                }
+                                is_empty
+                            } else {
+                                false
+                            }
+                        };
+                        
+                        if should_unsubscribe {
+                            self.channel
+                                .unsubscribe(&alias_filter_id)
+                                .await
+                                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                        }
+                    }
+                }
             }
         }
+        
         Ok(())
     }
 
     pub async fn purge(&mut self) {
         self.conversations.lock().await.clear();
-        self.subscribers.lock().await.clear();
-        self.aliases.lock().await.clear();
-        self.filters.write().await.clear();
-        self.end_of_stored_events.lock().await.clear();
         self.global_relay_node.write().await.conversations.clear();
+        self.filters.write().await.clear();
     }
 
     /// Starts listening for incoming messages and routes them to the appropriate conversations.
@@ -296,17 +370,47 @@ where
                     message: RelayMessage::EndOfStoredEvents(subscription_id),
                     ..
                 } => {
-                    let mut eose = self.end_of_stored_events.lock().await;
+                    // Handle EOSE for filter - affects all conversations using this filter
+                    let should_emit_eose = {
+                        let mut conversations = self.conversations.lock().await;
+                        let filters = self.filters.read().await;
+                        let filter_id = subscription_id.as_str();
+                        
+                        // Find all conversations using this filter
+                        if let Some(filter_node) = filters.get(filter_id) {
+                            let mut all_ready = true;
+                            let mut any_found = false;
+                            
+                            for conv_id in filter_node.conversations.iter() {
+                                if let Some(conversation_state) = conversations.get_mut(conv_id) {
+                                    any_found = true;
+                                    let remaining = conversation_state.decrease_eose();
+                                    log::trace!("{:?} EOSE left for {:?} (filter {})", remaining, conv_id, filter_id);
+                                    
+                                    if remaining != Some(0) {
+                                        all_ready = false;
+                                    }
+                                }
+                            }
+                            
+                            if any_found && all_ready {
+                                // Reset EOSE for all conversations using this filter
+                                for conv_id in filter_node.conversations.iter() {
+                                    if let Some(conversation_state) = conversations.get_mut(conv_id) {
+                                        conversation_state.reset_eose();
+                                    }
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            log::warn!("EOSE for unknown filter: {:?}", subscription_id);
+                            false
+                        }
+                    };
 
-                    let remaining = eose.get_mut(&subscription_id.to_string()).and_then(|v| {
-                        *v -= 1;
-                        Some(*v)
-                    });
-
-                    log::trace!("{:?} EOSE left for {:?}", remaining, subscription_id);
-
-                    if remaining == Some(0) {
-                        eose.remove(&subscription_id.to_string());
+                    if should_emit_eose {
                         (subscription_id.into_owned(), LocalEvent::EndOfStoredEvents)
                     } else {
                         continue;
@@ -314,6 +418,7 @@ where
                 }
                 _ => continue,
             };
+            
             let message = match &event {
                 LocalEvent::Message(event) => {
                     if event.pubkey == self.keypair.public_key() && event.kind != Kind::Metadata {
@@ -355,39 +460,40 @@ where
                 LocalEvent::EndOfStoredEvents => ConversationMessage::EndOfStoredEvents,
             };
 
-            self.dispatch_event(subscription_id.clone(), message.clone())
-                .await?;
+            // Dispatch to all conversations using this filter
+            let (conversations_to_dispatch, to_cleanup) = {
+                let filters = self.filters.read().await;
+                let conversations = self.conversations.lock().await;
+                let filter_id = subscription_id.as_str();
+                
+                let mut conversations_to_dispatch = vec![];
+                let mut to_cleanup = vec![];
 
-            let mut to_cleanup = vec![];
-            let mut other_conversations = vec![];
-
-            // Check if there are other potential conversations to dispatch to
-            for (id, filter) in self.filters.read().await.iter() {
-                if id.as_str() == subscription_id.as_str() {
-                    continue;
-                }
-
-                match self.conversations.lock().await.get(id) {
-                    Some(conv) if conv.is_expired() => {
-                        to_cleanup.push(id.clone());
-                        continue;
-                    }
-                    _ => {}
-                }
-
-                if let LocalEvent::Message(event) = &event {
-                    if filter.match_event(&event) {
-                        other_conversations.push(id.clone());
+                if let Some(filter_node) = filters.get(filter_id) {
+                    for conv_id in filter_node.conversations.iter() {
+                        match conversations.get(conv_id) {
+                            Some(conv_state) if conv_state.conversation.is_expired() => {
+                                to_cleanup.push(conv_id.clone());
+                            }
+                            Some(_) => {
+                                conversations_to_dispatch.push(conv_id.clone());
+                            }
+                            None => continue,
+                        }
                     }
                 }
-            }
+                
+                (conversations_to_dispatch, to_cleanup)
+            };
 
+            // Process cleanup without holding locks
             for id in to_cleanup {
                 self.cleanup_conversation(&id).await?;
             }
 
-            for id in other_conversations {
-                self.dispatch_event(SubscriptionId::new(id.as_str()), message.clone())
+            // Dispatch to all conversations using this filter
+            for conv_id in conversations_to_dispatch {
+                self.dispatch_event(SubscriptionId::new(conv_id.as_str()), message.clone())
                     .await?;
             }
         }
@@ -409,26 +515,38 @@ where
 
         let conversation_id = ConversationId::from(conversation_id);
 
-        let response = match self.conversations.lock().await.get_mut(&conversation_id) {
-            Some(conv) => match conv.on_message(message) {
-                Ok(response) => response,
-                Err(e) => {
-                    log::warn!("Error in conversation id {}: {}", conversation_id, e);
-                    Response::new().finish()
+        // Check if conversation exists and get mutable reference with minimal lock time
+        let response = {
+            let mut conversations = self.conversations.lock().await;
+            
+            match conversations.get_mut(&conversation_id) {
+                Some(conv_state) => {
+                    // Call on_message while holding the lock (but this is unavoidable for mut access)
+                    match conv_state.conversation.on_message(message) {
+                        Ok(response) => Some(response),
+                        Err(e) => {
+                            log::warn!("Error in conversation id {}: {}", conversation_id, e);
+                            Some(Response::new().finish())
+                        }
+                    }
+                },
+                None => {
+                    log::warn!("No conversation found for id: {:?}", conversation_id);
+                    None
                 }
-            },
-            None => {
-                log::warn!("No conversation found for id: {:?}", conversation_id);
-                self.channel
-                    .unsubscribe(&conversation_id)
-                    .await
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-
-                return Ok(());
             }
         };
 
-        self.process_response(&conversation_id, response).await?;
+        match response {
+            Some(response) => {
+                self.process_response(&conversation_id, response).await?;
+            }
+            None => {
+                // Conversation not found - with filter-based subscriptions, 
+                // we don't unsubscribe individual conversations here
+                log::warn!("No conversation found for id: {:?}", conversation_id);
+            }
+        }
 
         Ok(())
     }
@@ -439,48 +557,154 @@ where
         response: Response,
     ) -> Result<(), ConversationError> {
         log::trace!("Processing response builder for {} = {:?}", id, response);
-
-        let selected_relays_optional = {
+  
+        // Get relays of conversation
+        let conversation_relays_ctx = {
             let global_relay_guard = self.global_relay_node.read().await;
             let relay_nodes_guard = self.relay_nodes.read().await;
 
             self.get_relays_by_conversation(id, &global_relay_guard, &relay_nodes_guard)
                 .await?
         };
+        // 
 
-        if !response.filter.is_empty() {
-            self.filters
-                .write()
-                .await
-                .insert(id.clone(), response.filter.clone());
+        let filter = response.filter;
 
-            let num_relays = if let Some(selected_relays) = selected_relays_optional.clone() {
-                let num_relays = selected_relays.len();
+        // If filter is not empty we could subscribe
+        let subscription_info = if !filter.is_empty() {
+            let mut filters = self.filters.write().await;
+            let mut merged_with_existing = false;
+            let mut filter_id_to_unsubscribe: Option<String> = None;
+            
+            // Try to merge with existing filters
+            for (existing_filter_id, filter_node) in filters.iter_mut() {
+                if can_merge_filters(&filter_node.filter, &filter) {
+                    log::trace!("Merging conversation {} with existing filter {}", id, existing_filter_id);
+                    
+                    // Store the old filter for unsubscribing (currently unused but kept for future enhancements)
+                    let _old_filter = filter_node.filter.clone();
+                    
+                    // Merge the filters
+                    let merged_filter = merge_filters(&filter_node.filter, &filter);
+                    
+                    // Add conversation to existing filter node
+                    filter_node.conversations.insert(id.clone());
+                    filter_node.filter = merged_filter.clone();
+                    
+                    // Store the filter ID for unsubscribing from old filter
+                    filter_id_to_unsubscribe = Some(existing_filter_id.clone());
+                    
+                    merged_with_existing = true;
+                    break;
+                }
+            }
+            
+            let num_relays = if !merged_with_existing {
+                // No existing filter to merge with, create new filter
+                let mut filter_node = FilterNode::new(filter.clone());
+                filter_node.conversations.insert(id.clone());
+                let filter_id = random_string(32);
 
-                log::trace!("Subscribing to relays = {:?}", selected_relays);
-                self.channel
-                    .subscribe_to(selected_relays, id, response.filter.clone())
-                    .await
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                // Add filter node to filters map and update conversation state
+                filters.insert(filter_id.clone(), filter_node);
+                
+                // Update conversation state to reference the filter
+                {
+                    let mut conversations = self.conversations.lock().await;
+                    if let Some(conversation_state) = conversations.get_mut(id) {
+                        conversation_state.filter = Some(filter_id.clone());
+                    }
+                }
 
-                num_relays
+                // Determine relay count and perform subscription using filter ID
+                if let ConversationRelaysContext::Targeted(selected_relays) = conversation_relays_ctx.clone() {
+                    let num_relays = selected_relays.len();
+                    log::trace!("Subscribing filter {} to relays = {:?}", filter_id, selected_relays);
+                    
+                    self.channel
+                        .subscribe_to(selected_relays, &filter_id, &filter)
+                        .await
+                        .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                    
+                    num_relays
+                } else {
+                    log::trace!("Subscribing filter {} to all relays", filter_id);
+                    
+                    self.channel
+                        .subscribe(&filter_id, &filter)
+                        .await
+                        .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+
+                    self.channel
+                        .num_relays()
+                        .await
+                        .map_err(|e| ConversationError::Inner(Box::new(e)))?
+                }
             } else {
-                log::trace!("Subscribing to all relays");
-                self.channel
-                    .subscribe(id, response.filter.clone())
-                    .await
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                // Merged with existing filter, need to unsubscribe from old and subscribe to new
+                let num_relays = if let Some(filter_id) = filter_id_to_unsubscribe {
+                    let filter_node = filters.get(&filter_id).ok_or(ConversationError::FilterNotFound(filter_id.clone()))?;
+                    let merged_filter = &filter_node.filter;
+                    
+                    // Unsubscribe from old filter using filter ID
+                    self.channel
+                        .unsubscribe(&filter_id)
+                        .await
+                        .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                    
+                    // Subscribe to new merged filter using filter ID
+                    let relay_count = if let ConversationRelaysContext::Targeted(selected_relays) = conversation_relays_ctx.clone() {
+                        let num_relays = selected_relays.len();
+                        log::trace!("Subscribing to merged filter {} on relays = {:?}", filter_id, selected_relays);
+                        
+                        self.channel
+                            .subscribe_to(selected_relays.clone(), &filter_id, merged_filter)
+                            .await
+                            .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                        
+                        num_relays
+                    } else {
+                        log::trace!("Subscribing to merged filter {} on all relays", filter_id);
+                        
+                        self.channel
+                            .subscribe(&filter_id, merged_filter)
+                            .await
+                            .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
-                self.channel
-                    .num_relays()
-                    .await
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))?
+                        self.channel
+                            .num_relays()
+                            .await
+                            .map_err(|e| ConversationError::Inner(Box::new(e)))?
+                    };
+                    
+                    // Update conversation state to reference the filter
+                    {
+                        let mut conversations = self.conversations.lock().await;
+                        if let Some(conversation_state) = conversations.get_mut(id) {
+                            conversation_state.filter = Some(filter_id.clone());
+                        }
+                    }
+                    
+                    relay_count
+                } else {
+                    0
+                };
+                
+                num_relays
             };
 
-            self.end_of_stored_events
+            Some(num_relays)
+        } else {
+            None
+        };
+
+        // Update EOSE count if subscription was created
+        if let Some(num_relays) = subscription_info {
+            self.conversations
                 .lock()
                 .await
-                .insert(id.to_string(), num_relays);
+                .get_mut(id)
+                .map(|state| state.set_eose(num_relays));
         }
 
         let mut events_to_broadcast = vec![];
@@ -523,57 +747,69 @@ where
             }
         }
 
-        for notification in response.notifications.iter() {
-            let mut lock = self.subscribers.lock().await;
-            if let Some(senders) = lock.get_mut(id) {
-                for sender in senders.iter_mut() {
-                    let _ = sender.send(notification.clone()).await;
+        // Send notifications in batch
+        if !response.notifications.is_empty() {
+            let mut subscribers = self.subscribers.lock().await;
+            if let Some(senders) = subscribers.get_mut(id) {
+                for notification in response.notifications.iter() {
+                    for sender in senders.iter_mut() {
+                        let _ = sender.send(notification.clone()).await;
+                    }
                 }
             }
         }
 
+        // Handle subkey proof subscription
         if response.subscribe_to_subkey_proofs {
             let alias_num = rand::random::<u64>();
-
-            self.aliases
-                .lock()
-                .await
-                .entry(id.clone())
-                .or_default()
-                .push(alias_num);
-
+            let alias = ConversationId::from_alias(id.as_str(), alias_num);
+            
+            // Create filter for subkey proofs
             let filter = Filter::new()
                 .kinds(vec![Kind::Custom(SUBKEY_PROOF)])
                 .events(events_to_broadcast.iter().map(|e| e.id));
 
-            let alias = ConversationId::from_alias(id.as_str(), alias_num);
-            self.filters
-                .write()
-                .await
-                .insert(alias.clone(), filter.clone());
+            // Create filter ID and update conversation state and add filter in batch
+            let filter_id = random_string(32);
+            {
+                let mut conversations = self.conversations.lock().await;
+                let mut filters = self.filters.write().await;
+                
+                // Update conversation with alias
+                let conversation_state = conversations
+                    .get_mut(id)
+                    .ok_or(ConversationError::ConversationNotFound)?;
+                conversation_state.add_alias(alias_num);
 
-            if let Some(selected_relays) = selected_relays_optional.clone() {
-                log::trace!(
-                    "Subscribing 'subkey proof' to relays = {:?}",
-                    selected_relays
-                );
+                // Create alias conversation state with reference to the filter
+                let mut alias_conversation_state = ConversationState::new(Box::new(DummyConversation));
+                alias_conversation_state.filter = Some(filter_id.clone());
+                conversations.insert(alias.clone(), alias_conversation_state);
+
+                // Add filter node
+                let mut filter_node = FilterNode::new(filter.clone());
+                filter_node.conversations.insert(alias.clone());
+                filters.insert(filter_id.clone(), filter_node);
+            }
+
+            // Subscribe to subkey proofs using filter ID
+            if let ConversationRelaysContext::Targeted(selected_relays) = conversation_relays_ctx.clone() {
+                log::trace!("Subscribing 'subkey proof' filter {} to relays = {:?}", filter_id, selected_relays);
                 self.channel
-                    .subscribe_to(selected_relays, &alias, filter)
+                    .subscribe_to(selected_relays, &filter_id, &filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             } else {
-                log::trace!("Subscribing 'subkey proof' to all relays");
-                // Subscribe to subkey proofs to all
-
+                log::trace!("Subscribing 'subkey proof' filter {} to all relays", filter_id);
                 self.channel
-                    .subscribe(&alias, filter)
+                    .subscribe(&filter_id, &filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
         }
 
         // check if Response has selected relays
-        if let Some(selected_relays) = selected_relays_optional {
+        if let ConversationRelaysContext::Targeted(selected_relays) = conversation_relays_ctx {
             for event in events_to_broadcast {
                 // if selected relays, broadcast to selected relays
                 self.channel
@@ -637,7 +873,7 @@ where
         self.conversations
             .lock()
             .await
-            .insert(owned_id, conversation);
+            .insert(owned_id, ConversationState::new(conversation));
 
         Ok(response)
     }
@@ -695,8 +931,9 @@ where
     pub async fn subscribe_to_service_request<T: DeserializeOwned + Serialize>(
         &self,
         id: ConversationId,
-    ) -> Result<NotificationStream<T>, ConversationError> {
+    ) -> Result< NotificationStream<T>, ConversationError> {
         let (tx, rx) = mpsc::channel(8);
+
         self.subscribers
             .lock()
             .await
@@ -742,12 +979,14 @@ where
                 .conversations
                 .insert(conversation_id.clone());
         }
+        
 
+
+        let response: Response = self
+            .internal_add_with_id(&conversation_id, Box::new(conversation), None)
+            .await?;
         let delayed_reply = self
             .subscribe_to_service_request::<Conv::Notification>(conversation_id.clone())
-            .await?;
-        let response = self
-            .internal_add_with_id(&conversation_id, Box::new(conversation), None)
             .await?;
         self.process_response(&conversation_id, response).await?;
 
@@ -765,159 +1004,6 @@ where
     }
 }
 
-#[derive(Debug)]
-struct ResponseEntry {
-    pub recepient_keys: Vec<PublicKey>,
-    pub kind: Kind,
-    pub tags: Tags,
-    pub content: serde_json::Value,
-    pub encrypted: bool,
-}
-
-/// A response from a conversation.
-///
-/// Responses can include:
-/// - Filters for subscribing to specific message types
-/// - Replies to send to specific recipients or broadcast to all participants in the conversation
-/// - Notifications to send to subscribers
-/// - A flag indicating if the conversation is finished. If set, the conversation will be removed from the router.
-///
-/// # Example
-/// ```rust,no_run
-/// use portal::router::Response;
-/// use nostr::{Filter, Kind, Tags};
-///
-/// let response = Response::new()
-///     .filter(Filter::new().kinds(vec![Kind::from(27000)]))
-///     .reply_to(pubkey, Kind::from(27001), Tags::new(), content)
-///     .notify(notification)
-///     .finish();
-/// ```
-#[derive(Debug, Default)]
-pub struct Response {
-    filter: Filter,
-    responses: Vec<ResponseEntry>,
-    notifications: Vec<serde_json::Value>,
-    finished: bool,
-    subscribe_to_subkey_proofs: bool,
-}
-
-impl Response {
-    /// Creates a new empty response.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Sets the filter for this response.
-    ///
-    /// The filter will be used to subscribe to specific message types with the relays.
-    ///
-    /// # Arguments
-    /// * `filter` - The filter to set
-    pub fn filter(mut self, filter: Filter) -> Self {
-        self.filter = filter;
-        self
-    }
-
-    /// Adds a reply to be sent to all recipients.
-    ///
-    /// # Arguments
-    /// * `kind` - The kind of message to send
-    /// * `tags` - The tags to include in the message
-    /// * `content` - The content to send, must be serializable
-    pub fn reply_all<S: serde::Serialize>(mut self, kind: Kind, tags: Tags, content: S) -> Self {
-        let content = serde_json::to_value(&content).unwrap();
-        self.responses.push(ResponseEntry {
-            recepient_keys: vec![],
-            kind,
-            tags,
-            content,
-            encrypted: true,
-        });
-        self
-    }
-
-    /// Adds a reply to be sent to a specific recipient.
-    ///
-    /// # Arguments
-    /// * `pubkey` - The public key of the recipient
-    /// * `kind` - The kind of message to send
-    /// * `tags` - The tags to include in the message
-    /// * `content` - The content to send, must be serializable
-    pub fn reply_to<S: serde::Serialize>(
-        mut self,
-        pubkey: PublicKey,
-        kind: Kind,
-        tags: Tags,
-        content: S,
-    ) -> Self {
-        let content = serde_json::to_value(&content).unwrap();
-        self.responses.push(ResponseEntry {
-            recepient_keys: vec![pubkey],
-            kind,
-            tags,
-            content,
-            encrypted: true,
-        });
-        self
-    }
-
-    /// Adds a notification to be sent to subscribers.
-    ///
-    /// # Arguments
-    /// * `data` - The notification data to send, must be serializable
-    pub fn notify<S: serde::Serialize>(mut self, data: S) -> Self {
-        let content = serde_json::to_value(&data).unwrap();
-        self.notifications.push(content);
-        self
-    }
-
-    /// Marks the conversation as finished.
-    ///
-    /// When a conversation is finished, it will be removed from the router.
-    pub fn finish(mut self) -> Self {
-        self.finished = true;
-        self
-    }
-
-    /// Subscribe to events that tag our replies via the event_id
-    pub fn subscribe_to_subkey_proofs(mut self) -> Self {
-        self.subscribe_to_subkey_proofs = true;
-        self
-    }
-
-    // Broadcast an unencrypted event
-    pub fn broadcast_unencrypted<S: serde::Serialize>(
-        mut self,
-        kind: Kind,
-        tags: Tags,
-        content: S,
-    ) -> Self {
-        let content = serde_json::to_value(&content).unwrap();
-        self.responses.push(ResponseEntry {
-            recepient_keys: vec![],
-            kind,
-            tags,
-            content,
-            encrypted: false,
-        });
-        self
-    }
-
-    fn set_recepient_keys(&mut self, user: PublicKey, subkeys: &HashSet<PublicKey>) {
-        for response in &mut self.responses {
-            if response.recepient_keys.is_empty() {
-                response.recepient_keys.push(user);
-                response.recepient_keys.extend(subkeys.iter().cloned());
-            }
-        }
-    }
-
-    fn extend(&mut self, response: Response) {
-        self.responses.extend(response.responses);
-        self.subscribe_to_subkey_proofs |= response.subscribe_to_subkey_proofs;
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct CleartextEvent {
@@ -953,47 +1039,16 @@ impl CleartextEvent {
     }
 }
 
-/// Convenience wrapper around a stream of notifications.
-///
-/// It's automatically implemented for any stream that implements `Stream<Item = Result<T, serde_json::Error>> + Send + Unpin + 'static`.
-pub trait InnerNotificationStream<T: Serialize>:
-    Stream<Item = Result<T, serde_json::Error>> + Send + Unpin + 'static
-{
-}
-impl<S, T: Serialize> InnerNotificationStream<T> for S where
-    S: Stream<Item = Result<T, serde_json::Error>> + Send + Unpin + 'static
-{
-}
+// Dummy conversation for alias conversations that don't need actual conversation logic
+struct DummyConversation;
 
-pub struct NotificationStream<T: Serialize> {
-    stream: Box<dyn InnerNotificationStream<T>>,
-}
-
-impl<T: Serialize> NotificationStream<T> {
-    pub(crate) fn new(stream: impl InnerNotificationStream<T>) -> Self {
-        Self {
-            stream: Box::new(stream),
-        }
+impl Conversation for DummyConversation {
+    fn on_message(&mut self, _message: ConversationMessage) -> Result<Response, ConversationError> {
+        Ok(Response::default())
     }
 
-    /// Returns the next notification from the stream.
-    pub async fn next(&mut self) -> Option<Result<T, serde_json::Error>> {
-        use futures::StreamExt;
-
-        self.stream.next().await
+    fn is_expired(&self) -> bool {
+        false
     }
 }
 
-impl<T: Serialize> Deref for NotificationStream<T> {
-    type Target = Box<dyn InnerNotificationStream<T>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.stream
-    }
-}
-
-impl<T: Serialize> DerefMut for NotificationStream<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.stream
-    }
-}

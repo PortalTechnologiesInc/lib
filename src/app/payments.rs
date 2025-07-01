@@ -9,20 +9,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     protocol::model::{
-        Timestamp,
-        bindings::{self},
-        event_kinds::{
+        bindings::{self}, event_kinds::{
             PAYMENT_REQUEST, PAYMENT_RESPONSE, RECURRING_PAYMENT_CANCEL, RECURRING_PAYMENT_REQUEST,
             RECURRING_PAYMENT_RESPONSE,
-        },
-        payment::{
+        }, payment::{
             CloseRecurringPaymentContent, PaymentResponseContent, RecurringPaymentRequestContent,
             RecurringPaymentResponseContent, RecurringPaymentStatus, SinglePaymentRequestContent,
-        },
+        }, Timestamp
     },
     router::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, Response,
-        adapters::{ConversationWithNotification, one_shot::OneShotSender},
+        adapters::{one_shot::OneShotSender, ConversationWithNotification}, response::Response, ConversationError, MultiKeyListener, MultiKeyListenerAdapter
     },
 };
 

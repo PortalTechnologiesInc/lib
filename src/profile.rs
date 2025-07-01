@@ -3,7 +3,7 @@ use nostr::{event::Kind, filter::Filter, key::PublicKey, nips::nip01::Metadata};
 use crate::{
     protocol::model::Timestamp,
     router::{
-        Conversation, ConversationError, ConversationMessage, Response,
+        Conversation, ConversationError, ConversationMessage,  response::Response,
         adapters::{ConversationWithNotification, one_shot::OneShotSender},
     },
 };
@@ -23,7 +23,7 @@ impl FetchProfileInfoConversation {
 }
 
 impl Conversation for FetchProfileInfoConversation {
-    fn init(&mut self) -> Result<crate::router::Response, crate::router::ConversationError> {
+    fn init(&mut self) -> Result<Response, crate::router::ConversationError> {
         Ok(Response::new().filter(
             Filter::new()
                 .author(self.pubkey)
@@ -35,7 +35,7 @@ impl Conversation for FetchProfileInfoConversation {
     fn on_message(
         &mut self,
         message: crate::router::ConversationMessage,
-    ) -> Result<crate::router::Response, crate::router::ConversationError> {
+    ) -> Result<Response, crate::router::ConversationError> {
         if let ConversationMessage::Cleartext(event) = message {
             let metadata: Result<Metadata, _> = serde_json::from_value(event.content);
             if let Ok(metadata) = metadata {
