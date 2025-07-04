@@ -4,7 +4,7 @@ use nostr::Keys;
 use nostr_relay_pool::{RelayOptions, RelayPool};
 use portal::{
     protocol::{LocalKeypair, key_handshake::KeyHandshakeUrl},
-    router::{MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream},
+    router::{MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, notification::NotificationStream},
     sdk::auth::{
         AuthChallengeSenderConversation, AuthResponseEvent, KeyHandshakeEvent,
         KeyHandshakeReceiverConversation,

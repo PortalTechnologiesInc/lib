@@ -6,7 +6,9 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 
 use crate::{
     protocol::LocalKeypair,
-    router::{Conversation, ConversationError, MessageRouter, channel::Channel},
+    router::{
+        channel::Channel, conversation::{ConversationFilterId, ConversationId}, Conversation, ConversationError, MessageRouter
+    },
 };
 
 pub mod logger;
@@ -63,12 +65,16 @@ pub enum SimulatedChannelError {
 impl Channel for SimulatedChannel {
     type Error = SimulatedChannelError;
 
-    async fn subscribe(&self, id: String, filter: Filter) -> Result<(), Self::Error> {
+    async fn subscribe(
+        &self,
+        id: &ConversationFilterId,
+        filter: &Filter,
+    ) -> Result<(), Self::Error> {
         // Use the first sender for subscribers
-        self.subscribers
-            .write()
-            .await
-            .insert(id.clone(), (filter, self.my_sender.clone()));
+        self.subscribers.write().await.insert(
+            id.to_string(),
+            (filter.clone(), self.my_sender.clone()),
+        );
 
         // Send any existing messages that match the filter
         // let messages = self.messages.lock().await;
@@ -90,8 +96,8 @@ impl Channel for SimulatedChannel {
     async fn subscribe_to<I, U>(
         &self,
         urls: I,
-        id: String,
-        filter: nostr::Filter,
+        id: &ConversationFilterId,
+        filter: &Filter,
     ) -> Result<(), Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
@@ -100,15 +106,15 @@ impl Channel for SimulatedChannel {
         Self::Error: From<<U as nostr::types::TryIntoUrl>::Err>,
     {
         // TODO: use the urls to create a filter
-        self.subscribers
-            .write()
-            .await
-            .insert(id.clone(), (filter, self.my_sender.clone()));
+        self.subscribers.write().await.insert(
+            id.to_string(),
+            (filter.clone(), self.my_sender.clone()),
+        );
         Ok(())
     }
 
-    async fn unsubscribe(&self, id: String) -> Result<(), Self::Error> {
-        self.subscribers.write().await.remove(&id);
+    async fn unsubscribe(&self, id: &ConversationFilterId) -> Result<(), Self::Error> {
+        self.subscribers.write().await.remove(id.as_str());
         Ok(())
     }
 
@@ -176,6 +182,10 @@ impl Channel for SimulatedChannel {
 
     async fn remove_relay(&self, url: String) -> Result<(), Self::Error> {
         todo!()
+    }
+
+    async fn num_relays(&self) -> Result<usize, Self::Error> {
+        Ok(1000)
     }
 }
 

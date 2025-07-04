@@ -8,7 +8,9 @@ use serde::de::DeserializeOwned;
 
 use nostr::{event::Kind, filter::Filter, key::PublicKey};
 
-use crate::protocol::model::{auth::SubkeyProof, event_kinds::SUBKEY_PROOF};
+use crate::{
+    protocol::model::{auth::SubkeyProof, event_kinds::SUBKEY_PROOF},
+};
 
 use crate::router::{
     CleartextEvent, Conversation, ConversationError, ConversationMessage, Response,
@@ -132,7 +134,9 @@ impl<T: MultiKeySender> Conversation for MultiKeySenderAdapter<T> {
                     response.filter = <T as MultiKeySender>::get_filter(self)
                         .map_err(|e| ConversationError::Inner(Box::new(e)))?;
                     // Add the SUBKEY_PROOF kind to the filter
-                    response.filter = response.filter.kinds(vec![Kind::Custom(SUBKEY_PROOF)]);
+                    response.filter = response
+                        .filter
+                        .kinds(vec![Kind::Custom(SUBKEY_PROOF)]);
 
                     Ok(response)
                 } else {
