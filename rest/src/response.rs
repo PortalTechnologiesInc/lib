@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use portal::profile::Profile;
 use portal::protocol::model::auth::AuthResponseStatus;
 use portal::protocol::model::payment::{PaymentResponseContent, RecurringPaymentResponseContent};
@@ -8,23 +9,37 @@ use serde::Serialize;
 #[serde(tag = "type")]
 pub enum Response {
     #[serde(rename = "error")]
-    Error { id: String, message: String },
+    Error { 
+        id: Cow<'static, str>, 
+        message: Cow<'static, str> 
+    },
 
     #[serde(rename = "success")]
-    Success { id: String, data: ResponseData },
+    Success { 
+        id: Cow<'static, str>, 
+        data: ResponseData 
+    },
 
     #[serde(rename = "notification")]
-    Notification { id: String, data: NotificationData },
+    Notification { 
+        id: Cow<'static, str>, 
+        data: NotificationData 
+    },
 }
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 pub enum ResponseData {
     #[serde(rename = "auth_success")]
-    AuthSuccess { message: String },
+    AuthSuccess { 
+        message: Cow<'static, str> 
+    },
 
     #[serde(rename = "key_handshake_url")]
-    KeyHandshakeUrl { url: String, stream_id: String },
+    KeyHandshakeUrl { 
+        url: Cow<'static, str>, 
+        stream_id: Cow<'static, str> 
+    },
 
     #[serde(rename = "auth_response")]
     AuthResponse { event: AuthResponseData },
@@ -37,30 +52,34 @@ pub enum ResponseData {
     #[serde(rename = "single_payment")]
     SinglePayment {
         status: PaymentResponseContent,
-        stream_id: Option<String>,
+        stream_id: Option<Cow<'static, str>>,
     },
 
     #[serde(rename = "profile")]
     ProfileData { profile: Option<Profile> },
 
     #[serde(rename = "close_recurring_payment_success")]
-    CloseRecurringPaymentSuccess { message: String },
+    CloseRecurringPaymentSuccess { 
+        message: Cow<'static, str> 
+    },
 
     #[serde(rename = "listen_closed_recurring_payment")]
-    ListenClosedRecurringPayment { stream_id: String },
+    ListenClosedRecurringPayment { 
+        stream_id: Cow<'static, str> 
+    },
 
     #[serde(rename = "invoice_payment")]
     InvoicePayment {
-        invoice: String,
-        payment_hash: String,
+        invoice: Cow<'static, str>,
+        payment_hash: Cow<'static, str>,
     },
 }
 
 #[derive(Debug, Serialize)]
 pub struct AuthResponseData {
-    pub user_key: String,
-    pub recipient: String,
-    pub challenge: String,
+    pub user_key: Cow<'static, str>,
+    pub recipient: Cow<'static, str>,
+    pub challenge: Cow<'static, str>,
     pub status: AuthResponseStatus,
 }
 
@@ -68,22 +87,30 @@ pub struct AuthResponseData {
 #[serde(tag = "type")]
 pub enum NotificationData {
     #[serde(rename = "key_handshake")]
-    KeyHandshake { main_key: String },
+    KeyHandshake { 
+        main_key: Cow<'static, str> 
+    },
     #[serde(rename = "payment_status_update")]
     PaymentStatusUpdate { status: InvoiceStatus },
     #[serde(rename = "closed_recurring_payment")]
     ClosedRecurringPayment {
-        reason: Option<String>,
-        subscription_id: String,
-        recipient: String,
-        main_key: String,
+        reason: Option<Cow<'static, str>>,
+        subscription_id: Cow<'static, str>,
+        recipient: Cow<'static, str>,
+        main_key: Cow<'static, str>,
     },
 }
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum InvoiceStatus {
-    Paid { preimage: Option<String> },
+    Paid { 
+        preimage: Option<Cow<'static, str>> 
+    },
     Timeout,
-    Error { reason: String },
+    Error { 
+        reason: Cow<'static, str> 
+    },
 }
+
+

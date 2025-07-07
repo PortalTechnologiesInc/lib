@@ -1,14 +1,14 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::borrow::Cow;
 
-use crate::command::{Command, CommandWithId};
+use crate::command::{Command, CommandWithId, OwnedCommandWithId};
 use crate::response::*;
 use crate::{AppState, PublicKey};
 use axum::extract::ws::{Message, WebSocket};
 use dashmap::DashMap;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
-use portal::protocol::model::payment::{InvoiceRequestContentWithKey, SinglePaymentRequestContent};
+use portal::protocol::model::payment::SinglePaymentRequestContent;
 use portal::protocol::model::Timestamp;
 use sdk::PortalSDK;
 use tokio::sync::mpsc;
@@ -59,8 +59,8 @@ impl SocketContext {
 
     async fn send_error_message(&self, request_id: &str, message: &str) -> bool {
         let response = Response::Error {
-            id: request_id.to_string(),
-            message: message.to_string(),
+            id: request_id.to_string().into(),
+            message: message.to_string().into(),
         };
 
         match serde_json::to_string(&response) {
@@ -166,43 +166,47 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
         if let Message::Text(text) = message {
             debug!("Received message: {}", text);
 
-            // Try to parse the command
-            match serde_json::from_str(&text) {
-                Ok(CommandWithId {
-                    id,
-                    cmd: Command::Auth { token },
-                }) => {
-                    if token == state.auth_token {
-                        authenticated = true;
-                        let response = Response::Success {
-                            id: id.clone(),
-                            data: ResponseData::AuthSuccess {
-                                message: "Authenticated successfully".to_string(),
-                            },
-                        };
-
-                        if !ctx.send_message(response).await {
-                            break;
-                        }
-                    } else {
-                        let _ = ctx.send_error_message(&id, "Authentication failed").await;
-                        break; // Close connection on auth failure
-                    }
-                }
+            let command = CommandWithId::parse(&text);
+            // Parse the command directly to owned data to avoid lifetime issues
+            match command {
                 Ok(command) => {
-                    if !authenticated {
-                        let _ = ctx
-                            .send_error_message(&command.id, "Not authenticated")
-                            .await;
-                        break; // Close connection
+                    
+                    match &command.cmd {
+                        Command::Auth { token } => {
+                            if token.as_ref() == state.auth_token {
+                                authenticated = true;
+                                let response = Response::Success {
+                                    id: command.id.to_string().into(),
+                                    data: ResponseData::AuthSuccess {
+                                        message: Cow::Borrowed("Authenticated successfully"),
+                                    },
+                                };
+
+                                if !ctx.send_message(response).await {
+                                    break;
+                                }
+                            } else {
+                                let _ = ctx.send_error_message(command.id.as_ref(), "Authentication failed").await;
+                                break; // Close connection on auth failure
+                            }
+                        }
+                        _ => {
+                            if !authenticated {
+                                let _ = ctx
+                                    .send_error_message(command.id.as_ref(), "Not authenticated")
+                                    .await;
+                                break; // Close connection
+                            }
+
+                            let ctx_clone = ctx.clone();
+
+                            let owned_command = command.into_owned();
+                            tokio::task::spawn(async move {
+                                // Handle authenticated commands
+                                handle_command(owned_command, ctx_clone).await;
+                            });
+                        }
                     }
-
-                    let ctx_clone = ctx.clone();
-
-                    tokio::task::spawn(async move {
-                        // Handle authenticated commands
-                        handle_command(command, ctx_clone).await;
-                    });
                 }
                 Err(e) => {
                     // Still try to get a request id from the command
@@ -241,13 +245,16 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
     info!("WebSocket connection closed");
 }
 
-async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
+async fn handle_command(command: OwnedCommandWithId, ctx: Arc<SocketContext>) {
+    // Extract the id before matching to avoid move issues
+    let command_id = command.id;
+    
     match command.cmd {
         Command::Auth { .. } => {
             // Already handled in the outer function
         }
         Command::NewKeyHandshakeUrl { static_token } => {
-            match ctx.sdk.new_key_handshake_url(static_token).await {
+            match ctx.sdk.new_key_handshake_url(static_token.map(|s| s.into_owned())).await {
                 Ok((url, notification_stream)) => {
                     // Generate a unique stream ID
                     let stream_id = Uuid::new_v4().to_string();
@@ -266,9 +273,9 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
                             // Convert the event to a notification response
                             let notification = Response::Notification {
-                                id: stream_id_clone.clone(),
+                                id: stream_id_clone.clone().into(),
                                 data: NotificationData::KeyHandshake {
-                                    main_key: event.main_key.to_string(),
+                                    main_key: event.main_key.to_string().into(),
                                 },
                             };
 
@@ -287,10 +294,10 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
                     // Convert the URL to a proper response struct
                     let response = Response::Success {
-                        id: command.id,
+                        id: command_id,
                         data: ResponseData::KeyHandshakeUrl {
-                            url: url.to_string(),
-                            stream_id,
+                            url: url.to_string().into(),
+                            stream_id: stream_id.into(),
                         },
                     };
 
@@ -299,7 +306,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Err(e) => {
                     let _ = ctx
                         .send_error_message(
-                            &command.id,
+                            command_id.as_ref(),
                             &format!("Failed to create auth init URL: {}", e),
                         )
                         .await;
@@ -308,11 +315,11 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
         }
         Command::AuthenticateKey { main_key, subkeys } => {
             // Parse keys
-            let main_key = match hex_to_pubkey(&main_key) {
+            let main_key = match hex_to_pubkey(main_key.as_ref()) {
                 Ok(key) => key,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid main key: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid main key: {}", e))
                         .await;
                     return;
                 }
@@ -322,7 +329,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Ok(keys) => keys,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid subkeys: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid subkeys: {}", e))
                         .await;
                     return;
                 }
@@ -331,12 +338,12 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             match ctx.sdk.authenticate_key(main_key, subkeys).await {
                 Ok(event) => {
                     let response = Response::Success {
-                        id: command.id,
+                        id: command_id,
                         data: ResponseData::AuthResponse {
                             event: AuthResponseData {
-                                user_key: event.user_key.to_string(),
-                                recipient: event.recipient.to_string(),
-                                challenge: event.challenge,
+                                user_key: event.user_key.to_string().into(),
+                                recipient: event.recipient.to_string().into(),
+                                challenge: event.challenge.into(),
                                 status: event.status,
                             },
                         },
@@ -347,7 +354,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Err(e) => {
                     let _ = ctx
                         .send_error_message(
-                            &command.id,
+                            command_id.as_ref(),
                             &format!("Failed to authenticate key: {}", e),
                         )
                         .await;
@@ -360,11 +367,11 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             payment_request,
         } => {
             // Parse keys
-            let main_key = match hex_to_pubkey(&main_key) {
+            let main_key = match hex_to_pubkey(main_key.as_ref()) {
                 Ok(key) => key,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid main key: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid main key: {}", e))
                         .await;
                     return;
                 }
@@ -374,7 +381,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Ok(keys) => keys,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid subkeys: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid subkeys: {}", e))
                         .await;
                     return;
                 }
@@ -387,7 +394,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             {
                 Ok(status) => {
                     let response = Response::Success {
-                        id: command.id,
+                        id: command_id,
                         data: ResponseData::RecurringPayment { status },
                     };
 
@@ -396,7 +403,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Err(e) => {
                     let _ = ctx
                         .send_error_message(
-                            &command.id,
+                            command_id.as_ref(),
                             &format!("Failed to request recurring payment: {}", e),
                         )
                         .await;
@@ -411,17 +418,17 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             let nwc = match &ctx.nwc {
                 Some(nwc) => nwc,
                 None => {
-                    let _ = ctx.send_error_message(&command.id, "Nostr Wallet Connect is not available: set the NWC_URL environment variable to enable it").await;
+                    let _ = ctx.send_error_message(command_id.as_ref(), "Nostr Wallet Connect is not available: set the NWC_URL environment variable to enable it").await;
                     return;
                 }
             };
 
             // Parse keys
-            let main_key = match hex_to_pubkey(&main_key) {
+            let main_key = match hex_to_pubkey(main_key.as_ref()) {
                 Ok(key) => key,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid main key: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid main key: {}", e))
                         .await;
                     return;
                 }
@@ -431,18 +438,20 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Ok(keys) => keys,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid subkeys: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid subkeys: {}", e))
                         .await;
                     return;
                 }
             };
 
-            // TODO: fetch and apply fiat exchange rate
+            // Extract description before using payment_request to avoid move issues
+            let description = payment_request.description.to_string();
 
+            // TODO: fetch and apply fiat exchange rate
             let invoice = match nwc
                 .make_invoice(portal::nostr::nips::nip47::MakeInvoiceRequest {
                     amount: payment_request.amount,
-                    description: Some(payment_request.description.clone()),
+                    description: Some(description.clone()),
                     description_hash: None,
                     expiry: None,
                 })
@@ -451,7 +460,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Ok(invoice) => invoice,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Failed to make invoice: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Failed to make invoice: {}", e))
                         .await;
                     return;
                 }
@@ -464,10 +473,10 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 expires_at,
                 invoice: invoice.invoice.clone(),
                 current_exchange_rate: None,
-                subscription_id: payment_request.subscription_id,
-                auth_token: payment_request.auth_token,
-                request_id: command.id.clone(),
-                description: Some(payment_request.description),
+                subscription_id: payment_request.subscription_id.map(|s| s.to_string()),
+                auth_token: payment_request.auth_token.map(|s| s.to_string()),
+                request_id: command_id.to_string(),
+                description: Some(description),
             };
 
             match ctx
@@ -513,7 +522,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                                     if invoice.settled_at.is_some() {
                                         break NotificationData::PaymentStatusUpdate {
                                             status: InvoiceStatus::Paid {
-                                                preimage: invoice.preimage,
+                                                preimage: invoice.preimage.map(|p| p.into()),
                                             },
                                         };
                                     } else {
@@ -530,7 +539,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                                     error!("Failed to lookup invoice: {}", e);
                                     break NotificationData::PaymentStatusUpdate {
                                         status: InvoiceStatus::Error {
-                                            reason: e.to_string(),
+                                            reason: e.to_string().into(),
                                         },
                                     };
                                 }
@@ -539,7 +548,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
                         // Convert the event to a notification response
                         let notification = Response::Notification {
-                            id: stream_id_clone.clone(),
+                            id: stream_id_clone.clone().into(),
                             data: notification,
                         };
 
@@ -553,10 +562,10 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                     ctx.active_streams.add_task(stream_id.clone(), task);
 
                     let response = Response::Success {
-                        id: command.id,
+                        id: command_id,
                         data: ResponseData::SinglePayment {
                             status,
-                            stream_id: Some(stream_id),
+                            stream_id: Some(stream_id.into()),
                         },
                     };
 
@@ -565,7 +574,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Err(e) => {
                     let _ = ctx
                         .send_error_message(
-                            &command.id,
+                            command_id.as_ref(),
                             &format!("Failed to request single payment: {}", e),
                         )
                         .await;
@@ -578,11 +587,11 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             payment_request,
         } => {
             // Parse keys
-            let main_key = match hex_to_pubkey(&main_key) {
+            let main_key = match hex_to_pubkey(main_key.as_ref()) {
                 Ok(key) => key,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid main key: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid main key: {}", e))
                         .await;
                     return;
                 }
@@ -592,7 +601,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Ok(keys) => keys,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid subkeys: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid subkeys: {}", e))
                         .await;
                     return;
                 }
@@ -605,7 +614,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             {
                 Ok(status) => {
                     let response = Response::Success {
-                        id: command.id,
+                        id: command_id,
                         data: ResponseData::SinglePayment {
                             status,
                             stream_id: None,
@@ -617,7 +626,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Err(e) => {
                     let _ = ctx
                         .send_error_message(
-                            &command.id,
+                            command_id.as_ref(),
                             &format!("Failed to request single payment: {}", e),
                         )
                         .await;
@@ -626,11 +635,11 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
         }
         Command::FetchProfile { main_key } => {
             // Parse key
-            let main_key = match hex_to_pubkey(&main_key) {
+            let main_key = match hex_to_pubkey(main_key.as_ref()) {
                 Ok(key) => key,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid main key: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid main key: {}", e))
                         .await;
                     return;
                 }
@@ -639,7 +648,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             match ctx.sdk.fetch_profile(main_key).await {
                 Ok(profile) => {
                     let response = Response::Success {
-                        id: command.id,
+                        id: command_id,
                         data: ResponseData::ProfileData { profile },
                     };
 
@@ -647,7 +656,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 }
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Failed to fetch profile: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Failed to fetch profile: {}", e))
                         .await;
                 }
             }
@@ -655,7 +664,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
         Command::SetProfile { profile } => match ctx.sdk.set_profile(profile.clone()).await {
             Ok(_) => {
                 let response = Response::Success {
-                    id: command.id,
+                    id: command_id,
                     data: ResponseData::ProfileData {
                         profile: Some(profile),
                     },
@@ -665,7 +674,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             }
             Err(e) => {
                 let _ = ctx
-                    .send_error_message(&command.id, &format!("Failed to set profile: {}", e))
+                    .send_error_message(command_id.as_ref(), &format!("Failed to set profile: {}", e))
                     .await;
             }
         },
@@ -689,12 +698,12 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
                             // Convert the event to a notification response
                             let notification = Response::Notification {
-                                id: stream_id_clone.clone(),
+                                id: stream_id_clone.clone().into(),
                                 data: NotificationData::ClosedRecurringPayment {
-                                    reason: event.content.reason,
-                                    subscription_id: event.content.subscription_id,
-                                    main_key: event.main_key.to_string(),
-                                    recipient: event.recipient.to_string(),
+                                    reason: event.content.reason.map(|r| r.into()),
+                                    subscription_id: event.content.subscription_id.into(),
+                                    main_key: event.main_key.to_string().into(),
+                                    recipient: event.recipient.to_string().into(),
                                 },
                             };
 
@@ -716,8 +725,10 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
                     // Convert the URL to a proper response struct
                     let response = Response::Success {
-                        id: command.id,
-                        data: ResponseData::ListenClosedRecurringPayment { stream_id },
+                        id: command_id,
+                        data: ResponseData::ListenClosedRecurringPayment { 
+                            stream_id: stream_id.into() 
+                        },
                     };
 
                     let _ = ctx.send_message(response).await;
@@ -725,7 +736,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Err(e) => {
                     let _ = ctx
                         .send_error_message(
-                            &command.id,
+                            command_id.as_ref(),
                             &format!("Failed to create closed recurring payment listener: {}", e),
                         )
                         .await;
@@ -738,11 +749,11 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             subscription_id,
         } => {
             // Parse keys
-            let main_key = match hex_to_pubkey(&main_key) {
+            let main_key = match hex_to_pubkey(main_key.as_ref()) {
                 Ok(key) => key,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid main key: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid main key: {}", e))
                         .await;
                     return;
                 }
@@ -752,7 +763,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Ok(keys) => keys,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid subkeys: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid subkeys: {}", e))
                         .await;
                     return;
                 }
@@ -760,14 +771,14 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
             match ctx
                 .sdk
-                .close_recurring_payment(main_key, subkeys, subscription_id)
+                .close_recurring_payment(main_key, subkeys, subscription_id.to_string())
                 .await
             {
                 Ok(()) => {
                     let response = Response::Success {
-                        id: command.id,
+                        id: command_id,
                         data: ResponseData::CloseRecurringPaymentSuccess {
-                            message: String::from("Recurring payment closed"),
+                            message: Cow::Borrowed("Recurring payment closed"),
                         },
                     };
 
@@ -776,7 +787,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Err(e) => {
                     let _ = ctx
                         .send_error_message(
-                            &command.id,
+                            command_id.as_ref(),
                             &format!("Failed to close recurring payment: {}", e),
                         )
                         .await;
@@ -789,11 +800,11 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             content,
         } => {
             // Parse keys
-            let recipient_key = match hex_to_pubkey(&recipient_key) {
+            let recipient_key = match hex_to_pubkey(recipient_key.as_ref()) {
                 Ok(key) => key,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid recipient key: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid recipient key: {}", e))
                         .await;
                     return;
                 }
@@ -804,7 +815,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Ok(keys) => keys,
                 Err(e) => {
                     let _ = ctx
-                        .send_error_message(&command.id, &format!("Invalid subkeys: {}", e))
+                        .send_error_message(command_id.as_ref(), &format!("Invalid subkeys: {}", e))
                         .await;
                     return;
                 }
@@ -819,10 +830,10 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                     match invoice_response {
                         Some(invoice_response) => {
                             let response = Response::Success {
-                                id: command.id,
+                                id: command_id,
                                 data: ResponseData::InvoicePayment {
-                                    invoice: invoice_response.invoice,
-                                    payment_hash: invoice_response.payment_hash,
+                                    invoice: invoice_response.invoice.into(),
+                                    payment_hash: invoice_response.payment_hash.into(),
                                 },
                             };
 
@@ -832,7 +843,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                             // Recipient did not reply with a invoice
                             let _ = ctx
                                 .send_error_message(
-                                    &command.id,
+                                    command_id.as_ref(),
                                     &format!(
                                         "Recipient '{:?}' did not reply with a invoice",
                                         recipient_key
@@ -845,7 +856,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 Err(e) => {
                     let _ = ctx
                         .send_error_message(
-                            &command.id,
+                            command_id.as_ref(),
                             &format!("Failed to send invoice payment: {}", e),
                         )
                         .await;
@@ -859,10 +870,11 @@ fn hex_to_pubkey(hex: &str) -> Result<PublicKey, String> {
     hex.parse::<PublicKey>().map_err(|e| e.to_string())
 }
 
-fn parse_subkeys(subkeys: &[String]) -> Result<Vec<PublicKey>, String> {
+
+fn parse_subkeys(subkeys: &[Cow<str>]) -> Result<Vec<PublicKey>, String> {
     let mut result = Vec::with_capacity(subkeys.len());
     for subkey in subkeys {
-        result.push(hex_to_pubkey(subkey)?);
+        result.push(hex_to_pubkey(subkey.as_ref())?);
     }
     Ok(result)
 }
