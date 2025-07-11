@@ -5,16 +5,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     protocol::model::{
-        Timestamp,
         auth::{
             AuthChallengeContent, AuthResponseContent, AuthResponseStatus, KeyHandshakeContent,
             SubkeyProof,
-        },
-        event_kinds::*,
+        }, event_kinds::*, Timestamp
     },
     router::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender,
-        MultiKeySenderAdapter, Response, adapters::ConversationWithNotification,
+        adapters::ConversationWithNotification, response::Response, ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender, MultiKeySenderAdapter
     },
     utils::random_string,
 };

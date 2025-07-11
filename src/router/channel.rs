@@ -1,7 +1,8 @@
-use std::error::Error;
-
 use nostr::{message::SubscriptionId, types::TryIntoUrl};
 use nostr_relay_pool::{RelayOptions, RelayPool, RelayPoolNotification, SubscribeOptions};
+
+use crate::router::conversation::{ConversationFilterId, ConversationId};
+use nostr::Filter;
 
 /// A trait for an abstract channel
 ///
@@ -11,15 +12,15 @@ pub trait Channel: Send + 'static {
 
     fn subscribe(
         &self,
-        id: String,
-        filter: nostr::Filter,
+        id: &ConversationFilterId,
+        filter: &Filter,
     ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
 
     fn subscribe_to<I, U>(
         &self,
         urls: I,
-        id: String,
-        filter: nostr::Filter,
+        id: &ConversationFilterId,
+        filter: &Filter,
     ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send
     where
         <I as IntoIterator>::IntoIter: Send,
@@ -29,7 +30,7 @@ pub trait Channel: Send + 'static {
 
     fn unsubscribe(
         &self,
-        id: String,
+        id: &ConversationFilterId,
     ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
 
     fn broadcast(
@@ -69,17 +70,25 @@ pub trait Channel: Send + 'static {
 impl Channel for RelayPool {
     type Error = nostr_relay_pool::pool::Error;
 
-    async fn subscribe(&self, id: String, filter: nostr::Filter) -> Result<(), Self::Error> {
-        self.subscribe_with_id(SubscriptionId::new(id), filter, SubscribeOptions::default())
-            .await?;
+    async fn subscribe(
+        &self,
+        id: &ConversationFilterId,
+        filter: &Filter,
+    ) -> Result<(), Self::Error> {
+        self.subscribe_with_id(
+            SubscriptionId::new(id),
+            filter.clone(),
+            SubscribeOptions::default(),
+        )
+        .await?;
         Ok(())
     }
 
     async fn subscribe_to<I, U>(
         &self,
         urls: I,
-        id: String,
-        filter: nostr::Filter,
+        id: &ConversationFilterId,
+        filter: &Filter,
     ) -> Result<(), Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
@@ -90,14 +99,14 @@ impl Channel for RelayPool {
         self.subscribe_with_id_to(
             urls,
             SubscriptionId::new(id),
-            filter,
+            filter.clone(),
             SubscribeOptions::default(),
         )
         .await?;
         Ok(())
     }
 
-    async fn unsubscribe(&self, id: String) -> Result<(), Self::Error> {
+    async fn unsubscribe(&self, id: &ConversationFilterId) -> Result<(), Self::Error> {
         self.unsubscribe(&SubscriptionId::new(id)).await;
         Ok(())
     }

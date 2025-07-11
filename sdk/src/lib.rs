@@ -20,7 +20,7 @@ use portal::{
     },
     router::{
         ConversationError, MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter,
-        NotificationStream, adapters::one_shot::OneShotSenderAdapter,
+        notification::NotificationStream, adapters::one_shot::OneShotSenderAdapter,
     },
     sdk::{
         auth::{
