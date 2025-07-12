@@ -2,8 +2,8 @@ use std::{io::Write, str::FromStr, sync::Arc};
 
 use app::{
     AuthChallengeListener, CallbackError, ClosedRecurringPaymentListener, Mnemonic,
-    PaymentRequestListener, PortalApp, RecurringPaymentRequest, SinglePaymentRequest,
-    auth::AuthChallengeEvent, db::PortalDB,
+    PaymentRequestListener, PortalApp, RecurringPaymentRequest, RelayStatus, RelayStatusListener,
+    RelayUrl, SinglePaymentRequest, auth::AuthChallengeEvent, db::PortalDB,
 };
 use nwc::nostr;
 use portal::{
@@ -21,6 +21,20 @@ use portal::{
         },
     },
 };
+
+struct LogRelayStatusChange;
+
+#[async_trait::async_trait]
+impl RelayStatusListener for LogRelayStatusChange {
+    async fn on_relay_status_change(
+        &self,
+        relay_url: RelayUrl,
+        status: RelayStatus,
+    ) -> Result<(), CallbackError> {
+        log::info!("Relay {:?} status changed: {:?}", relay_url.0, status);
+        Ok(())
+    }
+}
 
 struct ApproveLogin;
 
@@ -142,6 +156,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "wss://relay.nostr.net".to_string(),
             // "wss://relay.damus.io".to_string(),
         ],
+        Arc::new(LogRelayStatusChange),
     )
     .await?;
 

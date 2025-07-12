@@ -8,6 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 use bitcoin::bip32;
 use chrono::Duration;
 use nostr::event::EventBuilder;
+use nostr_relay_pool::monitor::{Monitor, MonitorNotification};
 use portal::{
     app::{
         auth::{
@@ -48,7 +49,6 @@ use portal::{
 };
 
 pub use portal::app::*;
-use reqwest::StatusCode;
 
 use crate::{
     logger::{CallbackLogger, LogCallback, LogLevel},
@@ -285,19 +285,47 @@ pub trait InvoiceResponseListener: Send + Sync {
     async fn on_invoice_response(&self, event: InvoiceResponse) -> Result<(), CallbackError>;
 }
 
+#[uniffi::export(with_foreign)]
+#[async_trait::async_trait]
+pub trait RelayStatusListener: Send + Sync {
+    async fn on_relay_status_change(
+        &self,
+        relay_url: RelayUrl,
+        status: RelayStatus,
+    ) -> Result<(), CallbackError>;
+}
+
 #[uniffi::export]
 impl PortalApp {
     #[uniffi::constructor]
-    pub async fn new(keypair: Arc<Keypair>, relays: Vec<String>) -> Result<Arc<Self>, AppError> {
-        let relay_pool = RelayPool::new();
+    pub async fn new(
+        keypair: Arc<Keypair>,
+        relays: Vec<String>,
+        relay_status_listener: Arc<dyn RelayStatusListener>,
+    ) -> Result<Arc<Self>, AppError> {
+        // Initialize relay pool with monitoring
+        let relay_pool = RelayPool::builder().monitor(Monitor::new(4096)).build();
+        let notifications = relay_pool.monitor().unwrap().subscribe();
+
+        // Add relays to the pool
         for relay in &relays {
             relay_pool.add_relay(relay, RelayOptions::default()).await?;
         }
         relay_pool.connect().await;
 
+        // Initialize runtime
+        let runtime = Arc::new(BindingsRuntime::new());
+
+        // Set up relay status monitoring
+        Self::setup_relay_status_monitoring(
+            Arc::clone(&runtime),
+            notifications,
+            relay_status_listener,
+        );
+
+        // Create router with keypair
         let keypair = &keypair.inner;
         let router = Arc::new(MessageRouter::new(relay_pool, keypair.clone()));
-        let runtime = Arc::new(BindingsRuntime::new());
 
         Ok(Arc::new(Self { router, runtime }))
     }
@@ -665,6 +693,31 @@ impl PortalApp {
 }
 
 impl PortalApp {
+    /// Set up relay status monitoring in a separate task
+    fn setup_relay_status_monitoring(
+        runtime: Arc<BindingsRuntime>,
+        mut notifications: tokio::sync::broadcast::Receiver<MonitorNotification>,
+        relay_status_listener: Arc<dyn RelayStatusListener>,
+    ) {
+        let _ = runtime.add_task(async move {
+            while let Ok(notification) = notifications.recv().await {
+                match notification {
+                    MonitorNotification::StatusChanged { relay_url, status } => {
+                        // log::info!("Relay {:?} status changed: {:?}", relay_url, status);
+
+                        let relay_url = RelayUrl(relay_url);
+                        let status = RelayStatus::from(status);
+                        if let Err(e) = relay_status_listener.on_relay_status_change(relay_url, status).await {
+                            log::error!("Relay status listener error: {:?}", e);
+                        }
+                        
+                    }
+                }
+            }
+            Ok::<(), AppError>(())
+        });
+    }
+
     async fn post_request_profile_service(&self, content: EventContent) -> Result<(), AppError> {
         let event = EventBuilder::text_note(serde_json::to_string(&content).unwrap())
             .sign_with_keys(&self.router.keypair().get_keys())
@@ -721,7 +774,7 @@ uniffi::custom_type!(RelayUrl, String, {
     lower: |obj| obj.0.as_str().to_string(),
 });
 
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Debug)]
 pub enum RelayStatus {
     Initialized,
     Pending,

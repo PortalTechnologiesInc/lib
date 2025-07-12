@@ -3,7 +3,8 @@ use std::{io::Write, str::FromStr, sync::Arc};
 use app::{
     AuthChallengeListener, CallbackError, ClosedRecurringPaymentListener, InvoiceRequestListener,
     InvoiceResponseListener, Mnemonic, PaymentRequestListener, PortalApp, RecurringPaymentRequest,
-    SinglePaymentRequest, auth::AuthChallengeEvent, db::PortalDB, nwc::MakeInvoiceResponse,
+    RelayStatus, RelayStatusListener, RelayUrl, SinglePaymentRequest, auth::AuthChallengeEvent,
+    db::PortalDB, nwc::MakeInvoiceResponse,
 };
 use cli::{CliError, create_app_instance};
 use portal::{
@@ -20,6 +21,7 @@ use portal::{
         },
     },
 };
+
 
 struct LogInvoiceRequestListener;
 

@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use app::{
-    AuthChallengeListener, CallbackError, ClosedRecurringPaymentListener, InvoiceRequestListener,
-    InvoiceResponseListener, Keypair, Mnemonic, PaymentRequestListener, PortalApp,
-    RecurringPaymentRequest, SinglePaymentRequest, auth::AuthChallengeEvent, db::PortalDB,
-    nwc::MakeInvoiceResponse,
+    auth::AuthChallengeEvent, db::PortalDB, nwc::MakeInvoiceResponse, AuthChallengeListener, CallbackError, ClosedRecurringPaymentListener, InvoiceRequestListener, InvoiceResponseListener, Keypair, Mnemonic, PaymentRequestListener, PortalApp, RecurringPaymentRequest, RelayStatus, RelayStatusListener, RelayUrl, SinglePaymentRequest
 };
 use portal::{
     nostr::nips::{nip19::ToBech32, nip47::PayInvoiceRequest},
@@ -20,6 +17,20 @@ use portal::{
         },
     },
 };
+
+struct LogRelayStatusChange;
+
+#[async_trait::async_trait]
+impl RelayStatusListener for LogRelayStatusChange {
+    async fn on_relay_status_change(
+        &self,
+        relay_url: RelayUrl,
+        status: RelayStatus,
+    ) -> Result<(), CallbackError> {
+        log::info!("Relay {:?} status changed: {:?}", relay_url.0, status);
+        Ok(())
+    }
+}
 
 pub type CliError = Box<dyn std::error::Error>;
 
@@ -40,6 +51,7 @@ pub async fn create_app_instance(
             "wss://relay.nostr.net".to_string(),
             "wss://relay.damus.io".to_string(),
         ],
+        Arc::new(LogRelayStatusChange),
     )
     .await?;
 
