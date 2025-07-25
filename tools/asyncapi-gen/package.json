@@ -1,0 +1,8 @@
+{
+  "name": "asyncapi-gen",
+  "version": "1.0.0",
+  "dependencies": {
+    "@asyncapi/generator": "^2.7.0",
+    "@asyncapi/html-template": "^3.3.1"
+  }
+}

@@ -1,0 +1,1175 @@
+asyncapi: '3.0.0'
+id: 'urn:portal-sdk-daemon-ws-api'
+info:
+  title: Portal SDK Daemon WebSocket API
+  version: '1.0.0'
+  description: |
+    This API uses a request/reply pattern over WebSocket. Each request sent by the client must include a unique `id` field, which is echoed in the corresponding response for correlation. The client publishes commands to the server and subscribes to responses and notifications. All messages include a `summary` and `description` for clarity. The `id` field is used as a correlation identifier for matching requests and responses.
+  contact:
+    name: Portal SDK Team
+    url: https://github.com/getportal/sdk
+    email: contact@getportal.cc
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT'
+  tags:
+    - name: nostr
+      description: Nostr-based authentication and payments
+    - name: lightning
+      description: Lightning Network integration
+    - name: cashu
+      description: Cashu e-cash support
+    - name: jwt
+      description: JWT authentication
+
+servers:
+  local:
+    host: localhost:3000
+    protocol: ws
+    pathname: /ws
+    description: Local instance of the SDK Daemon
+
+defaultContentType: application/json
+
+channels:
+  ws:
+    address: /ws
+    description: |
+      All client-server communication happens over this channel. The client publishes commands and subscribes to responses and notifications.
+    messages:
+      auth:
+        $ref: '#/components/messages/auth'
+      newKeyHandshakeUrl:
+        $ref: '#/components/messages/newKeyHandshakeUrl'
+      authenticateKey:
+        $ref: '#/components/messages/authenticateKey'
+      requestRecurringPayment:
+        $ref: '#/components/messages/requestRecurringPayment'
+      requestSinglePayment:
+        $ref: '#/components/messages/requestSinglePayment'
+      requestPaymentRaw:
+        $ref: '#/components/messages/requestPaymentRaw'
+      fetchProfile:
+        $ref: '#/components/messages/fetchProfile'
+      setProfile:
+        $ref: '#/components/messages/setProfile'
+      closeRecurringPayment:
+        $ref: '#/components/messages/closeRecurringPayment'
+      listenClosedRecurringPayment:
+        $ref: '#/components/messages/listenClosedRecurringPayment'
+      requestInvoice:
+        $ref: '#/components/messages/requestInvoice'
+      issueJwt:
+        $ref: '#/components/messages/issueJwt'
+      verifyJwt:
+        $ref: '#/components/messages/verifyJwt'
+      requestCashu:
+        $ref: '#/components/messages/requestCashu'
+      sendCashuDirect:
+        $ref: '#/components/messages/sendCashuDirect'
+      error:
+        $ref: '#/components/messages/error'
+
+  authReplies:
+    address: /ws
+    description: Authentication operation replies
+    messages:
+      authSuccess:
+        $ref: '#/components/messages/authSuccess'
+
+  newKeyHandshakeUrlReplies:
+    address: /ws
+    description: New key handshake URL operation replies
+    messages:
+      keyHandshakeUrl:
+        $ref: '#/components/messages/keyHandshakeUrl'
+
+  authenticateKeyReplies:
+    address: /ws
+    description: Authenticate key operation replies
+    messages:
+      authResponse:
+        $ref: '#/components/messages/authResponse'
+
+  requestRecurringPaymentReplies:
+    address: /ws
+    description: Request recurring payment operation replies
+    messages:
+      recurringPayment:
+        $ref: '#/components/messages/recurringPayment'
+
+  requestSinglePaymentReplies:
+    address: /ws
+    description: Request single payment operation replies
+    messages:
+      singlePayment:
+        $ref: '#/components/messages/singlePayment'
+
+  requestPaymentRawReplies:
+    address: /ws
+    description: Request payment raw operation replies
+    messages:
+      singlePayment:
+        $ref: '#/components/messages/singlePayment'
+
+  fetchProfileReplies:
+    address: /ws
+    description: Fetch profile operation replies
+    messages:
+      profileData:
+        $ref: '#/components/messages/profileData'
+
+  setProfileReplies:
+    address: /ws
+    description: Set profile operation replies
+    messages:
+      authSuccess:
+        $ref: '#/components/messages/authSuccess'
+
+  closeRecurringPaymentReplies:
+    address: /ws
+    description: Close recurring payment operation replies
+    messages:
+      closeRecurringPaymentSuccess:
+        $ref: '#/components/messages/closeRecurringPaymentSuccess'
+
+  listenClosedRecurringPaymentReplies:
+    address: /ws
+    description: Listen closed recurring payment operation replies
+    messages:
+      listenClosedRecurringPayment:
+        $ref: '#/components/messages/listenClosedRecurringPaymentResponse'
+
+  requestInvoiceReplies:
+    address: /ws
+    description: Request invoice operation replies
+    messages:
+      invoicePayment:
+        $ref: '#/components/messages/invoicePayment'
+
+  issueJwtReplies:
+    address: /ws
+    description: Issue JWT operation replies
+    messages:
+      issueJwt:
+        $ref: '#/components/messages/issueJwt'
+
+  verifyJwtReplies:
+    address: /ws
+    description: Verify JWT operation replies
+    messages:
+      verifyJwt:
+        $ref: '#/components/messages/verifyJwt'
+
+  requestCashuReplies:
+    address: /ws
+    description: Request Cashu operation replies
+    messages:
+      cashuResponse:
+        $ref: '#/components/messages/cashuResponse'
+
+  sendCashuDirectReplies:
+    address: /ws
+    description: Send Cashu direct operation replies
+    messages:
+      sendCashuDirectSuccess:
+        $ref: '#/components/messages/sendCashuDirectSuccess'
+
+  # Notification channels
+  keyHandshakeNotifications:
+    address: /ws
+    description: Key handshake notifications (correlated by stream_id from newKeyHandshakeUrl)
+    messages:
+      keyHandshake:
+        $ref: '#/components/messages/keyHandshake'
+
+  paymentStatusNotifications:
+    address: /ws
+    description: Payment status update notifications (correlated by stream_id from payment requests)
+    messages:
+      paymentStatusUpdate:
+        $ref: '#/components/messages/paymentStatusUpdate'
+
+  closedRecurringPaymentNotifications:
+    address: /ws
+    description: Closed recurring payment notifications (correlated by stream_id from listenClosedRecurringPayment)
+    messages:
+      closedRecurringPayment:
+        $ref: '#/components/messages/closedRecurringPayment'
+
+  cashuRequestNotifications:
+    address: /ws
+    description: Cashu request notifications (correlated by stream_id from requestCashu)
+    messages:
+      cashuRequest:
+        $ref: '#/components/messages/cashuRequest'
+
+operations:
+  auth:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/auth'
+    reply:
+      messages:
+        - $ref: '#/channels/authReplies/messages/authSuccess'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/authReplies'
+
+  newKeyHandshakeUrl:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/newKeyHandshakeUrl'
+    reply:
+      messages:
+        - $ref: '#/channels/newKeyHandshakeUrlReplies/messages/keyHandshakeUrl'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/newKeyHandshakeUrlReplies'
+
+  authenticateKey:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/authenticateKey'
+    reply:
+      messages:
+        - $ref: '#/channels/authenticateKeyReplies/messages/authResponse'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/authenticateKeyReplies'
+
+  requestRecurringPayment:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/requestRecurringPayment'
+    reply:
+      messages:
+        - $ref: '#/channels/requestRecurringPaymentReplies/messages/recurringPayment'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/requestRecurringPaymentReplies'
+
+  requestSinglePayment:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/requestSinglePayment'
+    reply:
+      messages:
+        - $ref: '#/channels/requestSinglePaymentReplies/messages/singlePayment'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/requestSinglePaymentReplies'
+
+  requestPaymentRaw:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/requestPaymentRaw'
+    reply:
+      messages:
+        - $ref: '#/channels/requestPaymentRawReplies/messages/singlePayment'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/requestPaymentRawReplies'
+
+  fetchProfile:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/fetchProfile'
+    reply:
+      messages:
+        - $ref: '#/channels/fetchProfileReplies/messages/profileData'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/fetchProfileReplies'
+
+  setProfile:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/setProfile'
+    reply:
+      messages:
+        - $ref: '#/channels/setProfileReplies/messages/authSuccess'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/setProfileReplies'
+
+  closeRecurringPayment:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/closeRecurringPayment'
+    reply:
+      messages:
+        - $ref: '#/channels/closeRecurringPaymentReplies/messages/closeRecurringPaymentSuccess'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/closeRecurringPaymentReplies'
+
+  listenClosedRecurringPayment:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/listenClosedRecurringPayment'
+    reply:
+      messages:
+        - $ref: '#/channels/listenClosedRecurringPaymentReplies/messages/listenClosedRecurringPayment'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/listenClosedRecurringPaymentReplies'
+
+  requestInvoice:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/requestInvoice'
+    reply:
+      messages:
+        - $ref: '#/channels/requestInvoiceReplies/messages/invoicePayment'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/requestInvoiceReplies'
+
+  issueJwt:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/issueJwt'
+    reply:
+      messages:
+        - $ref: '#/channels/issueJwtReplies/messages/issueJwt'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/issueJwtReplies'
+
+  verifyJwt:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/verifyJwt'
+    reply:
+      messages:
+        - $ref: '#/channels/verifyJwtReplies/messages/verifyJwt'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/verifyJwtReplies'
+
+  requestCashu:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/requestCashu'
+    reply:
+      messages:
+        - $ref: '#/channels/requestCashuReplies/messages/cashuResponse'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/requestCashuReplies'
+
+  sendCashuDirect:
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/sendCashuDirect'
+    reply:
+      messages:
+        - $ref: '#/channels/sendCashuDirectReplies/messages/sendCashuDirectSuccess'
+        - $ref: '#/channels/ws/messages/error'
+      channel:
+        $ref: '#/channels/sendCashuDirectReplies'
+
+  # Notification operations
+  receiveKeyHandshakeNotifications:
+    action: receive
+    channel:
+      $ref: '#/channels/keyHandshakeNotifications'
+    messages:
+      - $ref: '#/channels/keyHandshakeNotifications/messages/keyHandshake'
+
+  receivePaymentStatusNotifications:
+    action: receive
+    channel:
+      $ref: '#/channels/paymentStatusNotifications'
+    messages:
+      - $ref: '#/channels/paymentStatusNotifications/messages/paymentStatusUpdate'
+
+  receiveClosedRecurringPaymentNotifications:
+    action: receive
+    channel:
+      $ref: '#/channels/closedRecurringPaymentNotifications'
+    messages:
+      - $ref: '#/channels/closedRecurringPaymentNotifications/messages/closedRecurringPayment'
+
+  receiveCashuRequestNotifications:
+    action: receive
+    channel:
+      $ref: '#/channels/cashuRequestNotifications'
+    messages:
+      - $ref: '#/channels/cashuRequestNotifications/messages/cashuRequest'
+
+
+
+components:
+  messages:
+    auth:
+      summary: Authenticate the client session
+      description: Authenticate the client using an API token. This must be the first command sent.
+      payload:
+        $ref: '#/components/schemas/AuthCommand'
+      examples:
+        - payload:
+            id: "auth-1"
+            cmd: "Auth"
+            params:
+              token: "my-secret-token"
+
+    newKeyHandshakeUrl:
+      summary: Request a new key handshake URL
+      description: Request a URL for the key handshake authentication flow.
+      payload:
+        $ref: '#/components/schemas/NewKeyHandshakeUrlCommand'
+
+    authenticateKey:
+      summary: Authenticate a key
+      description: Authenticate a main key and optional subkeys for the session.
+      payload:
+        $ref: '#/components/schemas/AuthenticateKeyCommand'
+
+    requestRecurringPayment:
+      summary: Request a recurring payment
+      description: Request a recurring Lightning payment from a user.
+      payload:
+        $ref: '#/components/schemas/RequestRecurringPaymentCommand'
+
+    requestSinglePayment:
+      summary: Request a single payment
+      description: Request a one-time Lightning payment from a user.
+      payload:
+        $ref: '#/components/schemas/RequestSinglePaymentCommand'
+
+    requestPaymentRaw:
+      summary: Request a raw payment
+      description: Request a payment using a raw invoice.
+      payload:
+        $ref: '#/components/schemas/RequestPaymentRawCommand'
+
+    fetchProfile:
+      summary: Fetch a user profile
+      description: Fetch the Nostr profile for a given public key.
+      payload:
+        $ref: '#/components/schemas/FetchProfileCommand'
+
+    setProfile:
+      summary: Set a user profile
+      description: Set or update the Nostr profile for the authenticated user.
+      payload:
+        $ref: '#/components/schemas/SetProfileCommand'
+
+    closeRecurringPayment:
+      summary: Close a recurring payment
+      description: Close an active recurring payment subscription.
+      payload:
+        $ref: '#/components/schemas/CloseRecurringPaymentCommand'
+
+    listenClosedRecurringPayment:
+      summary: Listen for closed recurring payments
+      description: Subscribe to notifications for closed recurring payment subscriptions.
+      payload:
+        $ref: '#/components/schemas/ListenClosedRecurringPaymentCommand'
+
+    requestInvoice:
+      summary: Request an invoice
+      description: Request a Lightning invoice from a recipient.
+      payload:
+        $ref: '#/components/schemas/RequestInvoiceCommand'
+
+    issueJwt:
+      summary: Issue a JWT
+      description: Issue a new JWT for a target key with a specified duration.
+      payload:
+        $ref: '#/components/schemas/IssueJwtCommand'
+
+    verifyJwt:
+      summary: Verify a JWT
+      description: Verify a JWT for a given public key.
+      payload:
+        $ref: '#/components/schemas/VerifyJwtCommand'
+
+    requestCashu:
+      summary: Request a Cashu token
+      description: Request a Cashu token from a recipient, specifying the mint, amount, and unit.
+      payload:
+        $ref: '#/components/schemas/RequestCashuCommand'
+
+    sendCashuDirect:
+      summary: Send a Cashu token directly
+      description: Send a Cashu token directly to a recipient.
+      payload:
+        $ref: '#/components/schemas/SendCashuDirectCommand'
+
+    success:
+      summary: Successful response
+      description: Indicates a successful response to a command.
+      payload:
+        $ref: '#/components/schemas/SuccessResponse'
+      examples:
+        - payload:
+            type: "success"
+            id: "auth-1"
+            data:
+              type: "auth_success"
+              message: "Authentication successful."
+
+    error:
+      summary: Error response
+      description: Indicates an error occurred while processing a command.
+      payload:
+        $ref: '#/components/schemas/ErrorResponse'
+
+
+
+    keyHandshakeUrl:
+      summary: Key handshake URL response
+      description: Response containing a URL for the key handshake authentication flow. The stream_id field correlates with keyHandshake notifications.
+      payload:
+        $ref: '#/components/schemas/KeyHandshakeUrl'
+
+    authResponse:
+      summary: Authentication response
+      description: Response to key authentication with challenge and status.
+      payload:
+        $ref: '#/components/schemas/AuthResponse'
+
+    recurringPayment:
+      summary: Recurring payment response
+      description: Response to recurring payment request with subscription details. The stream_id field correlates with paymentStatusUpdate notifications.
+      payload:
+        $ref: '#/components/schemas/RecurringPayment'
+
+    singlePayment:
+      summary: Single payment response
+      description: Response to single payment request with payment status. The stream_id field correlates with paymentStatusUpdate notifications.
+      payload:
+        $ref: '#/components/schemas/SinglePayment'
+
+    profileData:
+      summary: Profile data response
+      description: Response containing user profile information.
+      payload:
+        $ref: '#/components/schemas/ProfileData'
+
+    authSuccess:
+      summary: Authentication success response
+      description: Simple success response for authentication operations.
+      payload:
+        $ref: '#/components/schemas/AuthSuccess'
+
+    closeRecurringPaymentSuccess:
+      summary: Close recurring payment success response
+      description: Success response for closing a recurring payment subscription.
+      payload:
+        $ref: '#/components/schemas/CloseRecurringPaymentSuccess'
+
+    invoicePayment:
+      summary: Invoice payment response
+      description: Response containing invoice and payment hash.
+      payload:
+        $ref: '#/components/schemas/InvoicePayment'
+
+    cashuResponse:
+      summary: Cashu response
+      description: Response to Cashu token request with status. The stream_id field correlates with cashuRequest notifications.
+      payload:
+        $ref: '#/components/schemas/CashuResponse'
+
+    sendCashuDirectSuccess:
+      summary: Send Cashu direct success response
+      description: Success response for sending Cashu token directly.
+      payload:
+        $ref: '#/components/schemas/SendCashuDirectSuccess'
+
+    listenClosedRecurringPaymentResponse:
+      summary: Listen closed recurring payment response
+      description: Response to listen closed recurring payment request. The stream_id field correlates with closedRecurringPayment notifications.
+      payload:
+        $ref: '#/components/schemas/ListenClosedRecurringPayment'
+
+    # Notification messages
+    keyHandshake:
+      summary: Key handshake notification
+      description: Notification sent when a key handshake event occurs. Correlated by stream_id from newKeyHandshakeUrl response.
+      payload:
+        $ref: '#/components/schemas/KeyHandshake'
+
+    paymentStatusUpdate:
+      summary: Payment status update notification
+      description: Notification sent when payment status changes. Correlated by stream_id from payment request responses.
+      payload:
+        $ref: '#/components/schemas/PaymentStatusUpdate'
+
+    closedRecurringPayment:
+      summary: Closed recurring payment notification
+      description: Notification sent when a recurring payment is closed. Correlated by stream_id from listenClosedRecurringPayment response.
+      payload:
+        $ref: '#/components/schemas/ClosedRecurringPayment'
+
+    cashuRequest:
+      summary: Cashu request notification
+      description: Notification sent when a Cashu request is received. Correlated by stream_id from requestCashu response.
+      payload:
+        $ref: '#/components/schemas/CashuRequestNotification'
+
+  schemas:
+    # --- Command Schemas ---
+    AuthCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [Auth] }
+        params:
+          type: object
+          required: [token]
+          properties:
+            token: { type: string }
+    NewKeyHandshakeUrlCommand:
+      type: object
+      required: [id, cmd]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [NewKeyHandshakeUrl] }
+        params:
+          type: object
+          properties:
+            static_token: { type: string, nullable: true }
+    AuthenticateKeyCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [AuthenticateKey] }
+        params:
+          type: object
+          required: [main_key, subkeys]
+          properties:
+            main_key: { type: string }
+            subkeys:
+              type: array
+              items: { type: string }
+    RequestRecurringPaymentCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [RequestRecurringPayment] }
+        params:
+          type: object
+          required: [main_key, subkeys, payment_request]
+          properties:
+            main_key: { type: string }
+            subkeys:
+              type: array
+              items: { type: string }
+            payment_request:
+              $ref: '#/components/schemas/RecurringPaymentRequestContent'
+    RequestSinglePaymentCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [RequestSinglePayment] }
+        params:
+          type: object
+          required: [main_key, subkeys, payment_request]
+          properties:
+            main_key: { type: string }
+            subkeys:
+              type: array
+              items: { type: string }
+            payment_request:
+              $ref: '#/components/schemas/SinglePaymentRequestContent'
+    RequestPaymentRawCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [RequestPaymentRaw] }
+        params:
+          type: object
+          required: [main_key, subkeys, payment_request]
+          properties:
+            main_key: { type: string }
+            subkeys:
+              type: array
+              items: { type: string }
+            payment_request:
+              $ref: '#/components/schemas/InvoicePaymentRequestContent'
+    FetchProfileCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [FetchProfile] }
+        params:
+          type: object
+          required: [main_key]
+          properties:
+            main_key: { type: string }
+    SetProfileCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [SetProfile] }
+        params:
+          type: object
+          required: [profile]
+          properties:
+            profile:
+              $ref: '#/components/schemas/Profile'
+    CloseRecurringPaymentCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [CloseRecurringPayment] }
+        params:
+          type: object
+          required: [main_key, subkeys, subscription_id]
+          properties:
+            main_key: { type: string }
+            subkeys:
+              type: array
+              items: { type: string }
+            subscription_id: { type: string }
+    ListenClosedRecurringPaymentCommand:
+      type: object
+      required: [id, cmd]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [ListenClosedRecurringPayment] }
+        params:
+          type: object
+          properties: {}
+    RequestInvoiceCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [RequestInvoice] }
+        params:
+          type: object
+          required: [recipient_key, content]
+          properties:
+            recipient_key: { type: string }
+            content:
+              $ref: '#/components/schemas/InvoiceRequestContent'
+    IssueJwtCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [IssueJwt] }
+        params:
+          type: object
+          required: [target_key, duration_hours]
+          properties:
+            target_key: { type: string }
+            duration_hours: { type: integer }
+    VerifyJwtCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [VerifyJwt] }
+        params:
+          type: object
+          required: [pubkey, token]
+          properties:
+            pubkey: { type: string }
+            token: { type: string }
+    RequestCashuCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [RequestCashu] }
+        params:
+          type: object
+          required: [recipient_key, subkeys, content]
+          properties:
+            recipient_key: { type: string }
+            subkeys:
+              type: array
+              items: { type: string }
+            content: { $ref: '#/components/schemas/CashuRequestContent' }
+    SendCashuDirectCommand:
+      type: object
+      required: [id, cmd, params]
+      properties:
+        id: { type: string }
+        cmd: { type: string, enum: [SendCashuDirect] }
+        params:
+          type: object
+          required: [main_key, subkeys, token]
+          properties:
+            main_key: { type: string }
+            subkeys:
+              type: array
+              items: { type: string }
+            token: { type: string }
+
+    # --- Response Schemas ---
+    SuccessResponse:
+      type: object
+      required: [type, id, data]
+      properties:
+        type: { type: string, enum: [success] }
+        id: { type: string }
+        data:
+          $ref: '#/components/schemas/ResponseData'
+    ErrorResponse:
+      type: object
+      required: [type, id, message]
+      properties:
+        type: { type: string, enum: [error] }
+        id: { type: string }
+        message: { type: string }
+    NotificationResponse:
+      type: object
+      required: [type, id, data]
+      properties:
+        type: { type: string, enum: [notification] }
+        id: { type: string }
+        data:
+          $ref: '#/components/schemas/NotificationData'
+
+    # --- Data Schemas ---
+    ResponseData:
+      oneOf:
+        - $ref: '#/components/schemas/AuthSuccess'
+        - $ref: '#/components/schemas/KeyHandshakeUrl'
+        - $ref: '#/components/schemas/AuthResponse'
+        - $ref: '#/components/schemas/RecurringPayment'
+        - $ref: '#/components/schemas/SinglePayment'
+        - $ref: '#/components/schemas/ProfileData'
+        - $ref: '#/components/schemas/CloseRecurringPaymentSuccess'
+        - $ref: '#/components/schemas/ListenClosedRecurringPayment'
+        - $ref: '#/components/schemas/InvoicePayment'
+        - $ref: '#/components/schemas/IssueJwt'
+        - $ref: '#/components/schemas/VerifyJwt'
+        - $ref: '#/components/schemas/CashuResponse'
+        - $ref: '#/components/schemas/SendCashuDirectSuccess'
+    AuthSuccess:
+      type: object
+      required: [type, message]
+      properties:
+        type: { type: string, enum: [auth_success] }
+        message: { type: string }
+    KeyHandshakeUrl:
+      type: object
+      required: [type, url, stream_id]
+      properties:
+        type: { type: string, enum: [key_handshake_url] }
+        url: { type: string }
+        stream_id: { type: string }
+    AuthResponse:
+      type: object
+      required: [type, event]
+      properties:
+        type: { type: string, enum: [auth_response] }
+        event: { $ref: '#/components/schemas/AuthResponseData' }
+    RecurringPayment:
+      type: object
+      required: [type, status]
+      properties:
+        type: { type: string, enum: [recurring_payment] }
+        status: { $ref: '#/components/schemas/RecurringPaymentStatusContent' }
+    SinglePayment:
+      type: object
+      required: [type, status, stream_id]
+      properties:
+        type: { type: string, enum: [single_payment] }
+        status: { $ref: '#/components/schemas/PaymentStatusContent' }
+        stream_id:
+          oneOf:
+            - { type: "string" }
+            - { type: "null" }
+    ProfileData:
+      type: object
+      required: [type, profile]
+      properties:
+        type: { type: string, enum: [profile] }
+        profile:
+          oneOf:
+            - $ref: '#/components/schemas/Profile'
+            - { type: "null" }
+    CloseRecurringPaymentSuccess:
+      type: object
+      required: [type, message]
+      properties:
+        type: { type: string, enum: [close_recurring_payment_success] }
+        message: { type: string }
+    ListenClosedRecurringPayment:
+      type: object
+      required: [type, stream_id]
+      properties:
+        type: { type: string, enum: [listen_closed_recurring_payment] }
+        stream_id: { type: string }
+    InvoicePayment:
+      type: object
+      required: [type, invoice, payment_hash]
+      properties:
+        type: { type: string, enum: [invoice_payment] }
+        invoice: { type: string }
+        payment_hash: { type: string }
+    IssueJwt:
+      type: object
+      required: [type, token]
+      properties:
+        type: { type: string, enum: [issue_jwt] }
+        token: { type: string }
+    VerifyJwt:
+      type: object
+      required: [type, target_key]
+      properties:
+        type: { type: string, enum: [verify_jwt] }
+        target_key: { type: string }
+    CashuResponse:
+      type: object
+      required: [type, status]
+      properties:
+        type: { type: string, enum: [cashu_response] }
+        status: { $ref: '#/components/schemas/CashuResponseStatus' }
+    SendCashuDirectSuccess:
+      type: object
+      required: [type, message]
+      properties:
+        type: { type: string, enum: [send_cashu_direct_success] }
+        message: { type: string }
+
+    # --- Notification Data ---
+    NotificationData:
+      oneOf:
+        - $ref: '#/components/schemas/KeyHandshake'
+        - $ref: '#/components/schemas/PaymentStatusUpdate'
+        - $ref: '#/components/schemas/ClosedRecurringPayment'
+        - $ref: '#/components/schemas/CashuRequestNotification'
+    KeyHandshake:
+      type: object
+      required: [type, main_key, stream_id]
+      properties:
+        type: { type: string, enum: [key_handshake] }
+        main_key: { type: string }
+        stream_id: { type: string, description: "Correlates with stream_id from newKeyHandshakeUrl response" }
+    PaymentStatusUpdate:
+      type: object
+      required: [type, status, stream_id]
+      properties:
+        type: { type: string, enum: [payment_status_update] }
+        status: { $ref: '#/components/schemas/InvoiceStatus' }
+        stream_id: { type: string, description: "Correlates with stream_id from payment request responses" }
+    ClosedRecurringPayment:
+      type: object
+      required: [type, reason, subscription_id, main_key, recipient, stream_id]
+      properties:
+        type: { type: string, enum: [closed_recurring_payment] }
+        reason:
+          oneOf:
+            - { type: "string" }
+            - { type: "null" }
+        subscription_id: { type: string }
+        main_key: { type: string }
+        recipient: { type: string }
+        stream_id: { type: string, description: "Correlates with stream_id from listenClosedRecurringPayment response" }
+    CashuRequestNotification:
+      type: object
+      required: [type, request, stream_id]
+      properties:
+        type: { type: string, enum: [cashu_request] }
+        request: { $ref: '#/components/schemas/CashuRequestContentWithKey' }
+        stream_id: { type: string, description: "Correlates with stream_id from requestCashu response" }
+    CashuRequestContent:
+      type: object
+      required: [request_id, mint_url, unit, amount]
+      properties:
+        request_id: { type: string }
+        mint_url: { type: string }
+        unit: { type: string }
+        amount: { type: number }
+    CashuRequestContentWithKey:
+      type: object
+      required: [inner, main_key, recipient]
+      properties:
+        inner: { $ref: '#/components/schemas/CashuRequestContent' }
+        main_key: { type: string }
+        recipient: { type: string }
+    CashuResponseStatus:
+      oneOf:
+        - type: object
+          required: [status, token]
+          properties:
+            status: { type: string, enum: [success] }
+            token: { type: string }
+        - type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [insufficient_funds] }
+        - type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [rejected] }
+            reason: { type: string, nullable: true }
+
+    # --- Supporting Schemas ---
+    RecurringPaymentRequestContent:
+      type: object
+      required: [amount, currency, recurrence, expires_at]
+      properties:
+        amount: { type: number }
+        currency: { $ref: '#/components/schemas/Currency' }
+        recurrence: { $ref: '#/components/schemas/RecurrenceInfo' }
+        current_exchange_rate: { type: object, nullable: true }
+        expires_at: { type: string }
+        auth_token: { type: string, nullable: true }
+    SinglePaymentRequestContent:
+      type: object
+      required: [description, amount, currency]
+      properties:
+        description: { type: string }
+        amount: { type: number }
+        currency: { $ref: '#/components/schemas/Currency' }
+        subscription_id: { type: string, nullable: true }
+        auth_token: { type: string, nullable: true }
+    InvoicePaymentRequestContent:
+      type: object
+      required: [amount, currency, description]
+      properties:
+        amount: { type: number }
+        currency: { $ref: '#/components/schemas/Currency' }
+        description: { type: string }
+        subscription_id: { type: string, nullable: true }
+        auth_token: { type: string, nullable: true }
+        current_exchange_rate: { type: object, nullable: true }
+        expires_at: { type: string, nullable: true }
+        invoice: { type: string, nullable: true }
+    RecurrenceInfo:
+      type: object
+      required: [calendar, first_payment_due]
+      properties:
+        until: { type: string, nullable: true }
+        calendar: { type: string }
+        max_payments: { type: number, nullable: true }
+        first_payment_due: { type: string }
+    RecurringPaymentStatusContent:
+      type: object
+      required: [subscription_id, authorized_amount, authorized_currency, authorized_recurrence]
+      properties:
+        subscription_id: { type: string }
+        authorized_amount: { type: number }
+        authorized_currency: { $ref: '#/components/schemas/Currency' }
+        authorized_recurrence: { $ref: '#/components/schemas/RecurrenceInfo' }
+    PaymentStatusContent:
+      oneOf:
+        - { type: "string", enum: ["pending"] }
+        - type: object
+          required: [rejected]
+          properties:
+            rejected:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  oneOf:
+                    - { type: "string" }
+                    - { type: "null" }
+        - type: object
+          required: [failed]
+          properties:
+            failed:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  oneOf:
+                    - { type: "string" }
+                    - { type: "null" }
+    InvoiceStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: ["paid", "timeout", "error"] }
+        preimage: { type: string, nullable: true }
+        reason: { type: string, nullable: true }
+    AuthResponseStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: ["approved", "declined"] }
+        reason: { type: string, nullable: true }
+        granted_permissions:
+          type: array
+          items: { type: string }
+          nullable: true
+        session_token: { type: string, nullable: true }
+    AuthResponseData:
+      type: object
+      required: [user_key, recipient, challenge, status]
+      properties:
+        user_key: { type: string }
+        recipient: { type: string }
+        challenge: { type: string }
+        status: { $ref: '#/components/schemas/AuthResponseStatus' }
+    Profile:
+      type: object
+      required: [id, pubkey]
+      properties:
+        id: { type: string }
+        pubkey: { type: string }
+        name: { type: string, nullable: true }
+        display_name: { type: string, nullable: true }
+        picture: { type: string, nullable: true }
+        about: { type: string, nullable: true }
+        nip05: { type: string, nullable: true }
+    InvoiceRequestContent:
+      type: object
+      required: [request_id, amount, currency, expires_at]
+      properties:
+        request_id: { type: string }
+        amount: { type: number }
+        currency: { $ref: '#/components/schemas/Currency' }
+        current_exchange_rate: { $ref: '#/components/schemas/ExchangeRate', nullable: true }
+        expires_at: { type: string }
+        description: { type: string, nullable: true }
+    ExchangeRate:
+      type: object
+      required: [rate, source, time]
+      properties:
+        rate: { type: number }
+        source: { type: string }
+        time: { type: string }
+    Currency:
+      type: string
+      enum: [Millisats] 
