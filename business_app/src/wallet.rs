@@ -345,6 +345,10 @@ pub trait CashuLocalStore: Send + Sync {
         count: u32,
     ) -> Result<(), CashuWalletError>;
     async fn get_keyset_counter(&self, keyset_id: String) -> Result<Option<u32>, CashuWalletError>;
+    async fn add_mint_quote(&self, quote: String) -> Result<(), CashuWalletError>;
+    async fn get_mint_quote(&self, quote_id: String) -> Result<Option<String>, CashuWalletError>;
+    async fn get_mint_quotes(&self) -> Result<Vec<String>, CashuWalletError>;
+    async fn remove_mint_quote(&self, quote_id: String) -> Result<(), CashuWalletError>;
 }
 
 // Wrapper struct for the app-facing localstore
@@ -774,20 +778,66 @@ impl WalletDatabase for AppCashuLocalStore {
             })
     }
 
-    async fn add_mint_quote(&self, _quote: cdk::wallet::MintQuote) -> Result<(), Self::Err> {
-        unimplemented!()
+    async fn add_mint_quote(&self, quote: cdk::wallet::MintQuote) -> Result<(), Self::Err> {
+        let quote_string = serde_json::to_string(&quote).unwrap_or_default();
+
+        self.inner
+            .add_mint_quote(quote_string)
+            .await
+            .map_err(|e| {
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                )))
+            })
     }
+
     async fn get_mint_quote(
         &self,
-        _quote_id: &str,
+        quote_id: &str,
     ) -> Result<Option<cdk::wallet::MintQuote>, Self::Err> {
-        unimplemented!()
+        match self.inner.get_mint_quote(quote_id.to_string()).await {
+            Ok(Some(quote_string)) => serde_json::from_str(&quote_string)
+                .map(Some)
+                .map_err(|e| cdk::cdk_database::Error::Database(Box::new(e))),
+            Ok(None) => Ok(None),
+            Err(e) => Err(cdk::cdk_database::Error::Database(Box::new(
+                std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+            ))),
+        }
     }
+
     async fn get_mint_quotes(&self) -> Result<Vec<cdk::wallet::MintQuote>, Self::Err> {
-        unimplemented!()
+        let quote_strings = self
+            .inner
+            .get_mint_quotes()
+            .await
+            .map_err(|e| {
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                )))
+            })?;
+
+        let mut quotes = Vec::new();
+        for quote_string in quote_strings {
+            if let Ok(quote) = serde_json::from_str(&quote_string) {
+                quotes.push(quote);
+            }
+        }
+        Ok(quotes)
     }
-    async fn remove_mint_quote(&self, _quote_id: &str) -> Result<(), Self::Err> {
-        unimplemented!()
+
+    async fn remove_mint_quote(&self, quote_id: &str) -> Result<(), Self::Err> {
+        self.inner
+            .remove_mint_quote(quote_id.to_string())
+            .await
+            .map_err(|e| {
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                )))
+            })
     }
     async fn add_melt_quote(&self, _quote: cdk::wallet::MeltQuote) -> Result<(), Self::Err> {
         unimplemented!()
