@@ -82,7 +82,7 @@
           };
           strictDeps = true;
           doCheck = false;
-          cargoExtraArgs = "-p app";
+          cargoExtraArgs = "-p business_app";
 
           cargoCheckCommand = "true";
         };
@@ -149,7 +149,7 @@
         });
         mkCargoMetadata = target: (cargoMetadata ((mkAndroidCommonArgs target) // commonArgs // {
           cargoArtifacts = mkAndroidArtifacts target;
-          manifestPath = "./app/Cargo.toml";
+          manifestPath = "./business_app/Cargo.toml";
         }));
 
         yarn-berry = pkgs.yarn-berry_3;
@@ -203,7 +203,7 @@
 
         fakeCargoMetadata = pkgs.writeShellScriptBin "cargo" ''
           # We need to patch the manifest path otherwise uniffi-bindgen-react-native will fail to find the package
-          cat ${mkCargoMetadata "arm64-v8a"}/metadata.json | sed 's|/build/source|${../app}|g'
+          cat ${mkCargoMetadata "arm64-v8a"}/metadata.json | sed 's|/build/source|${../business_app}|g'
         '';
 
         reactNativeLib = { withIos ? false }: pkgs.stdenv.mkDerivation (finalAttrs: {
@@ -220,15 +220,15 @@
 
           buildPhase = ''
             # The ubrn config poits to ../app, so symlink the source there
-            ln -s ${../app} ../app
+            ln -s ${../business_app} ../business_app
 
             # Generate the bindings for both platforms
-            uniffi-bindgen-react-native generate all --config ./ubrn.config.yaml ${libAndroidAarch64}/lib/libapp.a
+            uniffi-bindgen-react-native generate all --config ./ubrn.config.yaml ${libAndroidAarch64}/lib/libbusiness_app.a
 
             # Copy the artifacts to the android directory
             mkdir -p android/src/main/jniLibs/{arm64-v8a,x86_64}
-            cp ${libAndroidAarch64}/lib/libapp.a android/src/main/jniLibs/arm64-v8a/libportal.a
-            cp ${libAndroidX86_64}/lib/libapp.a android/src/main/jniLibs/x86_64/libportal.a
+            cp ${libAndroidAarch64}/lib/libbusiness_app.a android/src/main/jniLibs/arm64-v8a/libportal.a
+            cp ${libAndroidX86_64}/lib/libbusiness_app.a android/src/main/jniLibs/x86_64/libportal.a
 
             ${pkgs.lib.optionalString withIos ''
               # Since those packages are built on a native macos worker, we take them from its package output set

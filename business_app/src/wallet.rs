@@ -125,6 +125,7 @@ impl CashuWallet {
         unit: &str,
         seed: Vec<u8>,
         localstore: Arc<dyn CashuLocalStore>,
+        auth: Option<String>,
     ) -> Result<Arc<Self>, CashuWalletError> {
         let currency_unit = CurrencyUnit::from_str(unit)
             .map_err(|e| CashuWalletError::WalletError(format!("Invalid currency unit: {e}")))?;
@@ -136,13 +137,19 @@ impl CashuWallet {
         let localstore_adapter = Arc::new(AppCashuLocalStore { inner: localstore })
             as Arc<dyn WalletDatabase<Err = cdk::cdk_database::Error> + Send + Sync>;
 
-        let wallet = WalletBuilder::new()
+        let mut wallet = WalletBuilder::new()
             .mint_url(mint_url)
             .unit(currency_unit.clone())
             .localstore(localstore_adapter)
             .seed(&seed)
             .is_pre_derived(true)
-            .target_proof_count(3)
+            .target_proof_count(3);
+
+        if let Some(auth) = auth {
+            wallet = wallet.static_token(auth);
+        }
+
+        let wallet = wallet
             .build()
             .map_err(|e| CashuWalletError::WalletError(e.to_string()))?;
 
@@ -190,6 +197,21 @@ impl CashuWallet {
                 ..Default::default()
             };
             let prepared_send = self.inner.prepare_send(amount, opts).await?;
+            let token = self.inner.send(prepared_send, None).await?;
+            Ok(token.to_string())
+        })
+        .join()
+        .await
+        .expect("No async task issues")
+    }
+
+    pub async fn mint_token(self: Arc<Self>, amount: u64) -> Result<String, CashuWalletError> {
+        async_utility::task::spawn(async move {
+            let _ = self.inner.get_mint_info().await?;
+
+            let quote = self.inner.mint_quote(Amount::from(amount), Some("Minted from Portal Business".to_string())).await?;
+            let _ = self.inner.mint(&quote.id, SplitTarget::None, None).await?;
+            let prepared_send = self.inner.prepare_send(Amount::from(amount), SendOptions::default()).await?;
             let token = self.inner.send(prepared_send, None).await?;
             Ok(token.to_string())
         })

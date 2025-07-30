@@ -217,6 +217,15 @@ pub mod auth {
             reason: Option<String>,
         },
     }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
+    pub struct AuthResponseEvent {
+        pub user_key: PublicKey,
+        pub recipient: PublicKey,
+        pub challenge: String,
+        pub status: AuthResponseStatus,
+    }
 }
 
 pub mod identity {

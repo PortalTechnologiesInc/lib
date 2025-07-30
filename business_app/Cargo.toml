@@ -1,0 +1,38 @@
+[package]
+name = "business_app"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib", "lib"]
+
+[dependencies]
+uniffi = "0.29.1"
+portal = { path = "../", features = ["bindings"] }
+rates = { path = "../rates", features = ["bindings"]}
+thiserror = "2.0.12"
+tokio = { version = "1.41.1", features = ["rt-multi-thread"] }
+android_logger = "0.15.0"
+log = "0.4.27"
+async = "0.0.0"
+async-trait = "0.1.88"
+bip39 = { version = "2.1.0", features = ["rand"] }
+bitcoin = "0.32.5"
+nwc = "0.42.0"
+nostr = { version = "0.42.0" }
+futures = "0.3.31"
+
+nostrstore = "0.2.4"
+nostr-relay-pool = "0.42.0"
+reqwest = { version = "0.12.20", default-features = false, features = ["rustls-tls"] }
+serde = "1.0.219"
+serde_json = "1.0.140"
+async-utility = "0.3.1"
+# nostrstore-derive = "0.1.0"
+
+chrono = "0.4.41"
+
+cdk = { git = "https://github.com/PortalTechnologiesInc/cdk", rev = "db8817b8fade55dd23697d0e07c760e48cf11a73", features = ["wallet"] }
+cdk-common = { git = "https://github.com/PortalTechnologiesInc/cdk", rev = "db8817b8fade55dd23697d0e07c760e48cf11a73" }
+
+rand = "0.8"

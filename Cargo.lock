@@ -667,6 +667,49 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1628fb46dfa0b37568d12e5edd512553eccf6a22a78e8bde00bb4aed84d5bdbf"
 
 [[package]]
+name = "business_app"
+version = "0.1.0"
+dependencies = [
+ "android_logger",
+ "async",
+ "async-trait",
+ "async-utility",
+ "bip39",
+ "bitcoin",
+ "cdk",
+ "cdk-common",
+ "chrono",
+ "futures",
+ "log",
+ "nostr",
+ "nostr-relay-pool",
+ "nostrstore",
+ "nwc",
+ "portal",
+ "rand 0.8.5",
+ "rates",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "uniffi",
+]
+
+[[package]]
+name = "business_cli"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "business_app",
+ "env_logger",
+ "log",
+ "nostr",
+ "portal",
+ "tokio",
+]
+
+[[package]]
 name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

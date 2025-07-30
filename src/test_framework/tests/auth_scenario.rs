@@ -1,4 +1,4 @@
-use crate::sdk::auth::{AuthResponseEvent, KeyHandshakeEvent};
+use crate::sdk::auth::KeyHandshakeEvent;
 use crate::{
     app::auth::{
         AuthChallengeListenerConversation, AuthResponseConversation, KeyHandshakeConversation,
@@ -6,7 +6,10 @@ use crate::{
     protocol::{
         LocalKeypair,
         key_handshake::KeyHandshakeUrl,
-        model::{Nonce, Timestamp, auth::AuthResponseStatus},
+        model::{
+            Nonce, Timestamp,
+            auth::{AuthResponseEvent, AuthResponseStatus},
+        },
         subkey::{PrivateSubkeyManager, SubkeyMetadata},
     },
     router::{
@@ -134,7 +137,10 @@ async fn test_auth_flow() {
 
     // 8. Wait for auth response notification
     let auth_response_event: AuthResponseEvent = auth_response_event.next().await.unwrap().unwrap();
-    assert_eq!(auth_response_event.user_key, client_keys.public_key());
+    assert_eq!(
+        auth_response_event.user_key,
+        client_keys.public_key().into()
+    );
     assert_eq!(
         auth_response_event.recipient,
         client_keys.public_key().into()
@@ -238,7 +244,7 @@ async fn test_auth_with_subkey_client() {
     let auth_response_event: AuthResponseEvent = auth_response_event.next().await.unwrap().unwrap();
     assert_eq!(
         auth_response_event.user_key,
-        client_keys_master.public_key()
+        client_keys_master.public_key().into()
     );
     assert_eq!(
         auth_response_event.recipient,
@@ -344,7 +350,10 @@ async fn test_auth_with_subkey_service() {
 
     // 5. Wait for auth response notification
     let auth_response_event: AuthResponseEvent = auth_response_event.next().await.unwrap().unwrap();
-    assert_eq!(auth_response_event.user_key, client_keys.public_key());
+    assert_eq!(
+        auth_response_event.user_key,
+        client_keys.public_key().into()
+    );
     assert_eq!(
         auth_response_event.recipient,
         client_keys.public_key().into()

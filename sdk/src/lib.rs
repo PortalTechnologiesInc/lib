@@ -16,6 +16,7 @@ use portal::{
     protocol::{
         LocalKeypair,
         key_handshake::KeyHandshakeUrl,
+        model::auth::AuthResponseEvent,
         model::payment::{
             CashuDirectContent, CashuRequestContent, CashuRequestContentWithKey,
             CashuResponseContent, CloseRecurringPaymentContent, CloseRecurringPaymentResponse,
@@ -31,8 +32,7 @@ use portal::{
     },
     sdk::{
         auth::{
-            AuthChallengeSenderConversation, AuthResponseEvent, KeyHandshakeEvent,
-            KeyHandshakeReceiverConversation,
+            AuthChallengeSenderConversation, KeyHandshakeEvent, KeyHandshakeReceiverConversation,
         },
         payments::{
             RecurringPaymentRequestSenderConversation, SinglePaymentRequestSenderConversation,
@@ -80,6 +80,7 @@ impl PortalSDK {
         let inner = KeyHandshakeReceiverConversation::new(
             self.router.keypair().public_key(),
             token.clone(),
+            false,
         );
         let event = self
             .router

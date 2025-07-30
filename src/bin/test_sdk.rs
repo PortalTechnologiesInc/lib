@@ -3,11 +3,10 @@ use std::sync::Arc;
 use nostr::Keys;
 use nostr_relay_pool::{RelayOptions, RelayPool};
 use portal::{
-    protocol::{LocalKeypair, key_handshake::KeyHandshakeUrl},
+    protocol::{LocalKeypair, key_handshake::KeyHandshakeUrl, model::auth::AuthResponseEvent},
     router::{MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream},
     sdk::auth::{
-        AuthChallengeSenderConversation, AuthResponseEvent, KeyHandshakeEvent,
-        KeyHandshakeReceiverConversation,
+        AuthChallengeSenderConversation, KeyHandshakeEvent, KeyHandshakeReceiverConversation,
     },
     utils::random_string,
 };

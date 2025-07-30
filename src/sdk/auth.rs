@@ -9,8 +9,8 @@ use crate::{
     protocol::model::{
         Timestamp,
         auth::{
-            AuthChallengeContent, AuthResponseContent, AuthResponseStatus, KeyHandshakeContent,
-            SubkeyProof,
+            AuthChallengeContent, AuthResponseContent, AuthResponseEvent, AuthResponseStatus,
+            KeyHandshakeContent, SubkeyProof,
         },
         event_kinds::*,
     },
@@ -25,6 +25,7 @@ use crate::{
 pub struct KeyHandshakeReceiverConversation {
     local_key: PublicKey,
     token: String,
+    persist: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,11 +58,16 @@ impl MultiKeyListener for KeyHandshakeReceiverConversation {
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         if message.token == state.token {
-            Ok(Response::new()
+            let mut response = Response::new()
                 .notify(KeyHandshakeEvent {
                     main_key: event.pubkey,
-                })
-                .finish())
+                });
+            
+            if !state.inner.persist {
+                response = response.finish();
+            }
+
+            Ok(response)
         } else {
             Ok(Response::default())
         }
@@ -87,14 +93,6 @@ impl AuthChallengeSenderConversation {
             challenge: random_string(32),
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthResponseEvent {
-    pub user_key: PublicKey,
-    pub recipient: PublicKey,
-    pub challenge: String,
-    pub status: AuthResponseStatus,
 }
 
 impl MultiKeySender for AuthChallengeSenderConversation {
@@ -182,7 +180,7 @@ impl MultiKeySender for AuthChallengeSenderConversation {
 
         Ok(Response::new()
             .notify(AuthResponseEvent {
-                user_key,
+                user_key: user_key.into(),
                 recipient: event.pubkey.into(),
                 challenge: message.challenge.clone(),
                 status: message.status.clone(),

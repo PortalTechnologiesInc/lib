@@ -180,9 +180,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let mnemonic = generate_mnemonic()?;
     let keypair = Arc::new(mnemonic.get_keypair()?);
 
+    // if has arg nwc parse it, else dont use NWC
+    let nwc_str = std::env::args().nth(1);
+    let nwc = if let Some(nwc_str) = nwc_str {
+        Some(nwc::NWC::new(nwc_str.parse()?))
+    } else {
+        None
+    };
+
     // Testing database so commented for now
-    let nwc_str = std::env::var("CLI_NWC_URL").expect("CLI_NWC_URL is not set");
-    let nwc = nwc::NWC::new(nwc_str.parse()?);
 
     log::info!(
         "Public key: {:?}",
@@ -246,12 +252,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap();
     });
 
-    let _app = Arc::clone(&app);
-    tokio::spawn(async move {
-        _app.listen_for_payment_request(Arc::new(ApprovePayment(Arc::new(nwc))))
-            .await
-            .unwrap();
-    });
+    if let Some(nwc) = nwc {
+        let _app = Arc::clone(&app);
+        tokio::spawn(async move {
+            _app.listen_for_payment_request(Arc::new(ApprovePayment(Arc::new(nwc))))
+                .await
+                .unwrap();
+        });
+    }
 
     let _app = Arc::clone(&app);
     tokio::spawn(async move {

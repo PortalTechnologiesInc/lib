@@ -1,6 +1,6 @@
 ---
 rust:
-  directory: ../app
+  directory: ../business_app
   manifestPath: Cargo.toml
 
 android:
