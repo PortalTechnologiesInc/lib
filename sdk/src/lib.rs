@@ -46,13 +46,17 @@ pub struct PortalSDK {
 impl PortalSDK {
     pub async fn new(keypair: LocalKeypair, relays: Vec<String>) -> Result<Self, PortalSDKError> {
         let relay_pool = RelayPool::new();
-        for relay in relays {
+        for relay in &relays {
             relay_pool.add_relay(relay, RelayOptions::default()).await?;
         }
         relay_pool.connect().await;
         let relay_pool = Arc::new(relay_pool);
 
         let router = Arc::new(MessageRouter::new(Arc::clone(&relay_pool), keypair.clone()));
+
+        for relay in &relays {
+            router.add_relay(relay.clone(), false).await?;
+        }
 
         let _router = Arc::clone(&router);
         let _listener = tokio::spawn(async move { _router.listen().await });

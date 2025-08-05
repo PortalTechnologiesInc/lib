@@ -416,6 +416,11 @@ impl PortalApp {
         router.ping().await?;
         log::debug!("Router actor is ready");
 
+        for relay in &relays {
+            // Make sure the relay nodes are created
+            router.add_relay(relay.clone(), false).await?;
+        }
+
         Ok(Arc::new(Self {
             router,
             relay_pool,
