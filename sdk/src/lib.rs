@@ -341,6 +341,10 @@ impl PortalSDK {
             .await?;
         Ok(())
     }
+
+    pub fn relay_pool(&self) -> Arc<RelayPool> {
+        self.relay_pool.clone()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

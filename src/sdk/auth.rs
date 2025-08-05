@@ -30,6 +30,7 @@ pub struct KeyHandshakeReceiverConversation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyHandshakeEvent {
     pub main_key: PublicKey,
+    pub relays: Vec<String>,
 }
 
 impl MultiKeyListener for KeyHandshakeReceiverConversation {
@@ -60,6 +61,7 @@ impl MultiKeyListener for KeyHandshakeReceiverConversation {
             Ok(Response::new()
                 .notify(KeyHandshakeEvent {
                     main_key: event.pubkey,
+                    relays: message.preferred_relays.clone(),
                 })
                 .finish())
         } else {

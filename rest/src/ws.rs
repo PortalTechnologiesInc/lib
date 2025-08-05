@@ -14,6 +14,7 @@ use chrono::Duration;
 use dashmap::DashMap;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
+use portal::nostr_relay_pool::RelayOptions;
 use portal::protocol::jwt::CustomClaims;
 use portal::protocol::model::payment::{
     CashuDirectContent, CashuRequestContent, PaymentStatus, SinglePaymentRequestContent,
@@ -264,6 +265,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
                     // Setup notification forwarding
                     let tx_clone = ctx.tx_notification.clone();
+                    let relay_pool = ctx.sdk.relay_pool();
                     let stream_id_clone = stream_id.clone();
 
                     // Create a task to handle the notification stream
@@ -273,6 +275,27 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                         // Process notifications from the stream
                         while let Some(Ok(event)) = stream.next().await {
                             debug!("Got auth init event: {:?}", event);
+
+                            // Connect to relays
+                            // TODO: clearly we should have some policies here, we shouldn't connect to all relays unconditionally
+                            let relays = event.relays.clone();
+                            for relay in relays {
+                                match relay_pool.add_relay(&relay, RelayOptions::default()).await {
+                                    Ok(false) => {
+                                        continue;
+                                    }
+                                    Err(e) => {
+                                        warn!("Failed to add relay {relay}: {e}");
+                                        continue;
+                                    }
+                                    _ => {}
+                                }
+
+                                if let Err(e) = relay_pool.connect_relay(&relay).await {
+                                    warn!("Failed to connect to relay {relay}: {e}");
+                                    continue;
+                                }
+                            }
 
                             // Convert the event to a notification response
                             let notification = Response::Notification {
