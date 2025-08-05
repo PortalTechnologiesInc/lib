@@ -51,6 +51,48 @@
           meta.mainProgram = "rest";
         };
 
+        asyncapi-gen = pkgs.buildNpmPackage {
+          pname = "asyncapi-gen";
+          version = "1.0.0";
+          src = ./tools/asyncapi-gen;
+          npmDepsHash = "sha256-i2fm2j2nMRQy/ySD15tMIpzaWFBVwUgVN0J1dw49fu4=";
+          dontNpmBuild = true;
+
+          PUPPETEER_SKIP_DOWNLOAD = true;
+
+          postInstall = ''
+            mkdir -p $out/bin
+
+            for f in $(ls node_modules/.bin); do
+              LINK=$(readlink "node_modules/.bin/$f" | sed 's|../||')
+              ln -s "$out/lib/node_modules/asyncapi-gen/node_modules/$LINK" "$out/bin/$f"
+            done
+
+            ln -s "$out/lib/node_modules/asyncapi-gen/node_modules/@asyncapi/html-template" $out/template
+          '';
+        };
+        rest-docs = pkgs.stdenv.mkDerivation {
+          name = "portal-rest-docs";
+          src = pkgs.lib.fileset.toSource {
+            root = ./rest;
+            fileset = pkgs.lib.fileset.unions [
+              ./rest/asyncapi.yaml
+            ];
+          };
+          nativeBuildInputs = with pkgs; [ git asyncapi-gen ];
+          buildPhase = ''
+            cp -Lr --no-preserve=all ${asyncapi-gen}/template ./template
+
+            ln -s ${asyncapi-gen}/lib/node_modules/asyncapi-gen/node_modules $PWD/node_modules
+
+            asyncapi-generator $src/asyncapi.yaml ./template --output ./docs/ --debug --param singleFile=true
+          '';
+          installPhase = ''
+            mkdir -p $out/
+            cp -R ./docs $out/
+          '';
+        };
+
         tsClient = pkgs.buildNpmPackage {
           name = "portal-ts-client";
           version = (builtins.fromJSON (builtins.readFile ./rest/clients/ts/package.json)).version;
@@ -82,7 +124,7 @@
       in
       {
         packages = rec {
-          inherit backend;
+          inherit backend rest-docs;
 
           rest = rest' rustPlatform;
           rest-static = rest' pkgs.pkgsStatic.rustPlatform;
