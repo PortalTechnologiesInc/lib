@@ -84,13 +84,14 @@ Authenticates with the server using a token.
 await client.authenticate('your-auth-token');
 ```
 
-##### `newKeyHandshakeUrl(onKeyHandshake: (mainKey: string) => void, staticToken?: string): Promise<string>`
+##### `newKeyHandshakeUrl(onKeyHandshake: (mainKey: string, preferredRelays: string[]) => void, staticToken?: string): Promise<string>`
 
 Generates a new authentication URL for user key handshake.
 
 ```typescript
-const url = await client.newKeyHandshakeUrl((mainKey) => {
+const url = await client.newKeyHandshakeUrl((mainKey, preferredRelays) => {
   console.log('Recevied key handshake from:', mainKey);
+  console.log('User wants to talk at:', preferredRelays);
 });
 ```
 

@@ -187,7 +187,7 @@ export type Response =
 
 // Notification data types
 export type NotificationData = 
-  | { type: 'key_handshake', main_key: string }
+  | { type: 'key_handshake', main_key: string, preferred_relays: string[] }
   | { type: 'payment_status_update', status: InvoiceStatus }
   | { type: 'closed_recurring_payment', reason: string | null, subscription_id: string, main_key: string, recipient: string }
   | { type: 'cashu_request', request: CashuRequestContentWithKey }

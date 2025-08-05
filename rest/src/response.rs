@@ -83,7 +83,10 @@ pub struct AuthResponseData {
 #[serde(tag = "type")]
 pub enum NotificationData {
     #[serde(rename = "key_handshake")]
-    KeyHandshake { main_key: String },
+    KeyHandshake {
+        main_key: String,
+        preferred_relays: Vec<String>,
+    },
     #[serde(rename = "payment_status_update")]
     PaymentStatusUpdate { status: InvoiceStatus },
     #[serde(rename = "closed_recurring_payment")]

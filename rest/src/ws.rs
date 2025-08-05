@@ -278,9 +278,9 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
                             // Connect to relays
                             // TODO: clearly we should have some policies here, we shouldn't connect to all relays unconditionally
-                            let relays = event.relays.clone();
-                            for relay in relays {
-                                match relay_pool.add_relay(&relay, RelayOptions::default()).await {
+                            let preferred_relays = event.relays.clone();
+                            for relay in &preferred_relays {
+                                match relay_pool.add_relay(relay, RelayOptions::default()).await {
                                     Ok(false) => {
                                         continue;
                                     }
@@ -291,7 +291,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                                     _ => {}
                                 }
 
-                                if let Err(e) = relay_pool.connect_relay(&relay).await {
+                                if let Err(e) = relay_pool.connect_relay(relay).await {
                                     warn!("Failed to connect to relay {relay}: {e}");
                                     continue;
                                 }
@@ -302,6 +302,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                                 id: stream_id_clone.clone(),
                                 data: NotificationData::KeyHandshake {
                                     main_key: event.main_key.to_string(),
+                                    preferred_relays,
                                 },
                             };
 

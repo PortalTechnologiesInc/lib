@@ -249,13 +249,13 @@ export class PortalSDK {
   /**
    * Generate a new key handshake URL
    */
-  public async newKeyHandshakeUrl(onKeyHandshake: (mainKey: string) => void, staticToken: string | null = null): Promise<string> {
+  public async newKeyHandshakeUrl(onKeyHandshake: (mainKey: string, preferredRelays: string[]) => void, staticToken: string | null = null): Promise<string> {
     const _self = this;
     let streamId = '';
 
     const handler = (data: NotificationData) => {
       if (data.type === 'key_handshake') {
-        onKeyHandshake(data.main_key);
+        onKeyHandshake(data.main_key, data.preferred_relays);
         _self.activeStreams.delete(streamId);
       }
     };
