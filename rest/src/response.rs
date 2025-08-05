@@ -69,6 +69,12 @@ pub enum ResponseData {
 
     #[serde(rename = "cashu_burn")]
     CashuBurn { amount: u64 },
+
+    #[serde(rename = "add_relay")]
+    AddRelay { relay: String },
+
+    #[serde(rename = "remove_relay")]
+    RemoveRelay { relay: String },
 }
 
 #[derive(Debug, Serialize)]

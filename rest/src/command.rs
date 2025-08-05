@@ -93,6 +93,12 @@ pub enum Command {
         static_auth_token: Option<String>,
         token: String,
     },
+    AddRelay {
+        relay: String,
+    },
+    RemoveRelay {
+        relay: String,
+    }
 }
 
 #[derive(Debug, Deserialize)]

@@ -342,6 +342,21 @@ impl PortalSDK {
         Ok(())
     }
 
+    pub async fn add_relay(&self, url: String) -> Result<(), PortalSDKError> {
+        self.relay_pool
+            .add_relay(&url, RelayOptions::default())
+            .await?;
+        self.relay_pool.connect_relay(&url).await?;
+        self.router.add_relay(url, true).await?;
+        Ok(())
+    }
+
+    pub async fn remove_relay(&self, url: String) -> Result<(), PortalSDKError> {
+        self.relay_pool.remove_relay(&url).await?;
+        self.router.remove_relay(url).await?;
+        Ok(())
+    }
+
     pub fn relay_pool(&self) -> Arc<RelayPool> {
         self.relay_pool.clone()
     }

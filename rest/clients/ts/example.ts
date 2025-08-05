@@ -101,6 +101,19 @@ async function main() {
       console.error('JWT operation failed:', error);
     }
 
+    // Example: Relay Management
+    console.log('\n=== Relay Management ===');
+    try {
+      const relayUrl = 'wss://relay.damus.io';
+      const addedRelay = await client.addRelay(relayUrl);
+      console.log('Added relay:', addedRelay);
+      
+      const removedRelay = await client.removeRelay(relayUrl);
+      console.log('Removed relay:', removedRelay);
+    } catch (error) {
+      console.error('Relay management failed:', error);
+    }
+
     // Example 1: Authentication Flow
     console.log('\n=== Authentication Flow ===');
     const url = await client.newKeyHandshakeUrl((mainKey) => {

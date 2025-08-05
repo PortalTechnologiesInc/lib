@@ -39,6 +39,7 @@ console.log('Authentication URL:', url);
 - **Lightning Payments**: Single and recurring payment processing
 - **Profile Management**: Fetch and update user profiles
 - **JWT Support**: Issue and verify JWT tokens
+- **Relay Management**: Add and remove Nostr relays dynamically
 - **Real-time Updates**: WebSocket-based real-time notifications
 - **TypeScript Support**: Full TypeScript definitions included
 
@@ -234,6 +235,24 @@ const claims = await client.verifyJwt('public-key', 'jwt-token');
 console.log('Token target key:', claims.targetKey);
 ```
 
+##### `addRelay(relay: string): Promise<string>`
+
+Adds a relay to the relay pool.
+
+```typescript
+const relayUrl = await client.addRelay('wss://relay.damus.io');
+console.log('Added relay:', relayUrl);
+```
+
+##### `removeRelay(relay: string): Promise<string>`
+
+Removes a relay from the relay pool.
+
+```typescript
+const relayUrl = await client.removeRelay('wss://relay.damus.io');
+console.log('Removed relay:', relayUrl);
+```
+
 ##### `on(eventType: string | EventCallbacks, callback?: (data: any) => void): void`
 
 Registers event listeners.
@@ -422,6 +441,27 @@ await client.authenticate('your-auth-token');
 // Fetch user profile
 const profile = await client.fetchProfile('user-pubkey');
 console.log('User profile:', profile);
+```
+
+### Relay Management
+
+```typescript
+import { PortalSDK } from 'portal-sdk';
+
+const client = new PortalSDK({
+  serverUrl: 'ws://localhost:3000/ws'
+});
+
+await client.connect();
+await client.authenticate('your-auth-token');
+
+// Add a relay to the relay pool
+const addedRelay = await client.addRelay('wss://relay.damus.io');
+console.log('Added relay:', addedRelay);
+
+// Remove a relay from the relay pool
+const removedRelay = await client.removeRelay('wss://relay.damus.io');
+console.log('Removed relay:', removedRelay);
 ```
 
 ## Error Handling

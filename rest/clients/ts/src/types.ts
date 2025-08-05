@@ -159,6 +159,8 @@ export type Command =
   | { cmd: 'SendCashuDirect', params: { main_key: string, subkeys: string[], token: string } }
   | { cmd: 'MintCashu', params: { mint_url: string, static_auth_token?: string, unit: string, amount: number, description?: string } }
   | { cmd: 'BurnCashu', params: { mint_url: string, unit: string, token: string, static_auth_token?: string } }
+  | { cmd: 'AddRelay', params: { relay: string } }
+  | { cmd: 'RemoveRelay', params: { relay: string } }
   ;
 
 // Response types
@@ -178,6 +180,8 @@ export type ResponseData =
   | { type: 'send_cashu_direct_success', message: string }
   | { type: 'cashu_mint', token: string }
   | { type: 'cashu_burn', amount: number }
+  | { type: 'add_relay', relay: string }
+  | { type: 'remove_relay', relay: string }
   ;
 
 export type Response = 

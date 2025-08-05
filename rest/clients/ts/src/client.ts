@@ -526,4 +526,26 @@ export class PortalSDK {
     }
     throw new Error('Unexpected response type');
   }
+
+  /**
+   * Add a relay to the relay pool
+   */
+  public async addRelay(relay: string): Promise<string> {
+    const response = await this.sendCommand('AddRelay', { relay });
+    if (response.type === 'add_relay') {
+      return response.relay;
+    }
+    throw new Error('Unexpected response type');
+  }
+
+  /**
+   * Remove a relay from the relay pool
+   */
+  public async removeRelay(relay: string): Promise<string> {
+    const response = await this.sendCommand('RemoveRelay', { relay });
+    if (response.type === 'remove_relay') {
+      return response.relay;
+    }
+    throw new Error('Unexpected response type');
+  }
 }

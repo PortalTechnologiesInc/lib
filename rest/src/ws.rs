@@ -1344,6 +1344,44 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 };
                 let _ = ctx_clone.send_message(response).await;
             });
+        },
+        Command::AddRelay { relay } => {
+            let command_id = command.id.clone();
+            let ctx_clone = ctx.clone();
+
+            tokio::task::spawn(async move {
+                let response = match ctx_clone.sdk.add_relay(relay.clone()).await {
+                    Ok(()) => Response::Success {
+                        id: command_id,
+                        data: ResponseData::AddRelay { relay },
+                    },
+                    Err(e) => Response::Error {
+                        id: command_id,
+                        message: format!("Failed to add relay {}: {:?}", relay, e),
+                    },
+                };
+
+                let _ = ctx_clone.send_message(response).await;
+            });
+        },
+        Command::RemoveRelay { relay } => {
+            let command_id = command.id.clone();
+            let ctx_clone = ctx.clone();
+
+            tokio::task::spawn(async move {
+                let response = match ctx_clone.sdk.remove_relay(relay.clone()).await {
+                    Ok(()) => Response::Success {
+                        id: command_id,
+                        data: ResponseData::RemoveRelay { relay },
+                    },
+                    Err(e) => Response::Error {
+                        id: command_id,
+                        message: format!("Failed to remove relay {}: {:?}", relay, e),
+                    },
+                };
+
+                let _ = ctx_clone.send_message(response).await;
+            });
         }
     }
 }
