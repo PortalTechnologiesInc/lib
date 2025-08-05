@@ -42,7 +42,7 @@ pub enum MessageRouterActorError {
 
 #[derive(Debug)]
 pub enum MessageRouterActorMessage {
-    AddRelay(String, oneshot::Sender<Result<(), ConversationError>>),
+    AddRelay(String, bool, oneshot::Sender<Result<(), ConversationError>>),
     RemoveRelay(String, oneshot::Sender<Result<(), ConversationError>>),
     Shutdown(oneshot::Sender<Result<(), ConversationError>>),
     AddConversation(
@@ -94,8 +94,18 @@ where
             let mut state = MessageRouterActorState::new(keypair_clone);
             while let Some(message) = rx.recv().await {
                 match message {
-                    MessageRouterActorMessage::AddRelay(url, response_tx) => {
-                        let result = state.add_relay(&channel_clone, url.clone()).await;
+                    MessageRouterActorMessage::AddRelay(
+                        url,
+                        subscribe_existing_conversations,
+                        response_tx,
+                    ) => {
+                        let result = state
+                            .add_relay(
+                                &channel_clone,
+                                url.clone(),
+                                subscribe_existing_conversations,
+                            )
+                            .await;
                         if let Err(e) = response_tx.send(result) {
                             log::error!("Failed to send AddRelay({}) response: {:?}", url, e);
                         }
@@ -211,10 +221,18 @@ where
             .map_err(|e| MessageRouterActorError::Channel(Box::new(e)))
     }
 
-    pub async fn add_relay(&self, url: String) -> Result<(), MessageRouterActorError> {
+    pub async fn add_relay(
+        &self,
+        url: String,
+        subscribe_existing_conversations: bool,
+    ) -> Result<(), MessageRouterActorError> {
         let (tx, rx) = oneshot::channel();
-        self.send_message(MessageRouterActorMessage::AddRelay(url, tx))
-            .await?;
+        self.send_message(MessageRouterActorMessage::AddRelay(
+            url,
+            subscribe_existing_conversations,
+            tx,
+        ))
+        .await?;
         let result: Result<(), ConversationError> =
             rx.await.map_err(|e| MessageRouterActorError::Receiver(e))?;
         result.map_err(MessageRouterActorError::Conversation)
@@ -378,12 +396,13 @@ impl MessageRouterActorState {
         &mut self,
         channel: &Arc<C>,
         url: String,
+        subscribe_existing_conversations: bool,
     ) -> Result<(), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
         // Subscribe existing conversations to new relays
-        {
+        if subscribe_existing_conversations {
             for conversation_id in self.global_relay_node.conversations.iter() {
                 if let Some(filter) = self.filters.get(conversation_id) {
                     log::trace!("Subscribing {} to new relay = {:?}", conversation_id, &url);

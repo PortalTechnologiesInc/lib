@@ -458,24 +458,60 @@ impl PortalApp {
     }
 
     pub async fn send_key_handshake(&self, url: KeyHandshakeUrl) -> Result<(), AppError> {
-        let relays = self
+        let our_relays = self
             .relay_pool
             .relays()
             .await
-            .keys()
-            .map(|r| r.to_string())
+            .iter()
+            .filter_map(|(url, relay)| {
+                // Only add relays from which we are listening
+                if relay.flags().has_read() {
+                    Some(url.to_string())
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<_>>();
+
+        let mut new_relays = vec![];
+
+        // Connect to the new relays but without subscribing (READ is disabled)
+        for relay in &url.relays {
+            let is_new = self
+                .relay_pool
+                .add_relay(relay, RelayOptions::default().read(false).reconnect(false))
+                .await?;
+            if is_new {
+                new_relays.push(relay.clone());
+
+                self.relay_pool.connect_relay(relay).await?;
+                self.router.add_relay(relay.clone(), false).await?;
+            }
+        }
 
         let _id = self
             .router
-            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                url.send_to(),
-                url.subkey.map(|s| vec![s.into()]).unwrap_or_default(),
-                KeyHandshakeConversation::new(url, relays),
-            )))
+            .add_conversation_with_relays(
+                Box::new(OneShotSenderAdapter::new_with_user(
+                    url.send_to(),
+                    url.subkey.map(|s| vec![s.into()]).unwrap_or_default(),
+                    KeyHandshakeConversation::new(url.clone(), our_relays),
+                )),
+                url.relays,
+            )
             .await?;
-        // let rx = self.router.subscribe_to_service_request(id).await?;
-        // let response = rx.await_reply().await.map_err(AppError::ConversationError)?;
+
+        // Disconnect the new relays, only if they still don't have the READ flag (maybe it was added in the meantime)
+        let pool_relays = self.relay_pool.all_relays().await;
+        for relay in new_relays {
+            let relay = pool_relays.iter().find(|(url, _)| url.to_string() == relay);
+            if let Some((url, relay)) = relay {
+                if !relay.flags().has_read() {
+                    self.router.remove_relay(url.to_string()).await?;
+                    self.relay_pool.disconnect_relay(url).await?;
+                }
+            }
+        }
 
         Ok(())
     }

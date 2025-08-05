@@ -1,5 +1,8 @@
 use nostr::{message::SubscriptionId, types::TryIntoUrl};
-use nostr_relay_pool::{RelayPool, RelayPoolNotification, SubscribeOptions};
+use nostr_relay_pool::{
+    RelayPool, RelayPoolNotification, SubscribeOptions,
+    relay::{FlagCheck, RelayServiceFlags},
+};
 
 use crate::router::ids::PortalId;
 
@@ -92,7 +95,21 @@ impl Channel for RelayPool {
     }
 
     async fn unsubscribe(&self, id: PortalId) -> Result<(), Self::Error> {
-        self.unsubscribe(&SubscriptionId::new(id.to_string())).await;
+        let relays = self
+            .relays_with_flag(RelayServiceFlags::READ, FlagCheck::All)
+            .await;
+        for relay in relays.values() {
+            if let Err(e) = relay
+                .unsubscribe(&SubscriptionId::new(id.to_string()))
+                .await
+            {
+                log::error!(
+                    "Failed to unsubscribe {id} from relay {}: {:?}",
+                    relay.url(),
+                    e
+                );
+            }
+        }
         Ok(())
     }
 
