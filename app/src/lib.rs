@@ -737,7 +737,8 @@ impl PortalApp {
         self.relay_pool
             .add_relay(&url, RelayOptions::default().reconnect(false))
             .await?;
-        self.router.add_relay(url).await?;
+        self.relay_pool.connect_relay(&url).await?;
+        self.router.add_relay(url, true).await?;
         Ok(())
     }
 
