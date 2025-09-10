@@ -49,7 +49,7 @@ impl Conversation for FetchProfileInfoConversation {
     }
 
     fn is_expired(&self) -> bool {
-        self.expires_at > Timestamp::now()
+        self.expires_at < Timestamp::now()
     }
 }
 
