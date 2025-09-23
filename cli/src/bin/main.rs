@@ -4,7 +4,7 @@ use app::{
     AuthChallengeListener, CallbackError, CashuDirectListener, CashuRequestListener,
     ClosedRecurringPaymentListener, Mnemonic, PaymentRequestListener, PaymentStatusNotifier,
     PortalApp, RecurringPaymentRequest, RelayStatus, RelayStatusListener, RelayUrl,
-    SinglePaymentRequest, auth::AuthChallengeEvent, parse_bolt11,
+    SinglePaymentRequest, auth::AuthChallengeEvent, get_git_hash, parse_bolt11,
 };
 use portal::{
     nostr::nips::{nip19::ToBech32, nip47::PayInvoiceRequest},
@@ -295,6 +295,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // )
     // .await?;
 
+    dbg!(get_git_hash());
     tokio::spawn(async move {
         const INVOICE: &str = "lnbc100n1p5fvqfdsp586d9yz88deyfxm2mxgh39n39lezmpnkcv0a35uh38fvnjzlaxdzqpp59nwc8zac6psv09wysxvulgwj0t23jh3g5r4l5qzgpdsnel94w5zshp5mndu23huxkp6jgynf8agfjfaypgfjs2z8glq8fs9zqjfpnf34jnqcqpjrzjqgc7enr9zr4ju8yhezsep4h2p9ncf2nuxkp423pq2k4v3vsx2nunyz60tsqqj9qqqqqqqqqpqqqqqysqjq9qxpqysgqala28sswmp68uc9axqt893n48lzzt7l3uzkzjzlmlzurczpc647sxn4vrt4hvm30v5vv2ysvxhxeej78j903emrrjh02xdrl6z9alzqqns0w5s";
         let invoice_data = parse_bolt11(INVOICE);

@@ -9,6 +9,7 @@ crate-type = ["staticlib", "lib"]
 [dependencies]
 uniffi = { workspace = true }
 portal = { path = "../", features = ["bindings"] }
+fetch-git-hash = { path = "../fetch-git-hash" }
 rates = { path = "../rates", features = ["bindings"]}
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
