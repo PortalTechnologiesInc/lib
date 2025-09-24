@@ -77,6 +77,9 @@ impl FromStr for KeyHandshakeUrl {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Trim whitespace / new lines
+        let s = s.trim();
+
         // Check prefix
         if !s.starts_with("portal://") {
             return Err(ParseError::InvalidProtocol);
