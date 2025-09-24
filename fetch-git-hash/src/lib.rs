@@ -31,7 +31,9 @@ pub fn fetch_git_hash(_item: TokenStream) -> TokenStream {
     } else {
         "-dirty"
     };
-    format!("\"{}{}\"", get_hash().unwrap_or("unknown".into()), dirty)
-        .parse()
-        .unwrap()
+    let from_git_command = get_hash().map(|hash| format!("{}{}", hash, dirty));
+    let env = std::env::var("PORTAL_GIT_HASH").ok();
+
+    let commit = from_git_command.or(env).unwrap_or("unknown".into());
+    format!("\"{}\"", commit).parse().unwrap()
 }

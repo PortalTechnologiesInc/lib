@@ -58,6 +58,8 @@
           xcodeBaseDir = "/Applications/Xcode.app";
         });
 
+        gitRev = self.shortRev or self.dirtyShortRev or "unknown";
+
         craneLib = (crane.mkLib pkgs);
         craneLibAndroid = craneLib.overrideToolchain (
           p: p.rust-bin.stable.latest.default.override {
@@ -85,6 +87,8 @@
           cargoExtraArgs = "-p app";
 
           cargoCheckCommand = "true";
+
+          PORTAL_GIT_HASH = gitRev;
         };
         mkAndroidCommonArgs = target: rec {
           cargoBuildCommand = "cargo ndk --target ${target} --platform 23 -- build --profile release";
