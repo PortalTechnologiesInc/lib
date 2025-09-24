@@ -73,6 +73,7 @@ impl PortalSDK {
     pub async fn new_key_handshake_url(
         &self,
         static_token: Option<String>,
+        no_request: Option<bool>,
     ) -> Result<(KeyHandshakeUrl, NotificationStream<KeyHandshakeEvent>), PortalSDKError> {
         let token = static_token.unwrap_or_else(|| {
             format!(
@@ -110,6 +111,7 @@ impl PortalSDK {
             relays: self.prefererred_relays.clone(),
             token: token.clone(),
             subkey: subkey.map(|k| k.into()),
+            no_request: no_request.unwrap_or(false),
         };
 
         Ok((url, event))

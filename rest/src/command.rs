@@ -23,6 +23,7 @@ pub enum Command {
     // SDK methods
     NewKeyHandshakeUrl {
         static_token: Option<String>,
+        no_request: Option<bool>,
     },
     AuthenticateKey {
         main_key: String,

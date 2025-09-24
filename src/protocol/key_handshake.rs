@@ -12,6 +12,7 @@ pub struct KeyHandshakeUrl {
     pub relays: Vec<String>,
     pub token: String,
     pub subkey: Option<PublicKey>,
+    pub no_request: bool,
 }
 
 impl fmt::Display for KeyHandshakeUrl {
@@ -31,14 +32,21 @@ impl fmt::Display for KeyHandshakeUrl {
             String::new()
         };
 
+        let no_request_part = if self.no_request {
+            "&no_request=true"
+        } else {
+            ""
+        };
+
         match self.main_key.to_bech32() {
             Ok(bech32) => write!(
                 f,
-                "portal://{}?relays={}&token={}{}",
+                "portal://{}?relays={}&token={}{}{}",
                 bech32,
                 relays.join(","),
                 self.token,
-                subkey_part
+                subkey_part,
+                no_request_part
             ),
             Err(_) => Err(fmt::Error),
         }
@@ -85,6 +93,7 @@ impl FromStr for KeyHandshakeUrl {
         let mut relays = Vec::new();
         let mut token = None;
         let mut subkey = None;
+        let mut no_request = false;
 
         for param in query.split('&') {
             let (key, value) = param
@@ -101,6 +110,7 @@ impl FromStr for KeyHandshakeUrl {
                 }
                 "token" => token = Some(value.to_string()),
                 "subkey" => subkey = Some(nostr::PublicKey::from_bech32(value)?),
+                "no_request" => no_request = value == "true",
                 _ => {
                     return Err(ParseError::InvalidQueryParam(format!(
                         "unknown parameter: {}",
@@ -120,6 +130,7 @@ impl FromStr for KeyHandshakeUrl {
             relays,
             token,
             subkey: subkey.map(|k| PublicKey::from(k)),
+            no_request,
         })
     }
 }

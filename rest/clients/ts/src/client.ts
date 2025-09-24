@@ -249,7 +249,7 @@ export class PortalSDK {
   /**
    * Generate a new key handshake URL
    */
-  public async newKeyHandshakeUrl(onKeyHandshake: (mainKey: string, preferredRelays: string[]) => void, staticToken: string | null = null): Promise<string> {
+  public async newKeyHandshakeUrl(onKeyHandshake: (mainKey: string, preferredRelays: string[]) => void, staticToken: string | null = null, noRequest: boolean | null = false): Promise<string> {
     const _self = this;
     let streamId = '';
 
@@ -260,7 +260,7 @@ export class PortalSDK {
       }
     };
     
-    const response = await this.sendCommand('NewKeyHandshakeUrl', { static_token: staticToken });
+    const response = await this.sendCommand('NewKeyHandshakeUrl', { static_token: staticToken, no_request: noRequest });
     
     if (response.type === 'key_handshake_url') {
       const { url, stream_id } = response;
