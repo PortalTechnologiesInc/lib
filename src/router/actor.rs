@@ -394,11 +394,10 @@ impl MessageRouterActorState {
                     }
                     
                     // Collect aliases
-                    for alias in conv_state.aliases().iter().copied() {
-                        let alias_id = PortalId::new_conversation_alias(conversation_id.id(), alias);
-                        if let Some(alias_state) = self.conversations.get(&alias_id) {
+                    for alias in conv_state.aliases() {
+                        if let Some(alias_state) = self.conversations.get(&alias) {
                             if let Some(filter) = &alias_state.filter {
-                                aliases_to_subscribe.push((alias_id, filter.clone()));
+                                aliases_to_subscribe.push((alias, filter.clone()));
                             }
                         }
                     }
@@ -501,16 +500,15 @@ impl MessageRouterActorState {
                 .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
             // Remove aliases
-            for alias in conv_state.aliases().iter().copied() {
-                let alias_id = PortalId::new_conversation_alias(conversation.id(), alias);
-                let alias_id_for_removal = alias_id.clone();
+            for alias in conv_state.aliases() {
+                let alias_clone = alias.clone();
                 channel
-                    .unsubscribe(alias_id)
+                    .unsubscribe(alias)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
                 
                 // Also remove the alias conversation state
-                self.conversations.remove(&alias_id_for_removal);
+                self.conversations.remove(&alias_clone);
             }
         }
 
@@ -821,15 +819,16 @@ impl MessageRouterActorState {
         if response.subscribe_to_subkey_proofs {
             let alias_num = rand::random::<u64>();
 
+            let alias = PortalId::new_conversation_alias(id.id(), alias_num);
+
             if let Some(conv_state) = self.conversations.get_mut(id) {
-                conv_state.add_alias(alias_num);
+                conv_state.add_alias(alias.clone());
             }
 
             let filter = Filter::new()
                 .kinds(vec![Kind::Custom(SUBKEY_PROOF)])
                 .events(events_to_broadcast.iter().map(|e| e.id));
 
-            let alias = PortalId::new_conversation_alias(id.id(), alias_num);
             
             // Create a new ConversationState for the alias
             self.conversations.insert(alias.clone(), ConversationState::new_alias(alias.clone(), filter.clone()));
@@ -1034,7 +1033,7 @@ struct ConversationState {
     /// The actual conversation object
     conversation: ConversationBox,
     /// Aliases for subkey proof subscriptions
-    aliases: Vec<u64>,
+    aliases: Vec<PortalId>,
     /// Nostr filter for this conversation
     filter: Option<Filter>,
     /// Notification subscribers for this conversation
@@ -1086,7 +1085,7 @@ impl ConversationState {
             is_global: true, // Aliases default to global
         }
     }
-    
+    /// Get the ID of this conversation
     fn id(&self) -> PortalId {
         self.id.clone()
     }
@@ -1124,7 +1123,7 @@ impl ConversationState {
     }
 
     /// Add an alias for subkey proof subscriptions
-    fn add_alias(&mut self, alias: u64) {
+    fn add_alias(&mut self, alias: PortalId) {
         // Prevent duplicate aliases
         if !self.aliases.contains(&alias) {
             self.aliases.push(alias);
@@ -1132,8 +1131,8 @@ impl ConversationState {
     }
 
     /// Get a reference to the aliases
-    fn aliases(&self) -> &[u64] {
-        &self.aliases
+    fn aliases(&self) -> Vec<PortalId> {
+        self.aliases.clone()
     }
 
     /// Get the relay URLs for this conversation
