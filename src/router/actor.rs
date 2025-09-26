@@ -386,13 +386,13 @@ impl MessageRouterActorState {
             // First, collect all global conversations and their aliases
             let mut global_conversations = Vec::new();
             let mut aliases_to_subscribe = Vec::new();
-            
+
             for (conversation_id, conv_state) in self.conversations.iter() {
                 if conv_state.is_global() {
                     if let Some(filter) = conv_state.filter.as_ref() {
                         global_conversations.push((conversation_id.clone(), filter.clone()));
                     }
-                    
+
                     // Collect aliases
                     for alias in conv_state.aliases() {
                         if let Some(alias_state) = self.conversations.get(&alias) {
@@ -403,7 +403,7 @@ impl MessageRouterActorState {
                     }
                 }
             }
-            
+
             // Subscribe to the new relay
             for (conversation_id, filter) in global_conversations {
                 log::trace!("Subscribing {} to new relay = {:?}", conversation_id, &url);
@@ -412,19 +412,22 @@ impl MessageRouterActorState {
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
-            
+
             for (alias_id, filter) in aliases_to_subscribe {
                 channel
                     .subscribe_to(vec![url.clone()], alias_id, filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
-            
+
             // Increment EOSE counters for all global conversations
             for (conversation_id, conv_state) in self.conversations.iter_mut() {
                 if conv_state.is_global() {
                     conv_state.increment_eose();
-                    log::trace!("EOSE counter incremented for conversation {}", conversation_id);
+                    log::trace!(
+                        "EOSE counter incremented for conversation {}",
+                        conversation_id
+                    );
                 }
             }
         }
@@ -447,7 +450,7 @@ impl MessageRouterActorState {
             if conv_state.relay_urls().contains(&url) {
                 // Remove the relay from this conversation
                 conv_state.remove_relay(&url);
-                
+
                 // Decrement EOSE counter
                 conv_state.decrement_eose();
 
@@ -506,7 +509,7 @@ impl MessageRouterActorState {
                     .unsubscribe(alias)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-                
+
                 // Also remove the alias conversation state
                 self.conversations.remove(&alias_clone);
             }
@@ -710,7 +713,6 @@ impl MessageRouterActorState {
                 };
 
                 response
-
             }
             None => {
                 log::warn!("No conversation found for id: {}", conversation_id);
@@ -722,7 +724,6 @@ impl MessageRouterActorState {
                 return Ok(());
             }
         };
-
 
         log::debug!("Processing response for conversation: {}", conversation_id);
         self.process_response(channel, &conversation_id, response)
@@ -750,7 +751,7 @@ impl MessageRouterActorState {
                 id,
                 response.filter
             );
-            
+
             let num_relays = if let Some(selected_relays) = selected_relays_optional.clone() {
                 let num_relays = selected_relays.len();
                 log::trace!("Subscribing to relays = {:?}", selected_relays);
@@ -811,7 +812,11 @@ impl MessageRouterActorState {
             for notification in response.notifications.iter() {
                 log::debug!("Sending notification: {:?}", notification);
                 let sent_count = conv_state.send_notification(notification);
-                log::trace!("Notification sent to {} subscribers for conversation {}", sent_count, id);
+                log::trace!(
+                    "Notification sent to {} subscribers for conversation {}",
+                    sent_count,
+                    id
+                );
             }
         }
 
@@ -829,9 +834,11 @@ impl MessageRouterActorState {
                 .kinds(vec![Kind::Custom(SUBKEY_PROOF)])
                 .events(events_to_broadcast.iter().map(|e| e.id));
 
-            
             // Create a new ConversationState for the alias
-            self.conversations.insert(alias.clone(), ConversationState::new_alias(alias.clone(), filter.clone()));
+            self.conversations.insert(
+                alias.clone(),
+                ConversationState::new_alias(alias.clone(), filter.clone()),
+            );
 
             if let Some(selected_relays) = selected_relays_optional.clone() {
                 channel
@@ -850,19 +857,12 @@ impl MessageRouterActorState {
         // check if Response has selected relays
         if let Some(selected_relays) = selected_relays_optional {
             for event in events_to_broadcast {
-                // if selected relays, broadcast to selected relays
-                channel
-                    .broadcast_to(selected_relays.clone(), event)
-                    .await
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                self.queue_event(channel, event, Some(selected_relays.clone()))
+                    .await?;
             }
         } else {
             for event in events_to_broadcast {
-                // if not selected relays, broadcast to all relays
-                channel
-                    .broadcast(event)
-                    .await
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                self.queue_event(channel, event, None).await?;
             }
 
             // TODO: wait for confirmation from relays
@@ -873,6 +873,31 @@ impl MessageRouterActorState {
             self.cleanup_conversation(channel, id).await?;
         }
 
+        Ok(())
+    }
+
+    async fn queue_event<C: Channel>(
+        &self,
+        channel: &Arc<C>,
+        event: Event,
+        relays: Option<HashSet<String>>,
+    ) -> Result<(), ConversationError>
+    where
+        C::Error: From<nostr::types::url::Error>,
+    {
+        if let Some(relays) = relays {
+            // if selected relays, broadcast to selected relays
+            channel
+                .broadcast_to(relays, event)
+                .await
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        } else {
+            // if not selected relays, broadcast to all relays
+            channel
+                .broadcast(event)
+                .await
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        }
         Ok(())
     }
 
@@ -888,7 +913,8 @@ impl MessageRouterActorState {
         let conv_state = if let Some(relays) = relays {
             // Create conversation with specific relays
             let relay_set: HashSet<String> = relays.into_iter().collect();
-            let mut conv_state = ConversationState::new_with_relays(id.clone(), conversation, relay_set);
+            let mut conv_state =
+                ConversationState::new_with_relays(id.clone(), conversation, relay_set);
             if let Some(subscriber) = subscriber {
                 conv_state.add_subscriber(subscriber);
             }
@@ -945,7 +971,8 @@ impl MessageRouterActorState {
     {
         let conversation_id = PortalId::new_conversation();
 
-        let response = self.internal_add_with_id(&conversation_id, conversation, Some(relays), None)?;
+        let response =
+            self.internal_add_with_id(&conversation_id, conversation, Some(relays), None)?;
         self.process_response(channel, &conversation_id, response)
             .await?;
 
@@ -968,7 +995,7 @@ impl MessageRouterActorState {
         id: PortalId,
     ) -> Result<NotificationStream<T>, ConversationError> {
         let (tx, rx) = mpsc::channel(8);
-        
+
         if let Some(conv_state) = self.conversations.get_mut(&id) {
             conv_state.add_subscriber(tx);
         }
@@ -1009,7 +1036,7 @@ impl MessageRouterActorState {
 
         // Subscribe before adding the conversation to ensure we don't miss notifications
         let (tx, rx) = mpsc::channel(8);
-        
+
         let rx = tokio_stream::wrappers::ReceiverStream::new(rx);
         let rx = rx.map(|content| serde_json::from_value(content));
         let rx = NotificationStream::new(rx);
@@ -1022,8 +1049,6 @@ impl MessageRouterActorState {
         Ok(rx)
     }
 }
-
-
 
 /// Encapsulates all state related to a single conversation.
 /// This consolidates the multiple HashMaps that were previously keyed by PortalId.
@@ -1060,7 +1085,11 @@ impl ConversationState {
         }
     }
 
-    fn new_with_relays(id: PortalId, conversation: ConversationBox, relay_urls: HashSet<String>) -> Self {
+    fn new_with_relays(
+        id: PortalId,
+        conversation: ConversationBox,
+        relay_urls: HashSet<String>,
+    ) -> Self {
         Self {
             id,
             conversation,
@@ -1153,7 +1182,7 @@ impl ConversationState {
         //     self.is_global = true;
         // }
     }
-    
+
     /// Send notification to all subscribers and clean up dead ones
     fn send_notification(&mut self, notification: &serde_json::Value) -> usize {
         let mut sent_count = 0;
