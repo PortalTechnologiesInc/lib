@@ -18,7 +18,7 @@ use crate::{
     protocol::{LocalKeypair, model::event_kinds::SUBKEY_PROOF},
     router::{
         CleartextEvent, Conversation, ConversationError, ConversationMessage, NotificationStream,
-        PortalId, RelayNode, Response, channel::Channel,
+        PortalId, Response, channel::Channel,
     },
 };
 
@@ -360,11 +360,8 @@ where
 
 pub struct MessageRouterActorState {
     keypair: LocalKeypair,
-    /// All conversation states consolidated into a single HashMap
+    /// All conversation states
     conversations: HashMap<PortalId, ConversationState>,
-    
-    relay_nodes: HashMap<String, RelayNode>,
-    global_relay_node: RelayNode,
 }
 
 impl MessageRouterActorState {
@@ -372,8 +369,6 @@ impl MessageRouterActorState {
         Self {
             keypair,
             conversations: HashMap::new(),
-            relay_nodes: HashMap::new(),
-            global_relay_node: RelayNode::new(),
         }
     }
 
@@ -386,49 +381,53 @@ impl MessageRouterActorState {
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        // Subscribe existing conversations to new relays
+        // Subscribe existing global conversations to new relay
         if subscribe_existing_conversations {
-            let conversation_ids: Vec<PortalId> = self.global_relay_node.conversations.iter().cloned().collect();
-            for conversation_id in conversation_ids {
-
-                let aliases = if let Some(conv_state) = self.conversations.get_mut(&conversation_id) {
-
+            // First, collect all global conversations and their aliases
+            let mut global_conversations = Vec::new();
+            let mut aliases_to_subscribe = Vec::new();
+            
+            for (conversation_id, conv_state) in self.conversations.iter() {
+                if conv_state.is_global() {
                     if let Some(filter) = conv_state.filter.as_ref() {
-                        log::trace!("Subscribing {} to new relay = {:?}", conversation_id, &url);
-                        channel
-                            .subscribe_to(vec![url.clone()], conversation_id.clone(), filter.clone())
-                            .await
-                            .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-
-                        // Increment EOSE counter with bounds checking
-                        conv_state.increment_eose();
-                        log::trace!("EOSE counter incremented for conversation {}", conversation_id);
+                        global_conversations.push((conversation_id.clone(), filter.clone()));
                     }
-                    conv_state.aliases.clone()
-                } else {
-                    Vec::new()
-                };
-
-                // Handle aliases
-                for alias in aliases {
-                    let alias_id = PortalId::new_conversation_alias(conversation_id.id(), alias);
-                    if let Some(alias_state) = self.conversations.get_mut(&alias_id) {
-                        if let Some(filter) = &alias_state.filter {
-                            channel
-                                .subscribe_to(vec![url.clone()], alias_id, filter.clone())
-                                .await
-                                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                    
+                    // Collect aliases
+                    for alias in conv_state.aliases().iter().copied() {
+                        let alias_id = PortalId::new_conversation_alias(conversation_id.id(), alias);
+                        if let Some(alias_state) = self.conversations.get(&alias_id) {
+                            if let Some(filter) = &alias_state.filter {
+                                aliases_to_subscribe.push((alias_id, filter.clone()));
+                            }
                         }
                     }
                 }
-
             }
-        }
-
-        {
-            self.relay_nodes
-                .entry(url.clone())
-                .or_insert_with(|| RelayNode::new());
+            
+            // Subscribe to the new relay
+            for (conversation_id, filter) in global_conversations {
+                log::trace!("Subscribing {} to new relay = {:?}", conversation_id, &url);
+                channel
+                    .subscribe_to(vec![url.clone()], conversation_id.clone(), filter)
+                    .await
+                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+            }
+            
+            for (alias_id, filter) in aliases_to_subscribe {
+                channel
+                    .subscribe_to(vec![url.clone()], alias_id, filter)
+                    .await
+                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+            }
+            
+            // Increment EOSE counters for all global conversations
+            for (conversation_id, conv_state) in self.conversations.iter_mut() {
+                if conv_state.is_global() {
+                    conv_state.increment_eose();
+                    log::trace!("EOSE counter incremented for conversation {}", conversation_id);
+                }
+            }
         }
 
         Ok(())
@@ -442,27 +441,32 @@ impl MessageRouterActorState {
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        if let Some(node) = self.relay_nodes.remove(&url) {
-            for conv in node.conversations.iter() {
-                let relays_of_conversation = self.get_relays_by_conversation(conv)?;
-                match relays_of_conversation {
-                    Some(urls) => {
-                        // If conversation it not present in other relays, clean it
-                        if urls.is_empty() {
-                            self.cleanup_conversation(channel, conv).await?;
-                        }
-                    }
-                    None => {
-                        // If conversation is present also on the global node relay, should'nt happen, dont clean it
-                    }
-                }
+        let mut conversations_to_cleanup = Vec::new();
 
+        // Find conversations that are affected by this relay removal
+        for (conversation_id, conv_state) in self.conversations.iter_mut() {
+            if conv_state.relay_urls().contains(&url) {
+                // Remove the relay from this conversation
+                conv_state.remove_relay(&url);
+                
                 // Decrement EOSE counter
-                if let Some(conv_state) = self.conversations.get_mut(conv) {
-                    conv_state.decrement_eose();
+                conv_state.decrement_eose();
+
+                // If conversation has no relays left and is not global, mark for cleanup
+                if conv_state.relay_urls().is_empty() && !conv_state.is_global() {
+                    conversations_to_cleanup.push(conversation_id.clone());
                 }
+            } else if conv_state.is_global() {
+                // Global conversations are affected by any relay removal
+                conv_state.decrement_eose();
             }
         }
+
+        // Clean up conversations that have no relays left
+        for conversation_id in conversations_to_cleanup {
+            self.cleanup_conversation(channel, &conversation_id).await?;
+        }
+
         Ok(())
     }
 
@@ -470,22 +474,14 @@ impl MessageRouterActorState {
         &self,
         conversation_id: &PortalId,
     ) -> Result<Option<HashSet<String>>, ConversationError> {
-        if self
-            .global_relay_node
-            .conversations
-            .contains(conversation_id)
-        {
-            return Ok(None);
-        }
-
-        let mut relays = HashSet::new();
-        for (url, node) in self.relay_nodes.iter() {
-            if node.conversations.contains(conversation_id) {
-                relays.insert(url.clone());
+        if let Some(conv_state) = self.conversations.get(conversation_id) {
+            if conv_state.is_global() {
+                return Ok(None); // Global conversations use all relays
+            } else {
+                return Ok(Some(conv_state.relay_urls().clone()));
             }
         }
-
-        Ok(Some(relays))
+        Err(ConversationError::ConversationNotFound)
     }
 
     async fn cleanup_conversation<C: Channel>(
@@ -518,18 +514,6 @@ impl MessageRouterActorState {
             }
         }
 
-        // Remove from global relay node
-        {
-            self.global_relay_node.conversations.remove(conversation);
-        }
-
-        // Remove from specific relay node
-        {
-            for (_, relay_node) in self.relay_nodes.iter_mut() {
-                relay_node.conversations.remove(conversation);
-            }
-        }
-
         Ok(())
     }
 
@@ -544,7 +528,6 @@ impl MessageRouterActorState {
             .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
         self.conversations.clear();
-        self.global_relay_node.conversations.clear();
         Ok(())
     }
 
@@ -903,30 +886,23 @@ impl MessageRouterActorState {
     ) -> Result<Response, ConversationError> {
         let response = conversation.init()?;
 
-        if let Some(relays) = relays {
-            // Update relays node
-            // for each relay parameter
-            for relay in relays {
-                // get relay node associated
-
-                match self.relay_nodes.get_mut(&relay) {
-                    Some(found_node) => {
-                        found_node.conversations.insert(id.clone());
-                    }
-                    None => {
-                        return Err(ConversationError::RelayNotConnected(relay));
-                    }
-                }
+        let conv_state = if let Some(relays) = relays {
+            // Create conversation with specific relays
+            let relay_set: HashSet<String> = relays.into_iter().collect();
+            let mut conv_state = ConversationState::new_with_relays(id.clone(), conversation, relay_set);
+            if let Some(subscriber) = subscriber {
+                conv_state.add_subscriber(subscriber);
             }
+            conv_state
         } else {
-            // Update Global Relay Node
-            self.global_relay_node.conversations.insert(id.clone());
-        }
+            // Create global conversation (subscribed to all relays)
+            let mut conv_state = ConversationState::new(id.clone(), conversation);
+            if let Some(subscriber) = subscriber {
+                conv_state.add_subscriber(subscriber);
+            }
+            conv_state
+        };
 
-        let mut conv_state = ConversationState::new(id.clone(), conversation);
-        if let Some(subscriber) = subscriber {
-            conv_state.add_subscriber(subscriber);
-        }
         self.conversations.insert(id.clone(), conv_state);
 
         Ok(response)
@@ -1065,6 +1041,10 @@ struct ConversationState {
     subscribers: Vec<mpsc::Sender<serde_json::Value>>,
     /// Number of EOSE events remaining for this conversation
     end_of_stored_events: Option<usize>,
+    /// Which specific relays this conversation is subscribed to
+    relay_urls: HashSet<String>,
+    /// Whether this conversation is subscribed to all relays (global)
+    is_global: bool,
 }
 
 impl ConversationState {
@@ -1076,6 +1056,21 @@ impl ConversationState {
             filter: None,
             subscribers: Vec::new(),
             end_of_stored_events: None,
+            relay_urls: HashSet::new(),
+            is_global: true, // Default to global subscription
+        }
+    }
+
+    fn new_with_relays(id: PortalId, conversation: ConversationBox, relay_urls: HashSet<String>) -> Self {
+        Self {
+            id,
+            conversation,
+            aliases: Vec::new(),
+            filter: None,
+            subscribers: Vec::new(),
+            end_of_stored_events: None,
+            relay_urls,
+            is_global: false,
         }
     }
 
@@ -1087,7 +1082,13 @@ impl ConversationState {
             filter: Some(filter),
             subscribers: Vec::new(),
             end_of_stored_events: None,
+            relay_urls: HashSet::new(),
+            is_global: true, // Aliases default to global
         }
+    }
+    
+    fn id(&self) -> PortalId {
+        self.id.clone()
     }
 
     /// Add a subscriber to this conversation
@@ -1135,6 +1136,25 @@ impl ConversationState {
         &self.aliases
     }
 
+    /// Get the relay URLs for this conversation
+    fn relay_urls(&self) -> &HashSet<String> {
+        &self.relay_urls
+    }
+
+    /// Check if this conversation is subscribed globally
+    fn is_global(&self) -> bool {
+        self.is_global
+    }
+
+    /// Remove a relay URL from this conversation
+    fn remove_relay(&mut self, relay_url: &str) {
+        self.relay_urls.remove(relay_url);
+        // set global?
+        // if self.relay_urls.is_empty() {
+        //     self.is_global = true;
+        // }
+    }
+    
     /// Send notification to all subscribers and clean up dead ones
     fn send_notification(&mut self, notification: &serde_json::Value) -> usize {
         let mut sent_count = 0;
@@ -1155,10 +1175,6 @@ impl ConversationState {
             }
         });
         sent_count
-    }
-
-    fn id(&self) -> PortalId {
-        self.id.clone()
     }
 }
 
