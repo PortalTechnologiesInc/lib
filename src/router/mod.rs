@@ -15,6 +15,7 @@ use nostr::{
 pub mod actor;
 pub mod adapters;
 pub mod channel;
+pub mod filters;
 pub mod ids;
 
 pub use adapters::multi_key_listener::{MultiKeyListener, MultiKeyListenerAdapter};
