@@ -12,7 +12,10 @@ use nostr::{
 };
 use nostr_relay_pool::RelayPoolNotification;
 use serde::{Serialize, de::DeserializeOwned};
-use tokio::{runtime::Runtime, sync::{mpsc, oneshot}};
+use tokio::{
+    runtime::Runtime,
+    sync::{mpsc, oneshot},
+};
 use tokio_stream::StreamExt;
 
 use crate::{
@@ -406,7 +409,8 @@ impl MessageRouterActorState {
                     for alias in conv_state.aliases() {
                         if let Some(alias_state) = self.conversations.get(&alias) {
                             if let Some(filter) = &alias_state.filter {
-                                if let Some(subscription_id) = alias_state.subscription_id.as_ref() {
+                                if let Some(subscription_id) = alias_state.subscription_id.as_ref()
+                                {
                                     aliases_to_subscribe.push((
                                         alias,
                                         filter.clone(),
@@ -614,7 +618,9 @@ impl MessageRouterActorState {
                 let conv_state = self
                     .conversations
                     .iter_mut()
-                    .filter(|(_, conv_state)| conv_state.check_subscription_id(&portal_id.to_string()))
+                    .filter(|(_, conv_state)| {
+                        conv_state.check_subscription_id(&portal_id.to_string())
+                    })
                     .next();
 
                 let remaining = if let Some((conv_id, conv_state)) = conv_state {
@@ -682,8 +688,7 @@ impl MessageRouterActorState {
 
         // Check if there are other potential conversations to dispatch to
         for (id, conv_state) in self.conversations.iter() {
-            if conv_state.check_subscription_id(&subscription_id.as_str())
-            {
+            if conv_state.check_subscription_id(&subscription_id.as_str()) {
                 continue;
             }
 
@@ -730,44 +735,48 @@ impl MessageRouterActorState {
             }
         };
 
-        log::debug!("Looking for conversation: {}", subscription_id);
+        log::debug!("Looking for conversations: {}", subscription_id);
 
-        let (response, conversation_id) = match self
-            .conversations
-            .iter_mut()
-            .filter(|(_, conv_state)| conv_state.check_subscription_id(&subscription_id.to_string()))
-            .next()
+        let mut responses = vec![];
+        for (conversation_id, conv_state) in
+            self.conversations.iter_mut().filter(|(_, conv_state)| {
+                conv_state.check_subscription_id(&subscription_id.to_string())
+            })
         {
-            Some((conversation_id, conv_state)) => {
-                log::debug!("Found conversation, processing message");
-                let response = match conv_state.conversation.on_message(message) {
-                    Ok(response) => response,
-                    Err(e) => {
-                        log::warn!("Error in conversation id {}: {:?}", conversation_id, e);
-                        Response::new().finish()
-                    }
-                };
+            log::debug!("Found conversation, processing message");
+            let response = match conv_state.conversation.on_message(message.clone()) {
+                Ok(response) => response,
+                Err(e) => {
+                    log::warn!("Error in conversation id {}: {:?}", conversation_id, e);
+                    Response::new().finish()
+                }
+            };
 
-                (response, conversation_id.clone())
-            }
-            None => {
-                log::warn!(
-                    "No conversation found for subscription id: {}",
-                    subscription_id
-                );
-                channel
-                    .unsubscribe(subscription_id)
-                    .await
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+            responses.push((response, conversation_id.clone()));
+        }
 
-                return Ok(());
-            }
-        };
+        if responses.is_empty() {
+            log::warn!(
+                "No conversation found for subscription id: {}",
+                subscription_id
+            );
+            channel
+                .unsubscribe(subscription_id)
+                .await
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
-        log::debug!("Processing response for conversation: {}", conversation_id);
-        self.process_response(channel, &conversation_id, response)
-            .await?;
+            return Ok(());
+        }
 
+        log::debug!(
+            "Processing responses for subscription id: {}",
+            subscription_id
+        );
+
+        for (response, conversation_id) in responses {
+            self.process_response(channel, &conversation_id, response)
+                .await?;
+        }
         Ok(())
     }
 
@@ -1263,12 +1272,8 @@ impl ConversationState {
 
     fn check_subscription_id(&self, subscription_id: &str) -> bool {
         match &self.subscription_id {
-            Some(s) => {
-                s.to_string() == subscription_id
-            },
-            None => {
-                false
-            },
+            Some(s) => s.to_string() == subscription_id,
+            None => false,
         }
     }
 }
@@ -1293,5 +1298,3 @@ impl std::fmt::Debug for ConversationBox {
         f.debug_struct("Conversation").finish()
     }
 }
-
-
