@@ -5,6 +5,43 @@ use std::str::FromStr;
 
 use crate::utils::random_string;
 
+pub const PORTAL_SUBSCRIPTION_ID_PREFIX: &str = "p3";
+pub const PORTAL_CONVERSATION_ID_PREFIX: &str = "p1";
+pub const PORTAL_CONVERSATION_ALIAS_ID_PREFIX: &str = "p2";
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct PortalSubscriptionId(String);
+
+impl PortalSubscriptionId {
+    pub fn new() -> Self {
+        Self(random_string(30))
+    }
+}
+
+impl Debug for PortalSubscriptionId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+impl Display for PortalSubscriptionId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", PORTAL_SUBSCRIPTION_ID_PREFIX, self.0)
+    }
+}
+
+impl FromStr for PortalSubscriptionId {
+    type Err = ParseIdError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let id = &s[2..];
+        if id.is_empty() {
+            return Err(ParseIdError);
+        }
+
+        Ok(PortalSubscriptionId(id.to_string()))
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum ConversationId {
     Standard(String),
@@ -28,8 +65,10 @@ impl Error for ParseIdError {}
 impl Display for ConversationId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConversationId::Standard(id) => write!(f, "p1{}", id),
-            ConversationId::Alias(id, alias) => write!(f, "p2{}_{}", id, alias),
+            ConversationId::Standard(id) => write!(f, "{}{}", PORTAL_CONVERSATION_ID_PREFIX, id),
+            ConversationId::Alias(id, alias) => {
+                write!(f, "{}{}_{}", PORTAL_CONVERSATION_ALIAS_ID_PREFIX, id, alias)
+            }
         }
     }
 }
@@ -55,14 +94,14 @@ impl FromStr for ConversationId {
         }
 
         match &s[..2] {
-            "p1" => {
+            PORTAL_CONVERSATION_ID_PREFIX => {
                 let id = &s[2..];
                 if id.is_empty() {
                     return Err(ParseIdError);
                 }
                 Ok(ConversationId::Standard(id.to_string()))
             }
-            "p2" => {
+            PORTAL_CONVERSATION_ALIAS_ID_PREFIX => {
                 let rest = &s[2..];
                 if let Some((id, alias_str)) = rest.split_once('_') {
                     if let Ok(alias) = alias_str.parse::<u64>() {
@@ -108,7 +147,7 @@ impl ConversationId {
     /// Get the alias if this is a conversation alias ID
     pub fn alias(&self) -> Option<u64> {
         match self {
-                ConversationId::Alias(_, alias) => Some(*alias),
+            ConversationId::Alias(_, alias) => Some(*alias),
             _ => None,
         }
     }
@@ -197,5 +236,17 @@ mod tests {
         assert!(ConversationId::from_str("p2abc").is_err());
         assert!(ConversationId::from_str("p2abc_").is_err());
         assert!(ConversationId::from_str("p2abc_invalid").is_err());
+    }
+
+    #[test]
+    fn test_parse_portal_subscription_id() {
+        let id = PortalSubscriptionId::from_str("p3abc123").unwrap();
+        assert_eq!(id.to_string(), "p3abc123");
+    }
+
+    #[test]
+    fn test_parse_conversation_id() {
+        let id = ConversationId::from_str("p1abc123").unwrap();
+        assert_eq!(id.to_string(), "p1abc123");
     }
 }

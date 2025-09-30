@@ -33,6 +33,7 @@ async fn test_auth_flow() {
         relays: vec!["simulated".to_string()],
         token: token.clone(),
         subkey: None,
+        no_request: false,
     };
 
     // Create the network with both nodes
