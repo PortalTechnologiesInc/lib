@@ -4,6 +4,7 @@ use std::{
     sync::Arc,
 };
 
+use cdk::mint::subscription;
 use nostr::{
     event::{Event, EventBuilder, Kind},
     filter::{Filter, MatchEventOptions},
@@ -395,29 +396,26 @@ impl MessageRouterActorState {
 
             for (conversation_id, conv_state) in self.conversations.iter() {
                 if conv_state.is_global() {
-                    if let Some(filter) = conv_state.filter.as_ref() {
-                        if let Some(subscription_id) = conv_state.subscription_id.as_ref() {
-                            global_conversations.push((
-                                conversation_id.clone(),
-                                filter.clone(),
-                                subscription_id.id().await,
-                            ));
-                        }
+                    if let Some(subscription_id) = conv_state.subscription_id.as_ref() {
+                        global_conversations.push((
+                            conversation_id.clone(),
+                            subscription_id.filter().await,
+                            subscription_id.id().await,
+                        ));
                     }
 
                     // Collect aliases
                     for alias in conv_state.aliases() {
                         if let Some(alias_state) = self.conversations.get(&alias) {
-                            if let Some(filter) = &alias_state.filter {
-                                if let Some(subscription_id) = alias_state.subscription_id.as_ref()
-                                {
-                                    aliases_to_subscribe.push((
-                                        alias,
-                                        filter.clone(),
-                                        subscription_id.id().await,
-                                    ));
-                                }
+                            if let Some(subscription_id) = alias_state.subscription_id.as_ref()
+                            {
+                                aliases_to_subscribe.push((
+                                    alias,
+                                    subscription_id.filter().await,
+                                    subscription_id.id().await,
+                                ));
                             }
+                            
                         }
                     }
                 }
@@ -702,8 +700,8 @@ impl MessageRouterActorState {
             }
 
             if let LocalEvent::Message(event) = &event {
-                if let Some(filter) = &conv_state.filter {
-                    if filter.match_event(&event, MatchEventOptions::default()) {
+                if let Some(subscription_state) = &conv_state.subscription_id {
+                    if subscription_state.filter().await.match_event(&event, MatchEventOptions::default()) {
                         other_conversations.push(id.clone());
                     }
                 }
@@ -829,9 +827,8 @@ impl MessageRouterActorState {
             };
 
             if let Some(conv_state) = self.conversations.get_mut(id) {
-                conv_state.filter = Some(response.filter.clone());
                 conv_state.set_eose_counter(num_relays);
-                conv_state.set_subscription_id(subscription_id).await;
+                conv_state.set_subscription_id(subscription_id, response.filter.clone()).await;
             }
         }
 
@@ -902,7 +899,7 @@ impl MessageRouterActorState {
             );
 
             if let Some(conv_state) = self.conversations.get_mut(&alias) {
-                conv_state.set_subscription_id(subscription_id.clone()).await;
+                conv_state.set_subscription_id(subscription_id.clone(), filter.clone()).await;
             }
 
             if let Some(selected_relays) = selected_relays_optional.clone() {
@@ -1124,8 +1121,6 @@ struct ConversationState {
     conversation: ConversationBox,
     /// Aliases for subkey proof subscriptions
     aliases: Vec<ConversationId>,
-    /// Nostr filter for this conversation
-    filter: Option<Filter>,
     /// Notification subscribers for this conversation
     subscribers: Vec<mpsc::Sender<serde_json::Value>>,
     /// Number of EOSE events remaining for this conversation
@@ -1144,7 +1139,6 @@ impl ConversationState {
             id,
             conversation,
             aliases: Vec::new(),
-            filter: None,
             subscribers: Vec::new(),
             end_of_stored_events: None,
             relay_urls: HashSet::new(),
@@ -1162,7 +1156,6 @@ impl ConversationState {
             id,
             conversation,
             aliases: Vec::new(),
-            filter: None,
             subscribers: Vec::new(),
             end_of_stored_events: None,
             relay_urls,
@@ -1176,7 +1169,6 @@ impl ConversationState {
             id,
             conversation: Box::new(EmptyConversation),
             aliases: Vec::new(),
-            filter: Some(filter),
             subscribers: Vec::new(),
             end_of_stored_events: None,
             relay_urls: HashSet::new(),
@@ -1282,8 +1274,8 @@ impl ConversationState {
         }
     }
 
-    async fn set_subscription_id(&mut self, subscription_id: PortalSubscriptionId) {
-        self.subscription_id = Some(SubscriptionState::new(subscription_id));
+    async fn set_subscription_id(&mut self, subscription_id: PortalSubscriptionId, filter: Filter) {
+        self.subscription_id = Some(SubscriptionState::new(subscription_id, filter));
     }
 }
 
@@ -1314,9 +1306,9 @@ pub struct SubscriptionState {
 }
 
 impl SubscriptionState {
-    pub fn new(id: PortalSubscriptionId) -> Self {
+    pub fn new(id: PortalSubscriptionId, filter: Filter) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(SubscriptionStateInner { id, count: 1 })),
+            inner: Arc::new(RwLock::new(SubscriptionStateInner { id, count: 1, filter })),
         }
     }
 
@@ -1335,13 +1327,17 @@ impl SubscriptionState {
     pub async fn decrement(&self) {
         self.inner.write().await.count -= 1;
     }
+
+    pub async fn filter(&self) -> Filter {
+        self.inner.read().await.filter.clone()
+    }
 }
 
-
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SubscriptionStateInner {
     id: PortalSubscriptionId,
     count: usize,
+    filter: Filter,
 }
 
 impl Drop for SubscriptionStateInner{
