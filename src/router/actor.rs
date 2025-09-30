@@ -14,7 +14,7 @@ use nostr_relay_pool::RelayPoolNotification;
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::{
     runtime::Runtime,
-    sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot, RwLock},
 };
 use tokio_stream::StreamExt;
 
@@ -400,7 +400,7 @@ impl MessageRouterActorState {
                             global_conversations.push((
                                 conversation_id.clone(),
                                 filter.clone(),
-                                subscription_id.clone(),
+                                subscription_id.id().await,
                             ));
                         }
                     }
@@ -414,7 +414,7 @@ impl MessageRouterActorState {
                                     aliases_to_subscribe.push((
                                         alias,
                                         filter.clone(),
-                                        subscription_id.clone(),
+                                        subscription_id.id().await,
                                     ));
                                 }
                             }
@@ -427,14 +427,14 @@ impl MessageRouterActorState {
             for (conversation_id, filter, subscription_id) in global_conversations {
                 log::trace!("Subscribing {} to new relay = {:?}", conversation_id, &url);
                 channel
-                    .subscribe_to(vec![url.clone()], subscription_id.clone(), filter)
+                    .subscribe_to(vec![url.clone()], subscription_id, filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
 
             for (alias_id, filter, subscription_id) in aliases_to_subscribe {
                 channel
-                    .subscribe_to(vec![url.clone()], subscription_id.clone(), filter)
+                    .subscribe_to(vec![url.clone()], subscription_id, filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
@@ -516,11 +516,14 @@ impl MessageRouterActorState {
         // Remove conversation state
         let aliases = if let Some(conv_state) = self.conversations.remove(conversation) {
             if let Some(subscription_id) = conv_state.subscription_id.clone() {
-                // Remove filters from relays
-                channel
-                    .unsubscribe(subscription_id)
-                    .await
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                subscription_id.decrement().await;
+                if subscription_id.count().await == 0 {
+                    // Remove filters from relays
+                    channel
+                        .unsubscribe(subscription_id.id().await)
+                        .await
+                        .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                }
             }
 
             conv_state.aliases()
@@ -535,7 +538,7 @@ impl MessageRouterActorState {
 
                 if let Some(subscription_id) = conv_state.subscription_id.clone() {
                     channel
-                        .unsubscribe(subscription_id)
+                        .unsubscribe(subscription_id.id().await)
                         .await
                         .map_err(|e| ConversationError::Inner(Box::new(e)))?;
                 }
@@ -615,13 +618,14 @@ impl MessageRouterActorState {
                     }
                 };
 
-                let conv_state = self
-                    .conversations
-                    .iter_mut()
-                    .filter(|(_, conv_state)| {
-                        conv_state.check_subscription_id(&portal_id.to_string())
-                    })
-                    .next();
+                let mut conv_state = None;
+                for (conv_id, conv) in self.conversations.iter_mut() {
+                    if conv.check_subscription_id(&portal_id.to_string()).await {
+                        conv_state = Some((conv_id, conv));
+                        break;
+                    }
+                }
+
 
                 let remaining = if let Some((conv_id, conv_state)) = conv_state {
                     let remaining = conv_state.decrement_eose();
@@ -688,7 +692,7 @@ impl MessageRouterActorState {
 
         // Check if there are other potential conversations to dispatch to
         for (id, conv_state) in self.conversations.iter() {
-            if conv_state.check_subscription_id(&subscription_id.as_str()) {
+            if conv_state.check_subscription_id(&subscription_id.as_str()).await {
                 continue;
             }
 
@@ -738,11 +742,12 @@ impl MessageRouterActorState {
         log::debug!("Looking for conversations: {}", subscription_id);
 
         let mut responses = vec![];
-        for (conversation_id, conv_state) in
-            self.conversations.iter_mut().filter(|(_, conv_state)| {
-                conv_state.check_subscription_id(&subscription_id.to_string())
-            })
+        for (conversation_id, conv_state) in self.conversations.iter_mut()
         {
+            if !conv_state.check_subscription_id(&subscription_id.to_string()).await {
+                continue;
+            }
+
             log::debug!("Found conversation, processing message");
             let response = match conv_state.conversation.on_message(message.clone()) {
                 Ok(response) => response,
@@ -826,7 +831,7 @@ impl MessageRouterActorState {
             if let Some(conv_state) = self.conversations.get_mut(id) {
                 conv_state.filter = Some(response.filter.clone());
                 conv_state.set_eose_counter(num_relays);
-                conv_state.subscription_id = Some(subscription_id);
+                conv_state.set_subscription_id(subscription_id).await;
             }
         }
 
@@ -897,7 +902,7 @@ impl MessageRouterActorState {
             );
 
             if let Some(conv_state) = self.conversations.get_mut(&alias) {
-                conv_state.subscription_id = Some(subscription_id.clone());
+                conv_state.set_subscription_id(subscription_id.clone()).await;
             }
 
             if let Some(selected_relays) = selected_relays_optional.clone() {
@@ -1130,7 +1135,7 @@ struct ConversationState {
     /// Whether this conversation is subscribed to all relays (global)
     is_global: bool,
     /// The subscription ID for this conversation
-    subscription_id: Option<PortalSubscriptionId>,
+    subscription_id: Option<SubscriptionState>,
 }
 
 impl ConversationState {
@@ -1270,11 +1275,15 @@ impl ConversationState {
         sent_count
     }
 
-    fn check_subscription_id(&self, subscription_id: &str) -> bool {
+    async fn check_subscription_id(&self, subscription_id: &str) -> bool {
         match &self.subscription_id {
-            Some(s) => s.to_string() == subscription_id,
+            Some(s) => s.id().await.to_string() == subscription_id,
             None => false,
         }
+    }
+
+    async fn set_subscription_id(&mut self, subscription_id: PortalSubscriptionId) {
+        self.subscription_id = Some(SubscriptionState::new(subscription_id));
     }
 }
 
@@ -1296,5 +1305,48 @@ type ConversationBox = Box<dyn Conversation + Send + Sync>;
 impl std::fmt::Debug for ConversationBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Conversation").finish()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SubscriptionState {
+    inner: Arc<RwLock<SubscriptionStateInner>>,
+}
+
+impl SubscriptionState {
+    pub fn new(id: PortalSubscriptionId) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(SubscriptionStateInner { id, count: 1 })),
+        }
+    }
+
+    pub async fn id(&self) -> PortalSubscriptionId {
+        self.inner.read().await.id.clone()
+    }
+
+    pub async fn count(&self) -> usize {
+        self.inner.read().await.count
+    }
+
+    pub async fn increment(&self) {
+        self.inner.write().await.count += 1;
+    }
+
+    pub async fn decrement(&self) {
+        self.inner.write().await.count -= 1;
+    }
+}
+
+
+#[derive(Debug, Clone)]
+pub struct SubscriptionStateInner {
+    id: PortalSubscriptionId,
+    count: usize,
+}
+
+impl Drop for SubscriptionStateInner{
+
+    fn drop(&mut self) {
+        log::error!("Dropping SubscriptionState {}", self.id);
     }
 }
