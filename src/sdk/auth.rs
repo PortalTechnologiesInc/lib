@@ -26,6 +26,14 @@ pub struct KeyHandshakeReceiverConversation {
     local_key: PublicKey,
     token: String,
 }
+impl ToString for KeyHandshakeReceiverConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "KeyHandshakeReceiverConversation{{local_key: {}, token: {}}}",
+            self.local_key, self.token
+        )
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyHandshakeEvent {
@@ -79,6 +87,15 @@ pub struct AuthChallengeSenderConversation {
     subkey_proof: Option<SubkeyProof>,
 
     challenge: String,
+}
+
+impl ToString for AuthChallengeSenderConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "AuthChallengeSenderConversation{{local_key: {}, subkey_proof: {:?}, challenge: {}}}",
+            self.local_key, self.subkey_proof, self.challenge
+        )
+    }
 }
 
 impl AuthChallengeSenderConversation {

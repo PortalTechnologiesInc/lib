@@ -1,5 +1,6 @@
 use std::{
     collections::HashSet,
+    fmt::{Debug, Display},
     ops::{Deref, DerefMut},
 };
 
@@ -199,7 +200,7 @@ pub enum ConversationError {
     ConversationNotFound,
 }
 
-pub trait Conversation {
+pub trait Conversation: ToString {
     fn on_message(&mut self, message: ConversationMessage) -> Result<Response, ConversationError>;
     fn is_expired(&self) -> bool;
     fn init(&mut self) -> Result<Response, ConversationError> {

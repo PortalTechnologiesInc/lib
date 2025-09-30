@@ -16,7 +16,7 @@ use crate::router::{
 
 const MAX_CLIENTS: usize = 8;
 
-pub trait MultiKeySender: Sized + Send + 'static {
+pub trait MultiKeySender: Sized + Send + 'static + ToString {
     const VALIDITY_SECONDS: Option<u64>;
 
     type Error: std::error::Error + Send + Sync + 'static;
@@ -50,6 +50,12 @@ pub struct MultiKeySenderAdapter<Inner> {
     pub subkeys: HashSet<PublicKey>,
     pub expires_at: Option<SystemTime>,
     pub inner: Inner,
+}
+
+impl<T: MultiKeySender> ToString for MultiKeySenderAdapter<T> {
+    fn to_string(&self) -> String {
+        self.inner.to_string()
+    }
 }
 
 impl<T: MultiKeySender> Conversation for MultiKeySenderAdapter<T> {

@@ -22,6 +22,15 @@ impl FetchProfileInfoConversation {
     }
 }
 
+impl ToString for FetchProfileInfoConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "FetchProfileInfoConversation{{pubkey: {}, expires_at: {:?}}}",
+            self.pubkey, self.expires_at
+        )
+    }
+}
+
 impl Conversation for FetchProfileInfoConversation {
     fn init(&mut self) -> Result<crate::router::Response, crate::router::ConversationError> {
         Ok(Response::new().filter(
@@ -64,6 +73,12 @@ pub struct SetProfileConversation {
 impl SetProfileConversation {
     pub fn new(profile: Profile) -> Self {
         Self { profile }
+    }
+}
+
+impl ToString for SetProfileConversation {
+    fn to_string(&self) -> String {
+        format!("SetProfileConversation{{profile: {:?}}}", self.profile)
     }
 }
 

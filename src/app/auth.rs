@@ -27,6 +27,15 @@ pub struct KeyHandshakeConversation {
     pub relays: Vec<String>,
 }
 
+impl ToString for KeyHandshakeConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "KeyHandshakeConversation{{url: {:?}, relays: {:?}}}",
+            self.url, self.relays
+        )
+    }
+}
+
 impl OneShotSender for KeyHandshakeConversation {
     type Error = ConversationError;
 
@@ -63,6 +72,15 @@ impl OneShotSender for KeyHandshakeConversation {
 
 pub struct AuthChallengeListenerConversation {
     local_key: PublicKey,
+}
+
+impl ToString for AuthChallengeListenerConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "AuthChallengeListenerConversation{{local_key: {:?}}}",
+            self.local_key
+        )
+    }
 }
 
 impl AuthChallengeListenerConversation {
@@ -161,6 +179,15 @@ impl AuthResponseConversation {
             subkey_proof,
             status,
         }
+    }
+}
+
+impl ToString for AuthResponseConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "AuthResponseConversation{{event: {:?}, subkey_proof: {:?}, status: {:?}}}",
+            self.event, self.subkey_proof, self.status
+        )
     }
 }
 

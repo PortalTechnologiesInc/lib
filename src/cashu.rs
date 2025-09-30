@@ -33,6 +33,15 @@ pub struct CashuRequestSenderConversation {
     content: CashuRequestContent,
 }
 
+impl ToString for CashuRequestSenderConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "CashuRequestSenderConversation{{local_key: {}, subkey_proof: {:?}, content: {:?}}}",
+            self.local_key, self.subkey_proof, self.content
+        )
+    }
+}
+
 impl MultiKeySender for CashuRequestSenderConversation {
     const VALIDITY_SECONDS: Option<u64> = Some(60 * 5);
 
@@ -106,6 +115,15 @@ pub struct CashuRequestReceiverConversation {
     local_key: PublicKey,
 }
 
+impl ToString for CashuRequestReceiverConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "CashuRequestReceiverConversation{{local_key: {}}}",
+            self.local_key
+        )
+    }
+}
+
 impl MultiKeyListener for CashuRequestReceiverConversation {
     const VALIDITY_SECONDS: Option<u64> = None;
 
@@ -159,6 +177,15 @@ pub struct CashuResponseSenderConversation {
     content: CashuResponseContent,
 }
 
+impl ToString for CashuResponseSenderConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "CashuResponseSenderConversation{{content: {:?}}}",
+            self.content
+        )
+    }
+}
+
 impl OneShotSender for CashuResponseSenderConversation {
     type Error = ConversationError;
 
@@ -187,6 +214,15 @@ impl OneShotSender for CashuResponseSenderConversation {
 #[derive(derive_new::new)]
 pub struct CashuDirectSenderConversation {
     content: CashuDirectContent,
+}
+
+impl ToString for CashuDirectSenderConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "CashuDirectSenderConversation{{content: {:?}}}",
+            self.content
+        )
+    }
 }
 
 impl MultiKeySender for CashuDirectSenderConversation {
@@ -245,6 +281,15 @@ impl MultiKeySender for CashuDirectSenderConversation {
 #[derive(derive_new::new)]
 pub struct CashuDirectReceiverConversation {
     local_key: PublicKey,
+}
+
+impl ToString for CashuDirectReceiverConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "CashuDirectReceiverConversation{{local_key: {}}}",
+            self.local_key
+        )
+    }
 }
 
 impl MultiKeyListener for CashuDirectReceiverConversation {

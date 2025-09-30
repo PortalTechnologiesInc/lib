@@ -30,6 +30,15 @@ pub struct PaymentRequestListenerConversation {
     local_key: PublicKey,
 }
 
+impl ToString for PaymentRequestListenerConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "PaymentRequestListenerConversation{{local_key: {:?}}}",
+            self.local_key
+        )
+    }
+}
+
 impl PaymentRequestListenerConversation {
     pub fn new(local_key: PublicKey) -> Self {
         Self { local_key }
@@ -133,6 +142,15 @@ pub struct PaymentStatusSenderConversation {
     response: PaymentResponseContent,
 }
 
+impl ToString for PaymentStatusSenderConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "PaymentStatusSenderConversation{{service_key: {:?}, recipient: {:?}, response: {:?}}}",
+            self.service_key, self.recipient, self.response
+        )
+    }
+}
+
 impl PaymentStatusSenderConversation {
     pub fn new(
         service_key: PublicKey,
@@ -175,6 +193,15 @@ pub struct RecurringPaymentStatusSenderConversation {
     service_key: PublicKey,
     recipient: PublicKey,
     response: RecurringPaymentResponseContent,
+}
+
+impl ToString for RecurringPaymentStatusSenderConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "RecurringPaymentStatusSenderConversation{{service_key: {:?}, recipient: {:?}, response: {:?}}}",
+            self.service_key, self.recipient, self.response
+        )
+    }
 }
 
 impl RecurringPaymentStatusSenderConversation {
