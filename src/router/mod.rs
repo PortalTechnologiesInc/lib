@@ -15,6 +15,7 @@ use nostr::{
 pub mod actor;
 pub mod adapters;
 pub mod channel;
+pub mod filters;
 pub mod ids;
 
 pub use adapters::multi_key_listener::{MultiKeyListener, MultiKeyListenerAdapter};
@@ -23,18 +24,6 @@ pub use ids::PortalId;
 
 // Re-export MessageRouterActor as MessageRouter for backward compatibility
 pub use actor::{MessageRouterActor as MessageRouter, MessageRouterActorError};
-
-pub struct RelayNode {
-    conversations: HashSet<PortalId>,
-}
-
-impl RelayNode {
-    fn new() -> Self {
-        RelayNode {
-            conversations: HashSet::new(),
-        }
-    }
-}
 
 #[derive(Debug)]
 struct ResponseEntry {
@@ -205,6 +194,9 @@ pub enum ConversationError {
 
     #[error("Relay '{0}' is not connected")]
     RelayNotConnected(String),
+
+    #[error("Conversation not found")]
+    ConversationNotFound,
 }
 
 pub trait Conversation {
