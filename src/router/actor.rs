@@ -15,10 +15,9 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_stream::StreamExt;
 
 use crate::{
-    protocol::{LocalKeypair, model::event_kinds::SUBKEY_PROOF},
+    protocol::{model::event_kinds::SUBKEY_PROOF, LocalKeypair},
     router::{
-        CleartextEvent, Conversation, ConversationError, ConversationMessage, NotificationStream,
-        PortalId, Response, channel::Channel,
+        channel::Channel, ids::{ConversationId}, CleartextEvent, Conversation, ConversationError, ConversationMessage, NotificationStream, Response
     },
 };
 
@@ -39,15 +38,15 @@ pub enum MessageRouterActorMessage {
     Shutdown(oneshot::Sender<Result<(), ConversationError>>),
     AddConversation(
         ConversationBox,
-        oneshot::Sender<Result<PortalId, ConversationError>>,
+        oneshot::Sender<Result<ConversationId, ConversationError>>,
     ),
     AddConversationWithRelays(
         ConversationBox,
         Vec<String>,
-        oneshot::Sender<Result<PortalId, ConversationError>>,
+        oneshot::Sender<Result<ConversationId, ConversationError>>,
     ),
     SubscribeToServiceRequest(
-        PortalId,
+        ConversationId,
         oneshot::Sender<Result<NotificationStream<serde_json::Value>, ConversationError>>,
     ),
     AddAndSubscribe(
@@ -259,7 +258,7 @@ where
     pub async fn add_conversation(
         &self,
         conversation: ConversationBox,
-    ) -> Result<PortalId, MessageRouterActorError> {
+    ) -> Result<ConversationId, MessageRouterActorError> {
         self.ping().await?;
         self.ping().await?;
 
@@ -274,7 +273,7 @@ where
         &self,
         conversation: ConversationBox,
         relays: Vec<String>,
-    ) -> Result<PortalId, MessageRouterActorError> {
+    ) -> Result<ConversationId, MessageRouterActorError> {
         let (tx, rx) = oneshot::channel();
         self.send_message(MessageRouterActorMessage::AddConversationWithRelays(
             conversation,
@@ -299,7 +298,7 @@ where
     /// * `Err(MessageRouterActorError)` if an error occurs during subscription
     pub async fn subscribe_to_service_request<T: DeserializeOwned + Serialize>(
         &self,
-        id: PortalId,
+        id: ConversationId,
     ) -> Result<NotificationStream<T>, MessageRouterActorError> {
         // For the actor pattern, we need to use the raw stream and convert it
         let raw_stream = self.subscribe_to_service_request_raw(id).await?;
@@ -324,7 +323,7 @@ where
     /// * `Err(MessageRouterActorError)` if an error occurs during subscription
     async fn subscribe_to_service_request_raw(
         &self,
-        id: PortalId,
+        id: ConversationId,
     ) -> Result<NotificationStream<serde_json::Value>, MessageRouterActorError> {
         let (tx, rx) = oneshot::channel();
         self.send_message(MessageRouterActorMessage::SubscribeToServiceRequest(id, tx))
@@ -361,7 +360,7 @@ where
 pub struct MessageRouterActorState {
     keypair: LocalKeypair,
     /// All conversation states
-    conversations: HashMap<PortalId, ConversationState>,
+    conversations: HashMap<ConversationId, ConversationState>,
 }
 
 impl MessageRouterActorState {
@@ -474,7 +473,7 @@ impl MessageRouterActorState {
 
     fn get_relays_by_conversation(
         &self,
-        conversation_id: &PortalId,
+        conversation_id: &ConversationId,
     ) -> Result<Option<HashSet<String>>, ConversationError> {
         if let Some(conv_state) = self.conversations.get(conversation_id) {
             if conv_state.is_global() {
@@ -489,7 +488,7 @@ impl MessageRouterActorState {
     async fn cleanup_conversation<C: Channel>(
         &mut self,
         channel: &Arc<C>,
-        conversation: &PortalId,
+        conversation: &ConversationId,
     ) -> Result<(), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
@@ -574,7 +573,7 @@ impl MessageRouterActorState {
                 ..
             } => {
                 // Parse the subscription ID to get the PortalId
-                let portal_id = match PortalId::parse(subscription_id.as_str()) {
+                let portal_id = match ConversationId::parse(subscription_id.as_str()) {
                     Some(id) => id,
                     None => {
                         log::warn!(
@@ -692,7 +691,7 @@ impl MessageRouterActorState {
         log::debug!("Dispatching event to subscription: {}", subscription_str);
 
         // Parse the subscription ID to get the PortalId
-        let conversation_id = match PortalId::parse(subscription_str) {
+        let conversation_id = match ConversationId::parse(subscription_str) {
             Some(id) => id,
             None => {
                 log::warn!("Invalid subscription ID format: {:?}", subscription_str);
@@ -735,7 +734,7 @@ impl MessageRouterActorState {
     async fn process_response<C: Channel>(
         &mut self,
         channel: &Arc<C>,
-        id: &PortalId,
+        id: &ConversationId,
         response: Response,
     ) -> Result<(), ConversationError>
     where
@@ -824,7 +823,7 @@ impl MessageRouterActorState {
         if response.subscribe_to_subkey_proofs {
             let alias_num = rand::random::<u64>();
 
-            let alias = PortalId::new_conversation_alias(id.id(), alias_num);
+            let alias = ConversationId::new_conversation_alias(id.id(), alias_num);
 
             if let Some(conv_state) = self.conversations.get_mut(id) {
                 conv_state.add_alias(alias.clone());
@@ -903,7 +902,7 @@ impl MessageRouterActorState {
 
     fn internal_add_with_id(
         &mut self,
-        id: &PortalId,
+        id: &ConversationId,
         mut conversation: ConversationBox,
         relays: Option<Vec<String>>,
         subscriber: Option<mpsc::Sender<serde_json::Value>>,
@@ -947,11 +946,11 @@ impl MessageRouterActorState {
         &mut self,
         channel: &Arc<C>,
         conversation: ConversationBox,
-    ) -> Result<PortalId, ConversationError>
+    ) -> Result<ConversationId, ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        let conversation_id = PortalId::new_conversation();
+        let conversation_id = ConversationId::new_conversation();
 
         let response = self.internal_add_with_id(&conversation_id, conversation, None, None)?;
         self.process_response(channel, &conversation_id, response)
@@ -965,11 +964,11 @@ impl MessageRouterActorState {
         channel: &Arc<C>,
         conversation: ConversationBox,
         relays: Vec<String>,
-    ) -> Result<PortalId, ConversationError>
+    ) -> Result<ConversationId, ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        let conversation_id = PortalId::new_conversation();
+        let conversation_id = ConversationId::new_conversation();
 
         let response =
             self.internal_add_with_id(&conversation_id, conversation, Some(relays), None)?;
@@ -992,7 +991,7 @@ impl MessageRouterActorState {
     /// * `Err(ConversationError)` if an error occurs during subscription
     pub fn subscribe_to_service_request<T: DeserializeOwned + Serialize>(
         &mut self,
-        id: PortalId,
+        id: ConversationId,
     ) -> Result<NotificationStream<T>, ConversationError> {
         let (tx, rx) = mpsc::channel(8);
 
@@ -1032,7 +1031,7 @@ impl MessageRouterActorState {
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        let conversation_id = PortalId::new_conversation();
+        let conversation_id = ConversationId::new_conversation();
 
         // Subscribe before adding the conversation to ensure we don't miss notifications
         let (tx, rx) = mpsc::channel(8);
@@ -1054,11 +1053,11 @@ impl MessageRouterActorState {
 /// This consolidates the multiple HashMaps that were previously keyed by PortalId.
 #[derive(Debug)]
 struct ConversationState {
-    id: PortalId,
+    id: ConversationId,
     /// The actual conversation object
     conversation: ConversationBox,
     /// Aliases for subkey proof subscriptions
-    aliases: Vec<PortalId>,
+    aliases: Vec<ConversationId>,
     /// Nostr filter for this conversation
     filter: Option<Filter>,
     /// Notification subscribers for this conversation
@@ -1072,7 +1071,7 @@ struct ConversationState {
 }
 
 impl ConversationState {
-    fn new(id: PortalId, conversation: ConversationBox) -> Self {
+    fn new(id: ConversationId, conversation: ConversationBox) -> Self {
         Self {
             id,
             conversation,
@@ -1086,7 +1085,7 @@ impl ConversationState {
     }
 
     fn new_with_relays(
-        id: PortalId,
+        id: ConversationId,
         conversation: ConversationBox,
         relay_urls: HashSet<String>,
     ) -> Self {
@@ -1102,7 +1101,7 @@ impl ConversationState {
         }
     }
 
-    fn new_alias(id: PortalId, filter: Filter) -> Self {
+    fn new_alias(id: ConversationId, filter: Filter) -> Self {
         Self {
             id,
             conversation: Box::new(EmptyConversation),
@@ -1115,7 +1114,7 @@ impl ConversationState {
         }
     }
     /// Get the ID of this conversation
-    fn id(&self) -> PortalId {
+    fn id(&self) -> ConversationId {
         self.id.clone()
     }
 
@@ -1152,7 +1151,7 @@ impl ConversationState {
     }
 
     /// Add an alias for subkey proof subscriptions
-    fn add_alias(&mut self, alias: PortalId) {
+    fn add_alias(&mut self, alias: ConversationId) {
         // Prevent duplicate aliases
         if !self.aliases.contains(&alias) {
             self.aliases.push(alias);
@@ -1160,7 +1159,7 @@ impl ConversationState {
     }
 
     /// Get a reference to the aliases
-    fn aliases(&self) -> Vec<PortalId> {
+    fn aliases(&self) -> Vec<ConversationId> {
         self.aliases.clone()
     }
 

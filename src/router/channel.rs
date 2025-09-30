@@ -4,7 +4,7 @@ use nostr_relay_pool::{
     relay::{FlagCheck, RelayServiceFlags},
 };
 
-use crate::router::ids::PortalId;
+use crate::router::ids::ConversationId;
 
 /// A trait for an abstract channel
 ///
@@ -14,14 +14,14 @@ pub trait Channel: Send + 'static {
 
     fn subscribe(
         &self,
-        id: PortalId,
+        id: ConversationId,
         filter: nostr::Filter,
     ) -> impl std::future::Future<Output = Result<usize, Self::Error>> + Send;
 
     fn subscribe_to<I, U>(
         &self,
         urls: I,
-        id: PortalId,
+        id: ConversationId,
         filter: nostr::Filter,
     ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send
     where
@@ -32,7 +32,7 @@ pub trait Channel: Send + 'static {
 
     fn unsubscribe(
         &self,
-        id: PortalId,
+        id: ConversationId,
     ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
 
     fn broadcast(
@@ -60,7 +60,7 @@ pub trait Channel: Send + 'static {
 impl Channel for RelayPool {
     type Error = nostr_relay_pool::pool::Error;
 
-    async fn subscribe(&self, id: PortalId, filter: nostr::Filter) -> Result<usize, Self::Error> {
+    async fn subscribe(&self, id: ConversationId, filter: nostr::Filter) -> Result<usize, Self::Error> {
         self.subscribe_with_id(
             SubscriptionId::new(id.to_string()),
             filter,
@@ -75,7 +75,7 @@ impl Channel for RelayPool {
     async fn subscribe_to<I, U>(
         &self,
         urls: I,
-        id: PortalId,
+        id: ConversationId,
         filter: nostr::Filter,
     ) -> Result<(), Self::Error>
     where
@@ -94,7 +94,7 @@ impl Channel for RelayPool {
         Ok(())
     }
 
-    async fn unsubscribe(&self, id: PortalId) -> Result<(), Self::Error> {
+    async fn unsubscribe(&self, id: ConversationId) -> Result<(), Self::Error> {
         let relays = self
             .relays_with_flag(RelayServiceFlags::READ, FlagCheck::All)
             .await;
@@ -144,14 +144,14 @@ impl Channel for RelayPool {
 impl<C: Channel + Send + Sync> Channel for std::sync::Arc<C> {
     type Error = C::Error;
 
-    async fn subscribe(&self, id: PortalId, filter: nostr::Filter) -> Result<usize, Self::Error> {
+    async fn subscribe(&self, id: ConversationId, filter: nostr::Filter) -> Result<usize, Self::Error> {
         <C as Channel>::subscribe(self, id, filter).await
     }
 
     async fn subscribe_to<I, U>(
         &self,
         urls: I,
-        id: PortalId,
+        id: ConversationId,
         filter: nostr::Filter,
     ) -> Result<(), Self::Error>
     where
@@ -163,7 +163,7 @@ impl<C: Channel + Send + Sync> Channel for std::sync::Arc<C> {
         <C as Channel>::subscribe_to(self, urls, id, filter).await
     }
 
-    async fn unsubscribe(&self, id: PortalId) -> Result<(), Self::Error> {
+    async fn unsubscribe(&self, id: ConversationId) -> Result<(), Self::Error> {
         <C as Channel>::unsubscribe(self, id).await
     }
 
