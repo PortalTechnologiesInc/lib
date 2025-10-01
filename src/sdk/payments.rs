@@ -40,6 +40,15 @@ impl RecurringPaymentRequestSenderConversation {
     }
 }
 
+impl ToString for RecurringPaymentRequestSenderConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "RecurringPaymentRequestSenderConversation{{local_key: {}, subkey_proof: {:?}, payment_request: {:?}}}",
+            self.local_key, self.subkey_proof, self.payment_request
+        )
+    }
+}
+
 impl MultiKeySender for RecurringPaymentRequestSenderConversation {
     const VALIDITY_SECONDS: Option<u64> = Some(60 * 5);
 
@@ -113,6 +122,15 @@ pub struct SinglePaymentRequestSenderConversation {
 
     payment_request: SinglePaymentRequestContent,
     last_status: Option<PaymentStatus>,
+}
+
+impl ToString for SinglePaymentRequestSenderConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "SinglePaymentRequestSenderConversation{{local_key: {}, subkey_proof: {:?}, payment_request: {:?}}}",
+            self.local_key, self.subkey_proof, self.payment_request
+        )
+    }
 }
 
 impl SinglePaymentRequestSenderConversation {
