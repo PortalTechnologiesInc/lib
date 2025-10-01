@@ -810,8 +810,14 @@ impl MessageRouterActorState {
                 response.filter
             );
 
-            let subscription_id = PortalSubscriptionId::new();
+            struct MergedWith {
+                conversation_description: String,
+                subscription_id: SubscriptionState,
+                num_relays: usize,
+            }
             let mut merged_with = None;
+
+            let subscription_id = PortalSubscriptionId::new();
 
             let num_relays = if let Some(selected_relays) = selected_relays_optional.clone() {
                 let num_relays = selected_relays.len();
@@ -828,29 +834,36 @@ impl MessageRouterActorState {
                 num_relays
             } else {
                 for (_, conv_state) in self.conversations.iter_mut() {
-                    if conv_state
+                    match conv_state
                         .try_merge(response.filter.clone(), channel)
                         .await?
                     {
-                        merged_with = Some((
-                            conv_state.to_string(),
-                            conv_state.subscription_id.as_ref().unwrap().clone(),
-                        ));
-
-                        break;
+                        Some(num_relays) => {
+                            merged_with = Some(MergedWith {
+                                conversation_description: conv_state.to_string(),
+                                subscription_id: conv_state
+                                    .subscription_id
+                                    .as_ref()
+                                    .unwrap()
+                                    .clone(),
+                                num_relays,
+                            });
+                            break;
+                        }
+                        None => {}
                     }
                 }
 
-                if merged_with.is_none() {
-                    log::trace!("Subscribing to all relays");
+                match merged_with.as_ref() {
+                    Some(merged_with) => merged_with.num_relays,
+                    None => {
+                        log::trace!("Subscribing to all relays");
 
-                    channel
-                        .subscribe(subscription_id.clone(), response.filter.clone())
-                        .await
-                        .map_err(|e| ConversationError::Inner(Box::new(e)))?
-                } else {
-                    // todo: valid number
-                    0
+                        channel
+                            .subscribe(subscription_id.clone(), response.filter.clone())
+                            .await
+                            .map_err(|e| ConversationError::Inner(Box::new(e)))?
+                    }
                 }
             };
 
@@ -858,11 +871,13 @@ impl MessageRouterActorState {
                 conv_state.set_eose_counter(num_relays);
 
                 if let Some(merged_with) = merged_with {
-                    conv_state.set_subscription(merged_with.1).await;
+                    conv_state
+                        .set_subscription(merged_with.subscription_id)
+                        .await;
                     log::info!(
                         "Merged new conversation <<{}>> with <<{}>>",
                         conv_state.to_string(),
-                        merged_with.0
+                        merged_with.conversation_description
                     );
                 } else {
                     conv_state
@@ -1339,12 +1354,12 @@ impl ConversationState {
         &mut self,
         other: Filter,
         channel: &Arc<C>,
-    ) -> Result<bool, ConversationError>
+    ) -> Result<Option<usize>, ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
         if !self.is_global {
-            return Ok(false);
+            return Ok(None);
         }
 
         if let Some(subscription_state) = &self.subscription_id {
@@ -1362,16 +1377,16 @@ impl ConversationState {
                 subscription_state.update_state(merged_filter.clone()).await;
 
                 // Subscribe to the new filter and new Subscription ID
-                channel
+                let num_relays = channel
                     .subscribe(subscription_state.id().await, merged_filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
-                return Ok(true);
+                return Ok(Some(num_relays));
             }
         }
 
-        return Ok(false);
+        return Ok(None);
     }
 
     async fn set_subscription(&mut self, other: SubscriptionState) {
@@ -1455,6 +1470,6 @@ pub struct SubscriptionStateInner {
 
 impl Drop for SubscriptionStateInner {
     fn drop(&mut self) {
-        log::error!("Dropping SubscriptionState {}", self.id);
+        log::debug!("Dropping Subscription {}", self.id);
     }
 }
