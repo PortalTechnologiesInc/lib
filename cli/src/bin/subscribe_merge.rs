@@ -35,7 +35,8 @@ pub async fn main() -> Result<(), CliError> {
             .unwrap();
         log::info!("Key handshake url: {}", key_handshake_url);
         let mut event: NotificationStream<KeyHandshakeEvent> = event;
-        event.next().await.unwrap();
+        let notification = event.next().await.unwrap();
+        log::info!("Notification: {:?}", notification);
     });
 
     log::info!("Waiting 5 seconds");
@@ -49,11 +50,12 @@ pub async fn main() -> Result<(), CliError> {
             .unwrap();
         log::info!("Key handshake url: {}", key_handshake_url);
         let mut event: NotificationStream<KeyHandshakeEvent> = event;
-        event.next().await.unwrap();
+        let notification = event.next().await.unwrap();
+        log::info!("Notification: {:?}", notification);
     });
 
-    log::info!("Waiting 30 seconds");
-    tokio::time::sleep(Duration::from_secs(30)).await;
+    log::info!("Waiting 300 seconds");
+    tokio::time::sleep(Duration::from_secs(300)).await;
 
     Ok(())
 }
