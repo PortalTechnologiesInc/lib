@@ -9,7 +9,7 @@ use crate::router::ids::PortalId;
 /// A trait for an abstract channel
 ///
 /// This is modeled around Nostr relays, in which we can subscribe to events matching a filter.
-pub trait Channel: Send + 'static {
+pub trait Channel: Send + Sync + 'static {
     type Error: std::error::Error + Send + Sync + 'static;
 
     fn subscribe(

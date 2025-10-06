@@ -1,10 +1,12 @@
+use core::f64;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
 
+// use std::time::Duration inside async blocks
 use nostr::{
-    event::{Event, EventBuilder, Kind}, filter::{Filter, MatchEventOptions}, hashes::hash160::Hash, message::{RelayMessage, SubscriptionId}, nips::nip44
+    event::{Event, EventBuilder, Kind}, filter::{Filter, MatchEventOptions}, message::{RelayMessage, SubscriptionId}, nips::nip44
 };
 use nostr_relay_pool::RelayPoolNotification;
 use serde::{Serialize, de::DeserializeOwned};
@@ -359,7 +361,6 @@ pub struct MessageRouterActorState {
     keypair: LocalKeypair,
     /// All conversation states
     conversations: HashMap<PortalId, ConversationState>,
-    queue_events: HashSet<QueuedEvent>,
 }
 
 impl MessageRouterActorState {
@@ -367,7 +368,6 @@ impl MessageRouterActorState {
         Self {
             keypair,
             conversations: HashMap::new(),
-            queue_events: HashSet::new()
         }
     }
 
@@ -883,7 +883,31 @@ impl MessageRouterActorState {
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        queue_event.broadcast(channel).await?;
+        let result = queue_event.broadcast(channel).await?;
+        if !result {
+            // incrementally delay until it is confirmed
+            log::warn!("New event with id {} is queued, delaying until it is confirmed", queue_event.event.id);
+
+            let channel = channel.clone();
+            let event = queue_event.clone();
+
+            tokio::spawn(async move {
+                let mut retry = 1.0;
+                let multiplier = f64::consts::E;
+
+                let mut delivered = false;
+                while !delivered {
+                    let eid = event.event.id;
+                    log::warn!("{} retry of event {}", retry, eid);
+                    tokio::time::sleep(std::time::Duration::from_secs_f64(retry * multiplier)).await;
+                    delivered = event.broadcast(&channel).await.unwrap();
+
+                    retry += 1.0;
+                }
+            });
+
+        }
+
         Ok(())
     }
 
@@ -1214,6 +1238,7 @@ impl std::fmt::Debug for ConversationBox {
 }
 
 
+#[derive(Clone)]
 pub struct QueuedEvent {
     event: Event,
     relays: Option<HashSet<String>>,
@@ -1228,19 +1253,19 @@ impl QueuedEvent {
     }
 
     pub async fn broadcast<C: Channel>(&self, channel: &Arc<C>)
-     -> Result<(), ConversationError>
+     -> Result<bool, ConversationError>
      where
         C::Error: From<nostr::types::url::Error>,
     {
         let event = self.event.clone();
         let relays = self.relays.clone();
 
-        if let Some(relays) = relays {
-            channel.broadcast_to(relays, event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        let result = if let Some(relays) = relays {
+            channel.broadcast_to(relays, event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?
         } else {
-            channel.broadcast(event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?;
-        }
-        Ok(())
+            channel.broadcast(event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?
+        };
+        Ok(result)
     }
 
 }
