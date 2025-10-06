@@ -38,12 +38,12 @@ pub trait Channel: Send + 'static {
     fn broadcast(
         &self,
         event: nostr::Event,
-    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
+    ) -> impl std::future::Future<Output = Result<bool, Self::Error>> + Send;
     fn broadcast_to<I, U>(
         &self,
         urls: I,
         event: nostr::Event,
-    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send
+    ) -> impl std::future::Future<Output = Result<bool, Self::Error>> + Send
     where
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,
@@ -113,19 +113,19 @@ impl Channel for RelayPool {
         Ok(())
     }
 
-    async fn broadcast(&self, event: nostr::Event) -> Result<(), Self::Error> {
-        self.send_event(&event).await?;
-        Ok(())
+    async fn broadcast(&self, event: nostr::Event) -> Result<bool, Self::Error> {
+        let output = self.send_event(&event).await?;
+        return Ok(!output.success.is_empty());
     }
-    async fn broadcast_to<I, U>(&self, urls: I, event: nostr::Event) -> Result<(), Self::Error>
+    async fn broadcast_to<I, U>(&self, urls: I, event: nostr::Event) -> Result<bool, Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,
         U: TryIntoUrl,
         Self::Error: From<<U as TryIntoUrl>::Err>,
     {
-        self.send_event_to(urls, &event).await?;
-        Ok(())
+        let output = self.send_event_to(urls, &event).await?;
+        return Ok(!output.success.is_empty());
     }
 
     async fn receive(&self) -> Result<RelayPoolNotification, Self::Error> {
@@ -167,11 +167,11 @@ impl<C: Channel + Send + Sync> Channel for std::sync::Arc<C> {
         <C as Channel>::unsubscribe(self, id).await
     }
 
-    async fn broadcast(&self, event: nostr::Event) -> Result<(), Self::Error> {
+    async fn broadcast(&self, event: nostr::Event) -> Result<bool, Self::Error> {
         <C as Channel>::broadcast(self, event).await
     }
 
-    async fn broadcast_to<I, U>(&self, urls: I, event: nostr::Event) -> Result<(), Self::Error>
+    async fn broadcast_to<I, U>(&self, urls: I, event: nostr::Event) -> Result<bool, Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,

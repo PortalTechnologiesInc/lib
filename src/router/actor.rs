@@ -4,10 +4,7 @@ use std::{
 };
 
 use nostr::{
-    event::{Event, EventBuilder, Kind},
-    filter::{Filter, MatchEventOptions},
-    message::{RelayMessage, SubscriptionId},
-    nips::nip44,
+    event::{Event, EventBuilder, Kind}, filter::{Filter, MatchEventOptions}, hashes::hash160::Hash, message::{RelayMessage, SubscriptionId}, nips::nip44
 };
 use nostr_relay_pool::RelayPoolNotification;
 use serde::{Serialize, de::DeserializeOwned};
@@ -362,6 +359,7 @@ pub struct MessageRouterActorState {
     keypair: LocalKeypair,
     /// All conversation states
     conversations: HashMap<PortalId, ConversationState>,
+    queue_events: HashSet<QueuedEvent>,
 }
 
 impl MessageRouterActorState {
@@ -369,6 +367,7 @@ impl MessageRouterActorState {
         Self {
             keypair,
             conversations: HashMap::new(),
+            queue_events: HashSet::new()
         }
     }
 
@@ -857,12 +856,12 @@ impl MessageRouterActorState {
         // check if Response has selected relays
         if let Some(selected_relays) = selected_relays_optional {
             for event in events_to_broadcast {
-                self.queue_event(channel, event, Some(selected_relays.clone()))
+                self.queue_event(channel, QueuedEvent::new_with_relays(event, selected_relays.clone()))
                     .await?;
             }
         } else {
             for event in events_to_broadcast {
-                self.queue_event(channel, event, None).await?;
+                self.queue_event(channel, QueuedEvent::new(event)).await?;
             }
 
             // TODO: wait for confirmation from relays
@@ -879,25 +878,12 @@ impl MessageRouterActorState {
     async fn queue_event<C: Channel>(
         &self,
         channel: &Arc<C>,
-        event: Event,
-        relays: Option<HashSet<String>>,
+        queue_event: QueuedEvent,
     ) -> Result<(), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        if let Some(relays) = relays {
-            // if selected relays, broadcast to selected relays
-            channel
-                .broadcast_to(relays, event)
-                .await
-                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-        } else {
-            // if not selected relays, broadcast to all relays
-            channel
-                .broadcast(event)
-                .await
-                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-        }
+        queue_event.broadcast(channel).await?;
         Ok(())
     }
 
@@ -1225,4 +1211,36 @@ impl std::fmt::Debug for ConversationBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Conversation").finish()
     }
+}
+
+
+pub struct QueuedEvent {
+    event: Event,
+    relays: Option<HashSet<String>>,
+}
+
+impl QueuedEvent {
+    pub fn new(event: Event ) -> Self {
+        Self { event, relays: None }
+    }
+    pub fn new_with_relays(event: Event, relays: HashSet<String>) -> Self {
+        Self { event, relays: Some(relays) }
+    }
+
+    pub async fn broadcast<C: Channel>(&self, channel: &Arc<C>)
+     -> Result<(), ConversationError>
+     where
+        C::Error: From<nostr::types::url::Error>,
+    {
+        let event = self.event.clone();
+        let relays = self.relays.clone();
+
+        if let Some(relays) = relays {
+            channel.broadcast_to(relays, event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        } else {
+            channel.broadcast(event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        }
+        Ok(())
+    }
+
 }
