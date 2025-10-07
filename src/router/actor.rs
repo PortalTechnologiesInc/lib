@@ -18,17 +18,9 @@ use crate::{
     protocol::{LocalKeypair, model::event_kinds::SUBKEY_PROOF},
     router::{
         CleartextEvent, Conversation, ConversationError, ConversationMessage, NotificationStream,
-        PortalId, RelayNode, Response, channel::Channel,
+        PortalId, Response, channel::Channel,
     },
 };
-
-type ConversationBox = Box<dyn Conversation + Send + Sync>;
-
-impl std::fmt::Debug for ConversationBox {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Conversation").finish()
-    }
-}
 
 #[derive(thiserror::Error, Debug)]
 pub enum MessageRouterActorError {
@@ -368,14 +360,8 @@ where
 
 pub struct MessageRouterActorState {
     keypair: LocalKeypair,
-    conversations: HashMap<PortalId, ConversationBox>,
-    aliases: HashMap<PortalId, Vec<u64>>,
-    filters: HashMap<PortalId, Filter>,
-    subscribers: HashMap<PortalId, Vec<mpsc::Sender<serde_json::Value>>>,
-    end_of_stored_events: HashMap<PortalId, usize>,
-
-    relay_nodes: HashMap<String, RelayNode>,
-    global_relay_node: RelayNode,
+    /// All conversation states
+    conversations: HashMap<PortalId, ConversationState>,
 }
 
 impl MessageRouterActorState {
@@ -383,12 +369,6 @@ impl MessageRouterActorState {
         Self {
             keypair,
             conversations: HashMap::new(),
-            aliases: HashMap::new(),
-            filters: HashMap::new(),
-            subscribers: HashMap::new(),
-            end_of_stored_events: HashMap::new(),
-            relay_nodes: HashMap::new(),
-            global_relay_node: RelayNode::new(),
         }
     }
 
@@ -401,40 +381,55 @@ impl MessageRouterActorState {
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        // Subscribe existing conversations to new relays
+        // Subscribe existing global conversations to new relay
         if subscribe_existing_conversations {
-            for conversation_id in self.global_relay_node.conversations.iter() {
-                if let Some(filter) = self.filters.get(conversation_id) {
-                    log::trace!("Subscribing {} to new relay = {:?}", conversation_id, &url);
-                    channel
-                        .subscribe_to(vec![url.clone()], conversation_id.clone(), filter.clone())
-                        .await
-                        .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+            // First, collect all global conversations and their aliases
+            let mut global_conversations = Vec::new();
+            let mut aliases_to_subscribe = Vec::new();
 
-                    self.end_of_stored_events
-                        .get_mut(conversation_id)
-                        .and_then(|v| Some(*v += 1));
-                }
+            for (conversation_id, conv_state) in self.conversations.iter() {
+                if conv_state.is_global() {
+                    if let Some(filter) = conv_state.filter.as_ref() {
+                        global_conversations.push((conversation_id.clone(), filter.clone()));
+                    }
 
-                if let Some(aliases) = self.aliases.get(conversation_id) {
-                    for alias in aliases {
-                        let alias_id =
-                            PortalId::new_conversation_alias(conversation_id.id(), *alias);
-                        if let Some(filter) = self.filters.get(&alias_id) {
-                            channel
-                                .subscribe_to(vec![url.clone()], alias_id, filter.clone())
-                                .await
-                                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                    // Collect aliases
+                    for alias in conv_state.aliases() {
+                        if let Some(alias_state) = self.conversations.get(&alias) {
+                            if let Some(filter) = &alias_state.filter {
+                                aliases_to_subscribe.push((alias, filter.clone()));
+                            }
                         }
                     }
                 }
             }
-        }
 
-        {
-            self.relay_nodes
-                .entry(url.clone())
-                .or_insert_with(|| RelayNode::new());
+            // Subscribe to the new relay
+            for (conversation_id, filter) in global_conversations {
+                log::trace!("Subscribing {} to new relay = {:?}", conversation_id, &url);
+                channel
+                    .subscribe_to(vec![url.clone()], conversation_id.clone(), filter)
+                    .await
+                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+            }
+
+            for (alias_id, filter) in aliases_to_subscribe {
+                channel
+                    .subscribe_to(vec![url.clone()], alias_id.clone(), filter)
+                    .await
+                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+            }
+
+            // Increment EOSE counters for all global conversations
+            for (conversation_id, conv_state) in self.conversations.iter_mut() {
+                if conv_state.is_global() {
+                    conv_state.increment_eose();
+                    log::trace!(
+                        "EOSE counter incremented for conversation {}",
+                        conversation_id
+                    );
+                }
+            }
         }
 
         Ok(())
@@ -448,26 +443,32 @@ impl MessageRouterActorState {
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        if let Some(node) = self.relay_nodes.remove(&url) {
-            for conv in node.conversations.iter() {
-                let relays_of_conversation = self.get_relays_by_conversation(conv)?;
-                match relays_of_conversation {
-                    Some(urls) => {
-                        // If conversation it not present in other relays, clean it
-                        if urls.is_empty() {
-                            self.cleanup_conversation(channel, conv).await?;
-                        }
-                    }
-                    None => {
-                        // If conversation is present also on the global node relay, should'nt happen, dont clean it
-                    }
-                }
+        let mut conversations_to_cleanup = Vec::new();
 
-                self.end_of_stored_events
-                    .get_mut(conv)
-                    .and_then(|v| Some(*v = v.saturating_sub(1)));
+        // Find conversations that are affected by this relay removal
+        for (conversation_id, conv_state) in self.conversations.iter_mut() {
+            if conv_state.relay_urls().contains(&url) {
+                // Remove the relay from this conversation
+                conv_state.remove_relay(&url);
+
+                // Decrement EOSE counter
+                conv_state.decrement_eose();
+
+                // If conversation has no relays left and is not global, mark for cleanup
+                if conv_state.relay_urls().is_empty() && !conv_state.is_global() {
+                    conversations_to_cleanup.push(conversation_id.clone());
+                }
+            } else if conv_state.is_global() {
+                // Global conversations are affected by any relay removal
+                conv_state.decrement_eose();
             }
         }
+
+        // Clean up conversations that have no relays left
+        for conversation_id in conversations_to_cleanup {
+            self.cleanup_conversation(channel, &conversation_id).await?;
+        }
+
         Ok(())
     }
 
@@ -475,22 +476,14 @@ impl MessageRouterActorState {
         &self,
         conversation_id: &PortalId,
     ) -> Result<Option<HashSet<String>>, ConversationError> {
-        if self
-            .global_relay_node
-            .conversations
-            .contains(conversation_id)
-        {
-            return Ok(None);
-        }
-
-        let mut relays = HashSet::new();
-        for (url, node) in self.relay_nodes.iter() {
-            if node.conversations.contains(conversation_id) {
-                relays.insert(url.clone());
+        if let Some(conv_state) = self.conversations.get(conversation_id) {
+            if conv_state.is_global() {
+                return Ok(None); // Global conversations use all relays
+            } else {
+                return Ok(Some(conv_state.relay_urls().clone()));
             }
         }
-
-        Ok(Some(relays))
+        Err(ConversationError::ConversationNotFound)
     }
 
     async fn cleanup_conversation<C: Channel>(
@@ -502,39 +495,26 @@ impl MessageRouterActorState {
         C::Error: From<nostr::types::url::Error>,
     {
         // Remove conversation state
-        self.conversations.remove(conversation);
-        self.subscribers.remove(conversation);
-        self.filters.remove(conversation);
-        self.end_of_stored_events.remove(conversation);
-        let aliases = self.aliases.remove(conversation);
+        if let Some(conv_state) = self.conversations.remove(conversation) {
+            // Remove filters from relays
+            channel
+                .unsubscribe(conversation.clone())
+                .await
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
-        // Remove from global relay node
-        {
-            self.global_relay_node.conversations.remove(conversation);
-        }
-
-        // Remove from specific relay node
-        {
-            for (_, relay_node) in self.relay_nodes.iter_mut() {
-                relay_node.conversations.remove(conversation);
-            }
-        }
-
-        // Remove filters from relays
-        channel
-            .unsubscribe(conversation.clone())
-            .await
-            .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-
-        if let Some(aliases) = aliases {
-            for alias in aliases {
-                let alias_id = PortalId::new_conversation_alias(conversation.id(), alias);
+            // Remove aliases
+            for alias in conv_state.aliases() {
+                let alias_clone = alias.clone();
                 channel
-                    .unsubscribe(alias_id)
+                    .unsubscribe(alias_clone)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+
+                // Also remove the alias conversation state
+                self.conversations.remove(alias);
             }
         }
+
         Ok(())
     }
 
@@ -549,11 +529,6 @@ impl MessageRouterActorState {
             .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
         self.conversations.clear();
-        self.subscribers.clear();
-        self.aliases.clear();
-        self.filters.clear();
-        self.end_of_stored_events.clear();
-        self.global_relay_node.conversations.clear();
         Ok(())
     }
 
@@ -610,15 +585,19 @@ impl MessageRouterActorState {
                     }
                 };
 
-                let remaining = self.end_of_stored_events.get_mut(&portal_id).and_then(|v| {
-                    *v -= 1;
-                    Some(*v)
-                });
+                let remaining = if let Some(conv_state) = self.conversations.get_mut(&portal_id) {
+                    let remaining = conv_state.decrement_eose();
+                    if remaining == Some(0) {
+                        conv_state.clear_eose();
+                    }
+                    remaining
+                } else {
+                    None
+                };
 
                 log::trace!("{:?} EOSE left for {}", remaining, portal_id);
 
                 if remaining == Some(0) {
-                    self.end_of_stored_events.remove(&portal_id);
                     (subscription_id.into_owned(), LocalEvent::EndOfStoredEvents)
                 } else {
                     return Ok(());
@@ -670,22 +649,21 @@ impl MessageRouterActorState {
         let mut other_conversations = vec![];
 
         // Check if there are other potential conversations to dispatch to
-        for (id, filter) in self.filters.iter() {
+        for (id, conv_state) in self.conversations.iter() {
             if id.to_string() == subscription_id.as_str() {
                 continue;
             }
 
-            match self.conversations.get(id) {
-                Some(conv) if conv.is_expired() => {
-                    to_cleanup.push(id.clone());
-                    continue;
-                }
-                _ => {}
+            if conv_state.conversation.is_expired() {
+                to_cleanup.push(id.clone());
+                continue;
             }
 
             if let LocalEvent::Message(event) = &event {
-                if filter.match_event(&event, MatchEventOptions::default()) {
-                    other_conversations.push(id.clone());
+                if let Some(filter) = &conv_state.filter {
+                    if filter.match_event(&event, MatchEventOptions::default()) {
+                        other_conversations.push(id.clone());
+                    }
                 }
             }
         }
@@ -724,15 +702,17 @@ impl MessageRouterActorState {
 
         log::debug!("Looking for conversation: {}", conversation_id);
         let response = match self.conversations.get_mut(&conversation_id) {
-            Some(conv) => {
+            Some(conv_state) => {
                 log::debug!("Found conversation, processing message");
-                match conv.on_message(message) {
+                let response = match conv_state.conversation.on_message(message) {
                     Ok(response) => response,
                     Err(e) => {
                         log::warn!("Error in conversation id {}: {:?}", conversation_id, e);
                         Response::new().finish()
                     }
-                }
+                };
+
+                response
             }
             None => {
                 log::warn!("No conversation found for id: {}", conversation_id);
@@ -771,7 +751,6 @@ impl MessageRouterActorState {
                 id,
                 response.filter
             );
-            self.filters.insert(id.clone(), response.filter.clone());
 
             let num_relays = if let Some(selected_relays) = selected_relays_optional.clone() {
                 let num_relays = selected_relays.len();
@@ -790,7 +769,10 @@ impl MessageRouterActorState {
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?
             };
 
-            self.end_of_stored_events.insert(id.clone(), num_relays);
+            if let Some(conv_state) = self.conversations.get_mut(id) {
+                conv_state.filter = Some(response.filter.clone());
+                conv_state.set_eose_counter(num_relays);
+            }
         }
 
         let mut events_to_broadcast = vec![];
@@ -825,26 +807,38 @@ impl MessageRouterActorState {
             }
         }
 
-        for notification in response.notifications.iter() {
-            log::debug!("Sending notification: {:?}", notification);
-            if let Some(senders) = self.subscribers.get_mut(id) {
-                for sender in senders.iter_mut() {
-                    let _ = sender.send(notification.clone()).await;
-                }
+        // Send all notifications
+        if let Some(conv_state) = self.conversations.get_mut(id) {
+            for notification in response.notifications.iter() {
+                log::debug!("Sending notification: {:?}", notification);
+                let sent_count = conv_state.send_notification(notification).await;
+                log::trace!(
+                    "Notification sent to {} subscribers for conversation {}",
+                    sent_count,
+                    id
+                );
             }
         }
 
+        // Handle subkey proof subscription if needed
         if response.subscribe_to_subkey_proofs {
             let alias_num = rand::random::<u64>();
 
-            self.aliases.entry(id.clone()).or_default().push(alias_num);
+            let alias = PortalId::new_conversation_alias(id.id(), alias_num);
+
+            if let Some(conv_state) = self.conversations.get_mut(id) {
+                conv_state.add_alias(alias.clone());
+            }
 
             let filter = Filter::new()
                 .kinds(vec![Kind::Custom(SUBKEY_PROOF)])
                 .events(events_to_broadcast.iter().map(|e| e.id));
 
-            let alias = PortalId::new_conversation_alias(id.id(), alias_num);
-            self.filters.insert(alias.clone(), filter.clone());
+            // Create a new ConversationState for the alias
+            self.conversations.insert(
+                alias.clone(),
+                ConversationState::new_alias(alias.clone(), filter.clone()),
+            );
 
             if let Some(selected_relays) = selected_relays_optional.clone() {
                 channel
@@ -853,7 +847,6 @@ impl MessageRouterActorState {
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             } else {
                 // Subscribe to subkey proofs to all
-
                 channel
                     .subscribe(alias, filter)
                     .await
@@ -864,19 +857,12 @@ impl MessageRouterActorState {
         // check if Response has selected relays
         if let Some(selected_relays) = selected_relays_optional {
             for event in events_to_broadcast {
-                // if selected relays, broadcast to selected relays
-                channel
-                    .broadcast_to(selected_relays.clone(), event)
-                    .await
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                self.queue_event(channel, event, Some(selected_relays.clone()))
+                    .await?;
             }
         } else {
             for event in events_to_broadcast {
-                // if not selected relays, broadcast to all relays
-                channel
-                    .broadcast(event)
-                    .await
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                self.queue_event(channel, event, None).await?;
             }
 
             // TODO: wait for confirmation from relays
@@ -890,35 +876,59 @@ impl MessageRouterActorState {
         Ok(())
     }
 
+    async fn queue_event<C: Channel>(
+        &self,
+        channel: &Arc<C>,
+        event: Event,
+        relays: Option<HashSet<String>>,
+    ) -> Result<(), ConversationError>
+    where
+        C::Error: From<nostr::types::url::Error>,
+    {
+        if let Some(relays) = relays {
+            // if selected relays, broadcast to selected relays
+            channel
+                .broadcast_to(relays, event)
+                .await
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        } else {
+            // if not selected relays, broadcast to all relays
+            channel
+                .broadcast(event)
+                .await
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        }
+        Ok(())
+    }
+
     fn internal_add_with_id(
         &mut self,
         id: &PortalId,
         mut conversation: ConversationBox,
         relays: Option<Vec<String>>,
+        subscriber: Option<mpsc::Sender<serde_json::Value>>,
     ) -> Result<Response, ConversationError> {
         let response = conversation.init()?;
 
-        if let Some(relays) = relays {
-            // Update relays node
-            // for each relay parameter
-            for relay in relays {
-                // get relay node associated
-
-                match self.relay_nodes.get_mut(&relay) {
-                    Some(found_node) => {
-                        found_node.conversations.insert(id.clone());
-                    }
-                    None => {
-                        return Err(ConversationError::RelayNotConnected(relay));
-                    }
-                }
+        let conv_state = if let Some(relays) = relays {
+            // Create conversation with specific relays
+            let relay_set: HashSet<String> = relays.into_iter().collect();
+            let mut conv_state =
+                ConversationState::new_with_relays(id.clone(), conversation, relay_set);
+            if let Some(subscriber) = subscriber {
+                conv_state.add_subscriber(subscriber);
             }
+            conv_state
         } else {
-            // Update Global Relay Node
-            self.global_relay_node.conversations.insert(id.clone());
-        }
+            // Create global conversation (subscribed to all relays)
+            let mut conv_state = ConversationState::new(id.clone(), conversation);
+            if let Some(subscriber) = subscriber {
+                conv_state.add_subscriber(subscriber);
+            }
+            conv_state
+        };
 
-        self.conversations.insert(id.clone(), conversation);
+        self.conversations.insert(id.clone(), conv_state);
 
         Ok(response)
     }
@@ -943,7 +953,7 @@ impl MessageRouterActorState {
     {
         let conversation_id = PortalId::new_conversation();
 
-        let response = self.internal_add_with_id(&conversation_id, conversation, None)?;
+        let response = self.internal_add_with_id(&conversation_id, conversation, None, None)?;
         self.process_response(channel, &conversation_id, response)
             .await?;
 
@@ -961,7 +971,8 @@ impl MessageRouterActorState {
     {
         let conversation_id = PortalId::new_conversation();
 
-        let response = self.internal_add_with_id(&conversation_id, conversation, Some(relays))?;
+        let response =
+            self.internal_add_with_id(&conversation_id, conversation, Some(relays), None)?;
         self.process_response(channel, &conversation_id, response)
             .await?;
 
@@ -984,7 +995,10 @@ impl MessageRouterActorState {
         id: PortalId,
     ) -> Result<NotificationStream<T>, ConversationError> {
         let (tx, rx) = mpsc::channel(8);
-        self.subscribers.entry(id).or_insert(Vec::new()).push(tx);
+
+        if let Some(conv_state) = self.conversations.get_mut(&id) {
+            conv_state.add_subscriber(tx);
+        }
 
         let rx = tokio_stream::wrappers::ReceiverStream::new(rx);
         let rx = rx.map(|content| serde_json::from_value(content));
@@ -1022,20 +1036,198 @@ impl MessageRouterActorState {
 
         // Subscribe before adding the conversation to ensure we don't miss notifications
         let (tx, rx) = mpsc::channel(8);
-        self.subscribers
-            .entry(conversation_id.clone())
-            .or_insert(Vec::new())
-            .push(tx);
 
         let rx = tokio_stream::wrappers::ReceiverStream::new(rx);
         let rx = rx.map(|content| serde_json::from_value(content));
         let rx = NotificationStream::new(rx);
 
         // Now add the conversation
-        let response = self.internal_add_with_id(&conversation_id, conversation, None)?;
+        let response = self.internal_add_with_id(&conversation_id, conversation, None, Some(tx))?;
         self.process_response(channel, &conversation_id, response)
             .await?;
 
         Ok(rx)
+    }
+}
+
+/// Encapsulates all state related to a single conversation.
+/// This consolidates the multiple HashMaps that were previously keyed by PortalId.
+#[derive(Debug)]
+struct ConversationState {
+    id: PortalId,
+    /// The actual conversation object
+    conversation: InnerConversationState,
+    /// Aliases for subkey proof subscriptions
+    aliases: Vec<PortalId>,
+    /// Nostr filter for this conversation
+    filter: Option<Filter>,
+    /// Notification subscribers for this conversation
+    subscribers: Vec<mpsc::Sender<serde_json::Value>>,
+    /// Number of EOSE events remaining for this conversation
+    end_of_stored_events: Option<usize>,
+    /// Which specific relays this conversation is subscribed to
+    relay_urls: HashSet<String>,
+    /// Whether this conversation is subscribed to all relays (global)
+    is_global: bool,
+}
+
+#[derive(Debug)]
+enum InnerConversationState {
+    Standard(ConversationBox),
+    Alias
+}
+
+impl InnerConversationState {
+    fn on_message(&mut self, message: ConversationMessage) -> Result<Response, ConversationError> {
+        match self {
+            InnerConversationState::Standard(conversation) => conversation.on_message(message),
+            InnerConversationState::Alias => Ok(Response::default()),
+        }
+    }
+
+    fn is_expired(&self) -> bool {
+        match self {
+            InnerConversationState::Standard(conversation) => conversation.is_expired(),
+            InnerConversationState::Alias => false,
+        }
+    }
+}
+
+impl ConversationState {
+    fn new(id: PortalId, conversation: ConversationBox) -> Self {
+        Self {
+            id,
+            conversation: InnerConversationState::Standard(conversation),
+            aliases: Vec::new(),
+            filter: None,
+            subscribers: Vec::new(),
+            end_of_stored_events: None,
+            relay_urls: HashSet::new(),
+            is_global: true, // Default to global subscription
+        }
+    }
+
+    fn new_with_relays(
+        id: PortalId,
+        conversation: ConversationBox,
+        relay_urls: HashSet<String>,
+    ) -> Self {
+        Self {
+            id,
+            conversation: InnerConversationState::Standard(conversation),
+            aliases: Vec::new(),
+            filter: None,
+            subscribers: Vec::new(),
+            end_of_stored_events: None,
+            relay_urls,
+            is_global: false,
+        }
+    }
+
+    fn new_alias(id: PortalId, filter: Filter) -> Self {
+        Self {
+            id,
+            conversation: InnerConversationState::Alias,
+            aliases: Vec::new(),
+            filter: Some(filter),
+            subscribers: Vec::new(),
+            end_of_stored_events: None,
+            relay_urls: HashSet::new(),
+            is_global: true, // Aliases default to global
+        }
+    }
+    /// Get the ID of this conversation
+    fn id(&self) -> PortalId {
+        self.id.clone()
+    }
+
+    /// Add a subscriber to this conversation
+    fn add_subscriber(&mut self, subscriber: mpsc::Sender<serde_json::Value>) {
+        self.subscribers.push(subscriber);
+    }
+
+    /// Set the EOSE counter for this conversation
+    fn set_eose_counter(&mut self, count: usize) {
+        self.end_of_stored_events = Some(count);
+    }
+
+    /// Decrement the EOSE counter and return the remaining count
+    fn decrement_eose(&mut self) -> Option<usize> {
+        if let Some(ref mut count) = self.end_of_stored_events {
+            *count = count.saturating_sub(1);
+            Some(*count)
+        } else {
+            None
+        }
+    }
+
+    /// Increment the EOSE counter
+    fn increment_eose(&mut self) {
+        if let Some(ref mut count) = self.end_of_stored_events {
+            *count = count.saturating_add(1);
+        }
+    }
+
+    /// Clear the EOSE counter
+    fn clear_eose(&mut self) {
+        self.end_of_stored_events = None;
+    }
+
+    /// Add an alias for subkey proof subscriptions
+    fn add_alias(&mut self, alias: PortalId) {
+        // Prevent duplicate aliases
+        if !self.aliases.contains(&alias) {
+            self.aliases.push(alias);
+        }
+    }
+
+    /// Get a reference to the aliases
+    fn aliases(&self) -> &[PortalId] {
+        &self.aliases
+    }
+
+    /// Get the relay URLs for this conversation
+    fn relay_urls(&self) -> &HashSet<String> {
+        &self.relay_urls
+    }
+
+    /// Check if this conversation is subscribed globally
+    fn is_global(&self) -> bool {
+        self.is_global
+    }
+
+    /// Remove a relay URL from this conversation
+    fn remove_relay(&mut self, relay_url: &str) {
+        self.relay_urls.remove(relay_url);
+    }
+
+    /// Send notification to all subscribers and clean up dead ones
+    async fn send_notification(&mut self, notification: &serde_json::Value) -> usize {
+        let mut sent_count = 0;
+        // Collect alive subscribers into a new vector
+        let mut alive_subscribers = Vec::new();
+        for sender in self.subscribers.drain(..) {
+            match sender.send(notification.clone()).await {
+                Ok(_) => {
+                    sent_count += 1;
+                    alive_subscribers.push(sender);
+                }
+                Err(mpsc::error::SendError(_)) => {
+                    // Channel is closed, remove dead subscriber
+                    // Do not push to alive_subscribers
+                    log::warn!("Removing subscriber from conversation {} because channel is closed", self.id);
+                }
+            }
+        }
+        self.subscribers = alive_subscribers;
+        sent_count
+    }
+}
+
+type ConversationBox = Box<dyn Conversation + Send + Sync>;
+
+impl std::fmt::Debug for ConversationBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Conversation").finish()
     }
 }
