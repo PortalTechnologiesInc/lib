@@ -5,7 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use cdk::mint::subscription;
 use nostr::{
     event::{Event, EventBuilder, Kind},
     filter::{Filter, MatchEventOptions},
@@ -15,7 +14,6 @@ use nostr::{
 use nostr_relay_pool::RelayPoolNotification;
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::{
-    runtime::Runtime,
     sync::{RwLock, mpsc, oneshot},
 };
 use tokio_stream::StreamExt;
@@ -513,8 +511,7 @@ impl MessageRouterActorState {
         // Remove conversation state
         let aliases = if let Some(conv_state) = self.conversations.remove(conversation) {
             if let Some(subscription_id) = conv_state.subscription_id.clone() {
-                subscription_id.decrement().await;
-                if subscription_id.count().await == 0 {
+                if subscription_id.decrement_and_check_if_zero().await {
                     // Remove filters from relays
                     channel
                         .unsubscribe(subscription_id.id().await)
@@ -530,15 +527,13 @@ impl MessageRouterActorState {
 
         // Remove aliases
         for alias in aliases {
-            if let Some(conv_state) = self.conversations.get(&alias) {
+            if let Some(conv_state) = self.conversations.remove(&alias) {
                if let Some(subscription_id) = conv_state.subscription_id.clone() {
                     channel
                         .unsubscribe(subscription_id.id().await)
                         .await
                         .map_err(|e| ConversationError::Inner(Box::new(e)))?;
                 }
-                // Also remove the alias conversation state
-                self.conversations.remove(&alias);
             }
         }
 
@@ -1457,8 +1452,14 @@ impl SubscriptionState {
         self.inner.read().await.count
     }
 
-    pub async fn decrement(&self) {
-        self.inner.write().await.count -= 1;
+    pub async fn decrement_and_check_if_zero(&self) -> bool {
+        let mut inner = self.inner.write().await;
+        if inner.count > 0 {
+            inner.count -= 1;
+        } else {
+            log::warn!("Attempted to decrement count below zero for subscription id {}", inner.id);
+        }
+        inner.count == 0
     }
 
     pub async fn filter(&self) -> Filter {
