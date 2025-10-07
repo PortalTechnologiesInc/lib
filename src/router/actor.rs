@@ -6,7 +6,7 @@ use std::{
 
 // use std::time::Duration inside async blocks
 use nostr::{
-    event::{Event, EventBuilder, Kind}, filter::{Filter, MatchEventOptions}, message::{RelayMessage, SubscriptionId}, nips::nip44
+    event::{Event, EventBuilder, Kind}, filter::{Filter, MatchEventOptions}, message::{RelayMessage, SubscriptionId}, nips::nip44, types::RelayUrl
 };
 use nostr_relay_pool::RelayPoolNotification;
 use serde::{Serialize, de::DeserializeOwned};
@@ -884,7 +884,7 @@ impl MessageRouterActorState {
         C::Error: From<nostr::types::url::Error>,
     {
         let result = queue_event.broadcast(channel).await?;
-        if !result {
+        if !result.is_empty() {
             // incrementally delay until it is confirmed
             log::warn!("New event with id {} is queued, delaying until it is confirmed", queue_event.event.id);
 
@@ -895,12 +895,12 @@ impl MessageRouterActorState {
                 let mut retry = 1.0;
                 let multiplier = f64::consts::E;
 
-                let mut delivered = false;
-                while !delivered {
-                    let eid = event.event.id;
-                    log::warn!("{} retry of event {}", retry, eid);
+                let mut remaining_relays = result;
+                while !remaining_relays.is_empty() {
+                    log::warn!("{} retry of event {} on relays {:?}", retry, event.event.id, remaining_relays);
                     tokio::time::sleep(std::time::Duration::from_secs_f64(retry * multiplier)).await;
-                    delivered = event.broadcast(&channel).await.unwrap();
+
+                    remaining_relays = event.broadcast_remaining(&channel, remaining_relays).await.unwrap();
 
                     retry += 1.0;
                 }
@@ -1253,7 +1253,7 @@ impl QueuedEvent {
     }
 
     pub async fn broadcast<C: Channel>(&self, channel: &Arc<C>)
-     -> Result<bool, ConversationError>
+     -> Result<HashSet<String>, ConversationError>
      where
         C::Error: From<nostr::types::url::Error>,
     {
@@ -1265,6 +1265,15 @@ impl QueuedEvent {
         } else {
             channel.broadcast(event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?
         };
+        Ok(result)
+    }
+
+    pub async fn broadcast_remaining<C: Channel>(&self, channel: &Arc<C>, relays: HashSet<String>) -> Result<HashSet<String>, ConversationError>
+     where
+        C::Error: From<nostr::types::url::Error>,
+    {
+        let event = self.event.clone();
+        let result = channel.broadcast_to(relays, event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?;
         Ok(result)
     }
 
