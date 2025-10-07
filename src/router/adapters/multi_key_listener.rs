@@ -17,7 +17,7 @@ use crate::router::{
     CleartextEvent, Conversation, ConversationError, ConversationMessage, Response,
 };
 
-pub trait MultiKeyListener: Sized + Send + 'static {
+pub trait MultiKeyListener: Sized + Send + 'static + ToString {
     const VALIDITY_SECONDS: Option<u64>;
 
     type Error: std::error::Error + Send + Sync + 'static;
@@ -44,6 +44,12 @@ pub struct MultiKeyListenerAdapter<Inner> {
     pub subkey_proof: Option<SubkeyProof>,
     pub expires_at: Option<SystemTime>,
     pub inner: Inner,
+}
+
+impl<T: MultiKeyListener> ToString for MultiKeyListenerAdapter<T> {
+    fn to_string(&self) -> String {
+        self.inner.to_string()
+    }
 }
 
 impl<T: MultiKeyListener> Conversation for MultiKeyListenerAdapter<T>
