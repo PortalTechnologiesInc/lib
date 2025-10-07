@@ -39,12 +39,12 @@ pub trait Channel: Send + Sync + 'static {
 
     fn broadcast(
         &self,
-        event: nostr::Event,
+        event: &nostr::Event,
     ) -> impl std::future::Future<Output = Result<HashSet<String>, Self::Error>> + Send;
     fn broadcast_to<I, U>(
         &self,
         urls: I,
-        event: nostr::Event,
+        event: &nostr::Event,
     ) -> impl std::future::Future<Output = Result<HashSet<String>, Self::Error>> + Send
     where
         <I as IntoIterator>::IntoIter: Send,
@@ -115,18 +115,18 @@ impl Channel for RelayPool {
         Ok(())
     }
 
-    async fn broadcast(&self, event: nostr::Event) -> Result<HashSet<String>, Self::Error> {
-        let output = self.send_event(&event).await?;
+    async fn broadcast(&self, event: &nostr::Event) -> Result<HashSet<String>, Self::Error> {
+        let output = self.send_event(event).await?;
         return Ok(output.failed.keys().map(|url| url.to_string()).collect());
     }
-    async fn broadcast_to<I, U>(&self, urls: I, event: nostr::Event) -> Result<HashSet<String>, Self::Error>
+    async fn broadcast_to<I, U>(&self, urls: I, event: &nostr::Event) -> Result<HashSet<String>, Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,
         U: TryIntoUrl,
         Self::Error: From<<U as TryIntoUrl>::Err>,
     {
-        let output = self.send_event_to(urls, &event).await?;
+        let output = self.send_event_to(urls, event).await?;
     
         return Ok(output.failed.keys().map(|url| url.to_string()).collect());
     }
@@ -170,11 +170,11 @@ impl<C: Channel + Send + Sync> Channel for std::sync::Arc<C> {
         <C as Channel>::unsubscribe(self, id).await
     }
 
-    async fn broadcast(&self, event: nostr::Event) -> Result<HashSet<String>, Self::Error> {
+    async fn broadcast(&self, event: &nostr::Event) -> Result<HashSet<String>, Self::Error> {
         <C as Channel>::broadcast(self, event).await
     }
 
-    async fn broadcast_to<I, U>(&self, urls: I, event: nostr::Event) -> Result<HashSet<String>, Self::Error>
+    async fn broadcast_to<I, U>(&self, urls: I, event: &nostr::Event) -> Result<HashSet<String>, Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,

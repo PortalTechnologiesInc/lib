@@ -1257,13 +1257,12 @@ impl QueuedEvent {
      where
         C::Error: From<nostr::types::url::Error>,
     {
-        let event = self.event.clone();
         let relays = self.relays.clone();
 
         let result = if let Some(relays) = relays {
-            channel.broadcast_to(relays, event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?
+            channel.broadcast_to(relays, &self.event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?
         } else {
-            channel.broadcast(event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?
+            channel.broadcast(&self.event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?
         };
         Ok(result)
     }
@@ -1272,8 +1271,7 @@ impl QueuedEvent {
      where
         C::Error: From<nostr::types::url::Error>,
     {
-        let event = self.event.clone();
-        let result = channel.broadcast_to(relays, event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        let result = channel.broadcast_to(relays, &self.event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?;
         Ok(result)
     }
 
