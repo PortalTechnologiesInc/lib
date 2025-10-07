@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use nostr::{message::SubscriptionId, types::{RelayUrl, TryIntoUrl}};
+use nostr::{message::SubscriptionId, types::TryIntoUrl};
 use nostr_relay_pool::{
     RelayPool, RelayPoolNotification, SubscribeOptions,
     relay::{FlagCheck, RelayServiceFlags},
@@ -40,12 +40,12 @@ pub trait Channel: Send + Sync + 'static {
     fn broadcast(
         &self,
         event: &nostr::Event,
-    ) -> impl std::future::Future<Output = Result<HashSet<String>, Self::Error>> + Send;
+    ) -> impl std::future::Future<Output = Result<BroadcastResult, Self::Error>> + Send;
     fn broadcast_to<I, U>(
         &self,
         urls: I,
         event: &nostr::Event,
-    ) -> impl std::future::Future<Output = Result<HashSet<String>, Self::Error>> + Send
+    ) -> impl std::future::Future<Output = Result<BroadcastResult, Self::Error>> + Send
     where
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,
@@ -57,6 +57,23 @@ pub trait Channel: Send + Sync + 'static {
     ) -> impl std::future::Future<Output = Result<RelayPoolNotification, Self::Error>> + Send;
 
     fn shutdown(&self) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
+}
+
+/// A result of a Nostr broadcast
+#[derive(Debug, Clone)]
+pub struct BroadcastResult {
+    failed: HashSet<String>,
+}
+
+impl BroadcastResult {
+    pub fn new(failed: HashSet<String>) -> Self {
+        Self { failed }
+    }
+
+    /// Get the failed relays
+    pub fn failed(&self) -> &HashSet<String> {
+        &self.failed
+    }
 }
 
 impl Channel for RelayPool {
@@ -115,11 +132,11 @@ impl Channel for RelayPool {
         Ok(())
     }
 
-    async fn broadcast(&self, event: &nostr::Event) -> Result<HashSet<String>, Self::Error> {
+    async fn broadcast(&self, event: &nostr::Event) -> Result<BroadcastResult, Self::Error> {
         let output = self.send_event(event).await?;
-        return Ok(output.failed.keys().map(|url| url.to_string()).collect());
+        return Ok(BroadcastResult::new(output.failed.keys().map(|url| url.to_string()).collect()));
     }
-    async fn broadcast_to<I, U>(&self, urls: I, event: &nostr::Event) -> Result<HashSet<String>, Self::Error>
+    async fn broadcast_to<I, U>(&self, urls: I, event: &nostr::Event) -> Result<BroadcastResult, Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,
@@ -128,7 +145,7 @@ impl Channel for RelayPool {
     {
         let output = self.send_event_to(urls, event).await?;
     
-        return Ok(output.failed.keys().map(|url| url.to_string()).collect());
+        return Ok(BroadcastResult::new(output.failed.keys().map(|url| url.to_string()).collect()));
     }
 
     async fn receive(&self) -> Result<RelayPoolNotification, Self::Error> {
@@ -170,11 +187,11 @@ impl<C: Channel + Send + Sync> Channel for std::sync::Arc<C> {
         <C as Channel>::unsubscribe(self, id).await
     }
 
-    async fn broadcast(&self, event: &nostr::Event) -> Result<HashSet<String>, Self::Error> {
+    async fn broadcast(&self, event: &nostr::Event) -> Result<BroadcastResult, Self::Error> {
         <C as Channel>::broadcast(self, event).await
     }
 
-    async fn broadcast_to<I, U>(&self, urls: I, event: &nostr::Event) -> Result<HashSet<String>, Self::Error>
+    async fn broadcast_to<I, U>(&self, urls: I, event: &nostr::Event) -> Result<BroadcastResult, Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,

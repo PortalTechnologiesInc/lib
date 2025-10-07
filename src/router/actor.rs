@@ -14,10 +14,9 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_stream::StreamExt;
 
 use crate::{
-    protocol::{LocalKeypair, model::event_kinds::SUBKEY_PROOF},
+    protocol::{model::event_kinds::SUBKEY_PROOF, LocalKeypair},
     router::{
-        CleartextEvent, Conversation, ConversationError, ConversationMessage, NotificationStream,
-        PortalId, Response, channel::Channel,
+        channel::{BroadcastResult, Channel}, CleartextEvent, Conversation, ConversationError, ConversationMessage, NotificationStream, PortalId, Response
     },
 };
 
@@ -884,7 +883,7 @@ impl MessageRouterActorState {
         C::Error: From<nostr::types::url::Error>,
     {
         let result = queue_event.broadcast(channel).await?;
-        if !result.is_empty() {
+        if !result.failed().is_empty() {
             // incrementally delay until it is confirmed
             log::warn!("New event with id {} is queued, delaying until it is confirmed", queue_event.event.id);
 
@@ -892,17 +891,33 @@ impl MessageRouterActorState {
             let event = queue_event.clone();
 
             tokio::spawn(async move {
-                let mut retry = 1.0;
+                let mut attempt = 0.0;
+                let base_delay = 1.0; // seconds
                 let multiplier = f64::consts::E;
-
                 let mut remaining_relays = result;
-                while !remaining_relays.is_empty() {
-                    log::warn!("{} retry of event {} on relays {:?}", retry, event.event.id, remaining_relays);
-                    tokio::time::sleep(std::time::Duration::from_secs_f64(retry * multiplier)).await;
+                while !remaining_relays.failed().is_empty() {
+                    attempt += 1.0;
 
-                    remaining_relays = event.broadcast_remaining(&channel, remaining_relays).await.unwrap();
+                    log::warn!("Attempt {} of event {} on relays {:?}", attempt, event.event.id, remaining_relays.failed());
+                    let mut secs = base_delay * multiplier.powf(attempt);
+                    if secs > 300.0 {
+                        secs = 300.0;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs_f64(secs)).await;
+                    match event.broadcast_remaining(&channel, &remaining_relays).await {
+                        Ok(result) => {
+                            remaining_relays = result;
+                        },
+                        Err(_) => {
+                            log::error!("Event {} failed to broadcast on relays {:?}", event.event.id, remaining_relays.failed());
+                        },
+                    }
 
-                    retry += 1.0;
+                    if attempt > 25.0 {
+                        log::error!("Event {} failed to broadcast after 25 attempts", event.event.id);
+                        break;
+                    }
+                    
                 }
             });
 
@@ -1253,7 +1268,7 @@ impl QueuedEvent {
     }
 
     pub async fn broadcast<C: Channel>(&self, channel: &Arc<C>)
-     -> Result<HashSet<String>, ConversationError>
+     -> Result<BroadcastResult, ConversationError>
      where
         C::Error: From<nostr::types::url::Error>,
     {
@@ -1267,11 +1282,11 @@ impl QueuedEvent {
         Ok(result)
     }
 
-    pub async fn broadcast_remaining<C: Channel>(&self, channel: &Arc<C>, relays: HashSet<String>) -> Result<HashSet<String>, ConversationError>
+    pub async fn broadcast_remaining<C: Channel>(&self, channel: &Arc<C>, relays: &BroadcastResult) -> Result<BroadcastResult, ConversationError>
      where
         C::Error: From<nostr::types::url::Error>,
     {
-        let result = channel.broadcast_to(relays, &self.event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        let result = channel.broadcast_to(relays.failed().clone(), &self.event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?;
         Ok(result)
     }
 
