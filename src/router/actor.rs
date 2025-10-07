@@ -523,7 +523,7 @@ impl MessageRouterActorState {
                 }
             }
 
-            conv_state.aliases()
+            conv_state.aliases.clone()
         } else {
             vec![]
         };
@@ -531,17 +531,14 @@ impl MessageRouterActorState {
         // Remove aliases
         for alias in aliases {
             if let Some(conv_state) = self.conversations.get(&alias) {
-                let alias_clone = alias.clone();
-
-                if let Some(subscription_id) = conv_state.subscription_id.clone() {
+               if let Some(subscription_id) = conv_state.subscription_id.clone() {
                     channel
                         .unsubscribe(subscription_id.id().await)
                         .await
                         .map_err(|e| ConversationError::Inner(Box::new(e)))?;
                 }
-
                 // Also remove the alias conversation state
-                self.conversations.remove(&alias_clone);
+                self.conversations.remove(&alias);
             }
         }
 
@@ -923,7 +920,7 @@ impl MessageRouterActorState {
         if let Some(conv_state) = self.conversations.get_mut(id) {
             for notification in response.notifications.iter() {
                 log::debug!("Sending notification: {:?}", notification);
-                let sent_count = conv_state.send_notification(notification);
+                let sent_count = conv_state.send_notification(notification).await;
                 log::trace!(
                     "Notification sent to {} subscribers for conversation {}",
                     sent_count,
@@ -1175,7 +1172,7 @@ impl MessageRouterActorState {
 struct ConversationState {
     id: ConversationId,
     /// The actual conversation object
-    conversation: ConversationBox,
+    conversation: InnerConversationState,
     /// Aliases for subkey proof subscriptions
     aliases: Vec<ConversationId>,
     /// Notification subscribers for this conversation
@@ -1201,11 +1198,42 @@ impl Display for ConversationState {
     }
 }
 
+#[derive(Debug)]
+enum InnerConversationState {
+    Standard(ConversationBox),
+    Alias
+}
+
+impl ToString for InnerConversationState {
+    fn to_string(&self) -> String {
+        match self {
+            InnerConversationState::Standard(conversation) => conversation.to_string(),
+            InnerConversationState::Alias => "Alias".to_string(),
+        }
+    }
+}
+
+impl InnerConversationState {
+    fn on_message(&mut self, message: ConversationMessage) -> Result<Response, ConversationError> {
+        match self {
+            InnerConversationState::Standard(conversation) => conversation.on_message(message),
+            InnerConversationState::Alias => Ok(Response::default()),
+        }
+    }
+
+    fn is_expired(&self) -> bool {
+        match self {
+            InnerConversationState::Standard(conversation) => conversation.is_expired(),
+            InnerConversationState::Alias => false,
+        }
+    }
+}
+
 impl ConversationState {
     fn new(id: ConversationId, conversation: ConversationBox) -> Self {
         Self {
             id,
-            conversation,
+            conversation: InnerConversationState::Standard(conversation),
             aliases: Vec::new(),
             subscribers: Vec::new(),
             end_of_stored_events: None,
@@ -1222,7 +1250,7 @@ impl ConversationState {
     ) -> Self {
         Self {
             id,
-            conversation,
+            conversation: InnerConversationState::Standard(conversation),
             aliases: Vec::new(),
             subscribers: Vec::new(),
             end_of_stored_events: None,
@@ -1235,7 +1263,7 @@ impl ConversationState {
     fn new_alias(id: ConversationId, filter: Filter) -> Self {
         Self {
             id,
-            conversation: Box::new(EmptyConversation),
+            conversation: InnerConversationState::Alias,
             aliases: Vec::new(),
             subscribers: Vec::new(),
             end_of_stored_events: None,
@@ -1290,8 +1318,8 @@ impl ConversationState {
     }
 
     /// Get a reference to the aliases
-    fn aliases(&self) -> Vec<ConversationId> {
-        self.aliases.clone()
+    fn aliases(&self) -> &[ConversationId] {
+        &self.aliases
     }
 
     /// Get the relay URLs for this conversation
@@ -1307,31 +1335,27 @@ impl ConversationState {
     /// Remove a relay URL from this conversation
     fn remove_relay(&mut self, relay_url: &str) {
         self.relay_urls.remove(relay_url);
-        // set global?
-        // if self.relay_urls.is_empty() {
-        //     self.is_global = true;
-        // }
     }
 
     /// Send notification to all subscribers and clean up dead ones
-    fn send_notification(&mut self, notification: &serde_json::Value) -> usize {
+    async fn send_notification(&mut self, notification: &serde_json::Value) -> usize {
         let mut sent_count = 0;
-        self.subscribers.retain(|sender| {
-            match sender.try_send(notification.clone()) {
+        // Collect alive subscribers into a new vector
+        let mut alive_subscribers = Vec::new();
+        for sender in self.subscribers.drain(..) {
+            match sender.send(notification.clone()).await {
                 Ok(_) => {
                     sent_count += 1;
-                    true // Keep alive subscribers
+                    alive_subscribers.push(sender);
                 }
-                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    // Channel is full but still alive, keep it
-                    true
-                }
-                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                Err(mpsc::error::SendError(_)) => {
                     // Channel is closed, remove dead subscriber
-                    false
+                    // Do not push to alive_subscribers
+                    log::warn!("Removing subscriber from conversation {} because channel is closed", self.id);
                 }
             }
-        });
+        }
+        self.subscribers = alive_subscribers;
         sent_count
     }
 
@@ -1391,25 +1415,6 @@ impl ConversationState {
 
     async fn set_subscription(&mut self, other: SubscriptionState) {
         self.subscription_id = Some(other);
-    }
-}
-
-/// Empty conversation implementation for aliases that don't need actual conversation logic
-struct EmptyConversation;
-
-impl ToString for EmptyConversation {
-    fn to_string(&self) -> String {
-        "EmptyConversation".to_string()
-    }
-}
-
-impl Conversation for EmptyConversation {
-    fn on_message(&mut self, _message: ConversationMessage) -> Result<Response, ConversationError> {
-        Ok(Response::default())
-    }
-
-    fn is_expired(&self) -> bool {
-        false
     }
 }
 

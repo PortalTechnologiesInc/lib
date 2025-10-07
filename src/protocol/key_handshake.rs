@@ -114,12 +114,7 @@ impl FromStr for KeyHandshakeUrl {
                 "token" => token = Some(value.to_string()),
                 "subkey" => subkey = Some(nostr::PublicKey::from_bech32(value)?),
                 "no_request" => no_request = value == "true",
-                _ => {
-                    return Err(ParseError::InvalidQueryParam(format!(
-                        "unknown parameter: {}",
-                        key
-                    )));
-                }
+                _ => continue,
             }
         }
 
