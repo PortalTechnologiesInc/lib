@@ -16,6 +16,10 @@ impl PortalSubscriptionId {
     pub fn new() -> Self {
         Self(random_string(30))
     }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl Debug for PortalSubscriptionId {

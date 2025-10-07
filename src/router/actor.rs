@@ -609,7 +609,7 @@ impl MessageRouterActorState {
 
                 let mut conv_state = None;
                 for (conv_id, conv) in self.conversations.iter_mut() {
-                    if conv.check_subscription_id(&portal_id.to_string()).await {
+                    if conv.check_subscription_id(&portal_id).await {
                         conv_state = Some((conv_id, conv));
                         break;
                     }
@@ -634,6 +634,14 @@ impl MessageRouterActorState {
                 }
             }
             _ => return Ok(()),
+        };
+
+        let subscription_id = match PortalSubscriptionId::from_str(subscription_id.as_str()) {
+            Ok(id) => id,
+            Err(_) => {
+                log::warn!("Invalid subscription ID format: {:?}", subscription_id);
+                return Ok(());
+            }
         };
 
         let message = match &event {
@@ -678,10 +686,11 @@ impl MessageRouterActorState {
         let mut to_cleanup = vec![];
         let mut other_conversations = vec![];
 
+
         // Check if there are other potential conversations to dispatch to
         for (id, conv_state) in self.conversations.iter() {
             if conv_state
-                .check_subscription_id(&subscription_id.as_str())
+                .check_subscription_id_str(&subscription_id.as_str())
                 .await
             {
                 continue;
@@ -699,7 +708,8 @@ impl MessageRouterActorState {
                         .await
                         .match_event(&event, MatchEventOptions::default())
                     {
-                        other_conversations.push(id.clone());
+                        // fix, here we need to push the subscription id and not the conversation id
+                        other_conversations.push(subscription_state.id().await);
                     }
                 }
             }
@@ -710,7 +720,7 @@ impl MessageRouterActorState {
         }
 
         for id in other_conversations {
-            self.dispatch_event(channel, SubscriptionId::new(id.clone()), message.clone())
+            self.dispatch_event(channel, id, message.clone())
                 .await?;
         }
         Ok(())
@@ -719,27 +729,18 @@ impl MessageRouterActorState {
     async fn dispatch_event<C: Channel>(
         &mut self,
         channel: &Arc<C>,
-        subscription_id: SubscriptionId,
+        subscription_id: PortalSubscriptionId,
         message: ConversationMessage,
     ) -> Result<(), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        // Parse the subscription ID to get the PortalId
-        let subscription_id = match PortalSubscriptionId::from_str(subscription_id.as_str()) {
-            Ok(id) => id,
-            Err(_) => {
-                log::warn!("Invalid subscription ID format: {:?}", subscription_id);
-                return Ok(());
-            }
-        };
-
         log::debug!("Looking for conversations: {}", subscription_id);
 
         let mut responses = vec![];
         for (conversation_id, conv_state) in self.conversations.iter_mut() {
             if !conv_state
-                .check_subscription_id(&subscription_id.to_string())
+                .check_subscription_id(&subscription_id)
                 .await
             {
                 continue;
@@ -1354,9 +1355,16 @@ impl ConversationState {
         sent_count
     }
 
-    async fn check_subscription_id(&self, subscription_id: &str) -> bool {
+    async fn check_subscription_id(&self, subscription_id: &PortalSubscriptionId) -> bool {
         match &self.subscription_id {
-            Some(s) => s.id().await.to_string() == subscription_id,
+            Some(s) => s.id().await == *subscription_id,
+            None => false,
+        }
+    }
+
+    async fn check_subscription_id_str(&self, subscription_id: &str) -> bool {
+        match &self.subscription_id {
+            Some(s) => s.id().await.as_str() == subscription_id,
             None => false,
         }
     }
@@ -1404,8 +1412,7 @@ impl ConversationState {
                 return Ok(Some(num_relays));
             }
         }
-
-        return Ok(None);
+        Ok(None)
     }
 
     async fn set_subscription(&mut self, other: SubscriptionState) {
