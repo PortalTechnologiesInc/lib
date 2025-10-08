@@ -38,7 +38,7 @@ impl InvoiceResponseListener for LogInvoiceResponseListener {
 async fn main() -> Result<(), CliError> {
     env_logger::init();
 
-    let relays = vec!["wss://relay.nostr.net".to_string()];
+    let relays = vec!["wss://miodominio.net".to_string()];
 
     let (receiver_key, receiver) = create_app_instance(
         "Receiver",
@@ -89,6 +89,6 @@ async fn main() -> Result<(), CliError> {
 
     log::info!("Apps created");
 
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
     Ok(())
 }

@@ -35,10 +35,7 @@ pub async fn create_app_instance(
 
     let app = PortalApp::new(
         keypair.clone(),
-        vec![
-            "wss://relay.nostr.net".to_string(),
-            "wss://relay.damus.io".to_string(),
-        ],
+        _relays,
         Arc::new(LogRelayStatusChange),
     )
     .await?;
