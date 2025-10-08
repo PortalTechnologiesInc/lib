@@ -249,7 +249,7 @@ pub mod payment {
         Single(SinglePaymentRequestContent),
         Recurring(RecurringPaymentRequestContent),
     }
-    
+
     impl PaymentRequestContent {
         pub fn expires_at(&self) -> Timestamp {
             match self {

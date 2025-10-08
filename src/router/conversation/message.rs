@@ -1,4 +1,7 @@
-use nostr::{event::{Event, EventId, Kind, Tags}, key::PublicKey};
+use nostr::{
+    event::{Event, EventId, Kind, Tags},
+    key::PublicKey,
+};
 
 #[derive(Debug, Clone)]
 pub enum ConversationMessage {

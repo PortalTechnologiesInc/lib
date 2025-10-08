@@ -15,9 +15,8 @@ use crate::{
         event_kinds::*,
     },
     router::conversation::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender,
-        MultiKeySenderAdapter, ConversationWithNotification,
-        response::Response,
+        ConversationError, ConversationWithNotification, MultiKeyListener, MultiKeyListenerAdapter,
+        MultiKeySender, MultiKeySenderAdapter, response::Response,
     },
     utils::random_string,
 };
@@ -48,7 +47,9 @@ impl MultiKeyListener for KeyHandshakeReceiverConversation {
     type Error = ConversationError;
     type Message = KeyHandshakeContent;
 
-    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(
+        state: &crate::router::conversation::MultiKeyListenerAdapter<Self>,
+    ) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::from(KEY_HANDSHAKE)])
             .since(nostr::types::Timestamp::now())

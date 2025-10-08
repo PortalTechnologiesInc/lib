@@ -3,12 +3,14 @@ use crate::{
         auth::SubkeyProof,
         event_kinds::*,
         payment::{
-            PaymentRequestContent, PaymentResponseContent, PaymentStatus, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
+            PaymentRequestContent, PaymentResponseContent, PaymentStatus,
+            RecurringPaymentRequestContent, RecurringPaymentResponseContent,
+            SinglePaymentRequestContent,
         },
     },
     router::conversation::{
-        ConversationError, MultiKeySender, MultiKeySenderAdapter, ConversationWithNotification,
-        response::Response
+        ConversationError, ConversationWithNotification, MultiKeySender, MultiKeySenderAdapter,
+        response::Response,
     },
 };
 use nostr::{

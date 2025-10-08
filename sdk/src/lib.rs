@@ -7,9 +7,18 @@ use portal::{
         CloseRecurringPaymentConversation, CloseRecurringPaymentReceiverConversation,
     },
     conversation::invoice::InvoiceRequestConversation,
+    conversation::profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
+    conversation::sdk::{
+        auth::{
+            AuthChallengeSenderConversation, AuthResponseEvent, KeyHandshakeEvent,
+            KeyHandshakeReceiverConversation,
+        },
+        payments::{
+            RecurringPaymentRequestSenderConversation, SinglePaymentRequestSenderConversation,
+        },
+    },
     nostr::key::PublicKey,
     nostr_relay_pool::{RelayOptions, RelayPool},
-    conversation::profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
     protocol::{
         LocalKeypair,
         key_handshake::KeyHandshakeUrl,
@@ -21,16 +30,9 @@ use portal::{
         },
     },
     router::{
-        conversation::{ConversationError, MultiKeyListenerAdapter, MultiKeySenderAdapter}, MessageRouter, MessageRouterActorError, NotificationStream, conversation::OneShotSenderAdapter,
-    },
-    conversation::sdk::{
-        auth::{
-            AuthChallengeSenderConversation, AuthResponseEvent, KeyHandshakeEvent,
-            KeyHandshakeReceiverConversation,
-        },
-        payments::{
-            RecurringPaymentRequestSenderConversation, SinglePaymentRequestSenderConversation,
-        },
+        MessageRouter, MessageRouterActorError, NotificationStream,
+        conversation::OneShotSenderAdapter,
+        conversation::{ConversationError, MultiKeyListenerAdapter, MultiKeySenderAdapter},
     },
     utils::verify_nip05,
 };

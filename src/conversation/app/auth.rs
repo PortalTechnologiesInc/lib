@@ -16,8 +16,8 @@ use crate::{
         },
     },
     router::conversation::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, ConversationWithNotification, OneShotSender,
-        response::Response,
+        ConversationError, ConversationWithNotification, MultiKeyListener, MultiKeyListenerAdapter,
+        OneShotSender, response::Response,
     },
 };
 
@@ -106,7 +106,9 @@ impl MultiKeyListener for AuthChallengeListenerConversation {
     type Error = ConversationError;
     type Message = AuthChallengeContent;
 
-    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(
+        state: &crate::router::conversation::MultiKeyListenerAdapter<Self>,
+    ) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::from(AUTH_CHALLENGE)])
             .pubkey(state.local_key);

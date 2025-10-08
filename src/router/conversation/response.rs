@@ -1,6 +1,10 @@
 use std::collections::HashSet;
 
-use nostr::{event::{Kind, Tags}, filter::Filter, key::PublicKey};
+use nostr::{
+    event::{Kind, Tags},
+    filter::Filter,
+    key::PublicKey,
+};
 
 #[derive(Debug)]
 pub(crate) struct ResponseEntry {
@@ -32,11 +36,11 @@ pub(crate) struct ResponseEntry {
 /// ```
 #[derive(Debug, Default)]
 pub struct Response {
-    pub(crate)filter: Filter,
-    pub(crate)responses: Vec<ResponseEntry>,
-    pub(crate)notifications: Vec<serde_json::Value>,
-    pub(crate)finished: bool,
-    pub(crate)subscribe_to_subkey_proofs: bool,
+    pub(crate) filter: Filter,
+    pub(crate) responses: Vec<ResponseEntry>,
+    pub(crate) notifications: Vec<serde_json::Value>,
+    pub(crate) finished: bool,
+    pub(crate) subscribe_to_subkey_proofs: bool,
 }
 
 impl Response {

@@ -2,11 +2,11 @@ use nostr::{event::Kind, filter::Filter, key::PublicKey, nips::nip01::Metadata};
 
 use crate::{
     protocol::model::Timestamp,
+    router::conversation::message::ConversationMessage,
     router::conversation::{
         Conversation, ConversationError, ConversationWithNotification, OneShotSender,
         response::Response,
     },
-    router::conversation::message::ConversationMessage,
 };
 
 pub struct FetchProfileInfoConversation {
@@ -42,10 +42,7 @@ impl Conversation for FetchProfileInfoConversation {
         ))
     }
 
-    fn on_message(
-        &mut self,
-        message: ConversationMessage,
-    ) -> Result<Response, ConversationError> {
+    fn on_message(&mut self, message: ConversationMessage) -> Result<Response, ConversationError> {
         if let ConversationMessage::Cleartext(event) = message {
             let metadata: Result<Metadata, _> = serde_json::from_value(event.content);
             if let Ok(metadata) = metadata {

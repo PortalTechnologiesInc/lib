@@ -11,9 +11,8 @@ use crate::{
         payment::{InvoiceRequestContent, InvoiceRequestContentWithKey, InvoiceResponse},
     },
     router::conversation::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender,
-        MultiKeySenderAdapter, ConversationWithNotification, OneShotSender,
-        response::Response,
+        ConversationError, ConversationWithNotification, MultiKeyListener, MultiKeyListenerAdapter,
+        MultiKeySender, MultiKeySenderAdapter, OneShotSender, response::Response,
     },
 };
 
@@ -119,7 +118,9 @@ impl MultiKeyListener for InvoiceReceiverConversation {
     type Error = ConversationError;
     type Message = InvoiceRequestContent;
 
-    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(
+        state: &crate::router::conversation::MultiKeyListenerAdapter<Self>,
+    ) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::Custom(INVOICE_REQUEST)])
             .pubkey(state.local_key);

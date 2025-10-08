@@ -9,16 +9,20 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     protocol::model::{
-        bindings::{self}, event_kinds::{
+        Timestamp,
+        bindings::{self},
+        event_kinds::{
             PAYMENT_REQUEST, PAYMENT_RESPONSE, RECURRING_PAYMENT_REQUEST,
             RECURRING_PAYMENT_RESPONSE,
-        }, payment::{
-            PaymentRequestContent, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
-        }, Timestamp
+        },
+        payment::{
+            PaymentRequestContent, PaymentResponseContent, RecurringPaymentRequestContent,
+            RecurringPaymentResponseContent, SinglePaymentRequestContent,
+        },
     },
     router::conversation::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, ConversationWithNotification, OneShotSender,
-        response::Response
+        ConversationError, ConversationWithNotification, MultiKeyListener, MultiKeyListenerAdapter,
+        OneShotSender, response::Response,
     },
 };
 
@@ -47,7 +51,9 @@ impl MultiKeyListener for PaymentRequestListenerConversation {
     type Error = ConversationError;
     type Message = PaymentRequestContent;
 
-    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(
+        state: &crate::router::conversation::MultiKeyListenerAdapter<Self>,
+    ) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![
                 Kind::Custom(PAYMENT_REQUEST),

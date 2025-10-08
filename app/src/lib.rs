@@ -17,33 +17,50 @@ use chrono::Duration;
 use nostr::event::EventBuilder;
 use nostr_relay_pool::monitor::{Monitor, MonitorNotification};
 use portal::{
-    conversation::{app::{
-        auth::{
-            AuthChallengeEvent, AuthChallengeListenerConversation, AuthResponseConversation,
-            KeyHandshakeConversation,
+    conversation::{
+        app::{
+            auth::{
+                AuthChallengeEvent, AuthChallengeListenerConversation, AuthResponseConversation,
+                KeyHandshakeConversation,
+            },
+            payments::{
+                PaymentRequestEvent, PaymentRequestListenerConversation,
+                PaymentStatusSenderConversation, RecurringPaymentStatusSenderConversation,
+            },
         },
-        payments::{PaymentRequestEvent, PaymentRequestListenerConversation,
-            PaymentStatusSenderConversation, RecurringPaymentStatusSenderConversation,
+        cashu::{
+            CashuDirectReceiverConversation, CashuRequestReceiverConversation,
+            CashuResponseSenderConversation,
         },
-    }, cashu::{
-        CashuDirectReceiverConversation, CashuRequestReceiverConversation,
-        CashuResponseSenderConversation,
-    }, close_subscription::{
-        CloseRecurringPaymentConversation, CloseRecurringPaymentReceiverConversation,
-    }, invoice::{InvoiceReceiverConversation, InvoiceRequestConversation, InvoiceSenderConversation}, profile::{FetchProfileInfoConversation, Profile, SetProfileConversation}},
+        close_subscription::{
+            CloseRecurringPaymentConversation, CloseRecurringPaymentReceiverConversation,
+        },
+        invoice::{
+            InvoiceReceiverConversation, InvoiceRequestConversation, InvoiceSenderConversation,
+        },
+        profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
+    },
     nostr::nips::nip19::ToBech32,
     nostr_relay_pool::{RelayOptions, RelayPool},
     protocol::{
         jwt::CustomClaims,
         key_handshake::KeyHandshakeUrl,
         model::{
-            auth::{AuthResponseStatus, SubkeyProof}, bindings::PublicKey, payment::{
-                CashuDirectContentWithKey, CashuRequestContentWithKey, CashuResponseContent, CashuResponseStatus, CloseRecurringPaymentContent, CloseRecurringPaymentResponse, InvoiceRequestContent, InvoiceRequestContentWithKey, InvoiceResponse, PaymentRequestContent, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
-            }, Timestamp
+            Timestamp,
+            auth::{AuthResponseStatus, SubkeyProof},
+            bindings::PublicKey,
+            payment::{
+                CashuDirectContentWithKey, CashuRequestContentWithKey, CashuResponseContent,
+                CashuResponseStatus, CloseRecurringPaymentContent, CloseRecurringPaymentResponse,
+                InvoiceRequestContent, InvoiceRequestContentWithKey, InvoiceResponse,
+                PaymentRequestContent, PaymentResponseContent, RecurringPaymentRequestContent,
+                RecurringPaymentResponseContent, SinglePaymentRequestContent,
+            },
         },
     },
     router::{
-        conversation::OneShotSenderAdapter, MessageRouter, conversation::MultiKeyListenerAdapter, conversation::MultiKeySenderAdapter, NotificationStream
+        MessageRouter, NotificationStream, conversation::MultiKeyListenerAdapter,
+        conversation::MultiKeySenderAdapter, conversation::OneShotSenderAdapter,
     },
     utils::verify_nip05,
 };
@@ -606,13 +623,13 @@ impl PortalApp {
         evt: Arc<dyn PaymentRequestListener>,
     ) -> Result<(), AppError> {
         let inner = PaymentRequestListenerConversation::new(self.router.keypair().public_key());
-        let mut rx: NotificationStream<portal::conversation::app::payments::PaymentRequestEvent> = self
-            .router
-            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
-                inner,
-                self.router.keypair().subkey_proof().cloned(),
-            )))
-            .await?;
+        let mut rx: NotificationStream<portal::conversation::app::payments::PaymentRequestEvent> =
+            self.router
+                .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
+                    inner,
+                    self.router.keypair().subkey_proof().cloned(),
+                )))
+                .await?;
 
         while let Ok(request) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
             let evt = Arc::clone(&evt);

@@ -10,8 +10,8 @@ use crate::{
         payment::{CloseRecurringPaymentContent, CloseRecurringPaymentResponse},
     },
     router::conversation::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender, ConversationWithNotification,
-        response::Response,
+        ConversationError, ConversationWithNotification, MultiKeyListener, MultiKeyListenerAdapter,
+        MultiKeySender, response::Response,
     },
 };
 
@@ -111,7 +111,9 @@ impl MultiKeyListener for CloseRecurringPaymentReceiverConversation {
     type Error = ConversationError;
     type Message = CloseRecurringPaymentContent;
 
-    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(
+        state: &crate::router::conversation::MultiKeyListenerAdapter<Self>,
+    ) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::from(RECURRING_PAYMENT_CANCEL)])
             //.pubkey(state.user.ok_or(ConversationError::UserNotSet)?);

@@ -1,6 +1,4 @@
-use std::{
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 use futures::Stream;
 use serde::Serialize;
@@ -10,11 +8,10 @@ pub mod channel;
 pub mod conversation;
 pub mod filters;
 pub mod ids;
-
+pub mod state;
 
 // Re-export MessageRouterActor as MessageRouter for backward compatibility
 pub use actor::{MessageRouterActor as MessageRouter, MessageRouterActorError};
-
 
 /// Convenience wrapper around a stream of notifications.
 ///

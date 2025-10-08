@@ -2,7 +2,10 @@ use std::{collections::HashSet, ops::Deref};
 
 use nostr::key::PublicKey;
 
-use crate::router::{conversation::Conversation, conversation::ConversationError, conversation::ConversationMessage, conversation::response::Response};
+use crate::router::{
+    conversation::Conversation, conversation::ConversationError, conversation::ConversationMessage,
+    conversation::response::Response,
+};
 
 pub trait OneShotSender: Sized + Send + 'static + ToString {
     type Error: std::error::Error + Send + Sync + 'static;

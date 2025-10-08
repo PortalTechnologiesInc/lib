@@ -1,10 +1,9 @@
-
 mod adapters;
 pub mod message;
 pub mod response;
 
-use response::Response;
 use message::ConversationMessage;
+use response::Response;
 
 // Re-export adapters
 
@@ -19,7 +18,14 @@ pub use adapters::one_shot::OneShotSenderAdapter;
 
 pub use adapters::ConversationWithNotification;
 
+/// A box of a conversation
+pub type ConversationBox = Box<dyn Conversation + Send + Sync>;
 
+impl std::fmt::Debug for ConversationBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Conversation").finish()
+    }
+}
 
 pub trait Conversation: ToString {
     fn on_message(&mut self, message: ConversationMessage) -> Result<Response, ConversationError>;
@@ -28,7 +34,6 @@ pub trait Conversation: ToString {
         Ok(Response::default())
     }
 }
-
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConversationError {
