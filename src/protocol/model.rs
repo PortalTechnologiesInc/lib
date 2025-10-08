@@ -243,6 +243,23 @@ pub mod payment {
     use super::*;
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(tag = "payment_type")]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
+    pub enum PaymentRequestContent {
+        Single(SinglePaymentRequestContent),
+        Recurring(RecurringPaymentRequestContent),
+    }
+    
+    impl PaymentRequestContent {
+        pub fn expires_at(&self) -> Timestamp {
+            match self {
+                Self::Single(content) => content.expires_at,
+                Self::Recurring(content) => content.expires_at,
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
     pub struct SinglePaymentRequestContent {
         pub amount: u64,

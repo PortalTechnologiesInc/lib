@@ -9,20 +9,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     protocol::model::{
-        Timestamp,
-        bindings::{self},
-        event_kinds::{
+        bindings::{self}, event_kinds::{
             PAYMENT_REQUEST, PAYMENT_RESPONSE, RECURRING_PAYMENT_REQUEST,
             RECURRING_PAYMENT_RESPONSE,
-        },
-        payment::{
-            PaymentResponseContent, RecurringPaymentRequestContent,
-            RecurringPaymentResponseContent, SinglePaymentRequestContent,
-        },
+        }, payment::{
+            PaymentRequestContent, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
+        }, Timestamp
     },
     router::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, Response,
-        adapters::{ConversationWithNotification, one_shot::OneShotSender},
+        adapters::{one_shot::OneShotSender, ConversationWithNotification}, ConversationError, MultiKeyListener, MultiKeyListenerAdapter, Response
     },
 };
 
@@ -117,23 +112,6 @@ pub struct PaymentRequestEvent {
 
 impl ConversationWithNotification for MultiKeyListenerAdapter<PaymentRequestListenerConversation> {
     type Notification = PaymentRequestEvent;
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "payment_type")]
-#[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
-pub enum PaymentRequestContent {
-    Single(SinglePaymentRequestContent),
-    Recurring(RecurringPaymentRequestContent),
-}
-
-impl PaymentRequestContent {
-    pub fn expires_at(&self) -> Timestamp {
-        match self {
-            Self::Single(content) => content.expires_at,
-            Self::Recurring(content) => content.expires_at,
-        }
-    }
 }
 
 pub struct PaymentStatusSenderConversation {

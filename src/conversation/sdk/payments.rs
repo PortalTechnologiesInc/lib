@@ -1,16 +1,13 @@
 use crate::{
-    app::payments::PaymentRequestContent,
     protocol::model::{
         auth::SubkeyProof,
         event_kinds::*,
         payment::{
-            PaymentResponseContent, PaymentStatus, RecurringPaymentRequestContent,
-            RecurringPaymentResponseContent, SinglePaymentRequestContent,
+            PaymentRequestContent, PaymentResponseContent, PaymentStatus, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
         },
     },
     router::{
-        ConversationError, MultiKeySender, MultiKeySenderAdapter, Response,
-        adapters::ConversationWithNotification,
+        adapters::ConversationWithNotification, ConversationError, MultiKeySender, MultiKeySenderAdapter, Response
     },
 };
 use nostr::{
