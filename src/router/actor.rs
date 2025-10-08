@@ -21,8 +21,8 @@ use tokio_stream::StreamExt;
 use crate::{
     protocol::{LocalKeypair, model::event_kinds::SUBKEY_PROOF},
     router::{
-        CleartextEvent, Conversation, ConversationError, ConversationMessage, NotificationStream,
-        Response,
+        conversation::message::CleartextEvent, conversation::Conversation, conversation::ConversationError, conversation::message::ConversationMessage, NotificationStream,
+        conversation::response::Response,
         channel::Channel,
         ids::{ConversationId, PortalSubscriptionId},
     },

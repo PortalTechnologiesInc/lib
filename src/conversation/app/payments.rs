@@ -16,8 +16,9 @@ use crate::{
             PaymentRequestContent, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
         }, Timestamp
     },
-    router::{
-        adapters::{one_shot::OneShotSender, ConversationWithNotification}, ConversationError, MultiKeyListener, MultiKeyListenerAdapter, Response
+    router::conversation::{
+        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, ConversationWithNotification, OneShotSender,
+        response::Response
     },
 };
 
@@ -46,7 +47,7 @@ impl MultiKeyListener for PaymentRequestListenerConversation {
     type Error = ConversationError;
     type Message = PaymentRequestContent;
 
-    fn init(state: &crate::router::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![
                 Kind::Custom(PAYMENT_REQUEST),
@@ -62,8 +63,8 @@ impl MultiKeyListener for PaymentRequestListenerConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeyListenerAdapter<Self>,
-        event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeyListenerAdapter<Self>,
+        event: &crate::router::conversation::message::CleartextEvent,
         content: &Self::Message,
     ) -> Result<Response, Self::Error> {
         log::debug!(
@@ -147,7 +148,7 @@ impl OneShotSender for PaymentStatusSenderConversation {
     type Error = ConversationError;
 
     fn send(
-        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+        state: &mut crate::router::conversation::OneShotSenderAdapter<Self>,
     ) -> Result<Response, Self::Error> {
         let mut keys = HashSet::new();
         keys.insert(state.service_key);
@@ -200,7 +201,7 @@ impl OneShotSender for RecurringPaymentStatusSenderConversation {
     type Error = ConversationError;
 
     fn send(
-        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+        state: &mut crate::router::conversation::OneShotSenderAdapter<Self>,
     ) -> Result<Response, Self::Error> {
         let mut keys = HashSet::new();
         keys.insert(state.service_key);

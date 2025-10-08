@@ -2,10 +2,11 @@ use nostr::{event::Kind, filter::Filter, key::PublicKey, nips::nip01::Metadata};
 
 use crate::{
     protocol::model::Timestamp,
-    router::{
-        Conversation, ConversationError, ConversationMessage, Response,
-        adapters::{ConversationWithNotification, one_shot::OneShotSender},
+    router::conversation::{
+        Conversation, ConversationError, ConversationWithNotification, OneShotSender,
+        response::Response,
     },
+    router::conversation::message::ConversationMessage,
 };
 
 pub struct FetchProfileInfoConversation {
@@ -32,7 +33,7 @@ impl ToString for FetchProfileInfoConversation {
 }
 
 impl Conversation for FetchProfileInfoConversation {
-    fn init(&mut self) -> Result<crate::router::Response, crate::router::ConversationError> {
+    fn init(&mut self) -> Result<Response, ConversationError> {
         Ok(Response::new().filter(
             Filter::new()
                 .author(self.pubkey)
@@ -43,8 +44,8 @@ impl Conversation for FetchProfileInfoConversation {
 
     fn on_message(
         &mut self,
-        message: crate::router::ConversationMessage,
-    ) -> Result<crate::router::Response, crate::router::ConversationError> {
+        message: ConversationMessage,
+    ) -> Result<Response, ConversationError> {
         if let ConversationMessage::Cleartext(event) = message {
             let metadata: Result<Metadata, _> = serde_json::from_value(event.content);
             if let Ok(metadata) = metadata {
@@ -86,7 +87,7 @@ impl OneShotSender for SetProfileConversation {
     type Error = ConversationError;
 
     fn send(
-        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+        state: &mut crate::router::conversation::OneShotSenderAdapter<Self>,
     ) -> Result<Response, Self::Error> {
         let metadata: Metadata = state.profile.clone().into();
         Ok(Response::new()

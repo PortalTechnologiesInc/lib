@@ -43,7 +43,7 @@ use portal::{
         },
     },
     router::{
-        adapters::one_shot::OneShotSenderAdapter, MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream
+        conversation::OneShotSenderAdapter, MessageRouter, conversation::MultiKeyListenerAdapter, conversation::MultiKeySenderAdapter, NotificationStream
     },
     utils::verify_nip05,
 };
@@ -1116,8 +1116,8 @@ pub enum AppError {
     ProfileFetchingError(String),
 }
 
-impl From<portal::router::ConversationError> for AppError {
-    fn from(error: portal::router::ConversationError) -> Self {
+impl From<portal::router::conversation::ConversationError> for AppError {
+    fn from(error: portal::router::conversation::ConversationError) -> Self {
         AppError::ConversationError(error.to_string())
     }
 }

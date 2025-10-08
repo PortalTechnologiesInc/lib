@@ -15,9 +15,9 @@ use crate::{
             event_kinds::{AUTH_CHALLENGE, AUTH_RESPONSE, KEY_HANDSHAKE},
         },
     },
-    router::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, Response,
-        adapters::{ConversationWithNotification, one_shot::OneShotSender},
+    router::conversation::{
+        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, ConversationWithNotification, OneShotSender,
+        response::Response,
     },
 };
 
@@ -40,7 +40,7 @@ impl OneShotSender for KeyHandshakeConversation {
     type Error = ConversationError;
 
     fn send(
-        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+        state: &mut crate::router::conversation::OneShotSenderAdapter<Self>,
     ) -> Result<Response, Self::Error> {
         let content = KeyHandshakeContent {
             token: state.url.token.clone(),
@@ -106,7 +106,7 @@ impl MultiKeyListener for AuthChallengeListenerConversation {
     type Error = ConversationError;
     type Message = AuthChallengeContent;
 
-    fn init(state: &crate::router::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::from(AUTH_CHALLENGE)])
             .pubkey(state.local_key);
@@ -119,8 +119,8 @@ impl MultiKeyListener for AuthChallengeListenerConversation {
     }
 
     fn on_message(
-        _state: &mut crate::router::MultiKeyListenerAdapter<Self>,
-        event: &crate::router::CleartextEvent,
+        _state: &mut crate::router::conversation::MultiKeyListenerAdapter<Self>,
+        event: &crate::router::conversation::message::CleartextEvent,
         content: &Self::Message,
     ) -> Result<Response, Self::Error> {
         log::debug!(
@@ -195,7 +195,7 @@ impl OneShotSender for AuthResponseConversation {
     type Error = ConversationError;
 
     fn send(
-        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+        state: &mut crate::router::conversation::OneShotSenderAdapter<Self>,
     ) -> Result<Response, Self::Error> {
         let content = AuthResponseContent {
             challenge: state.event.challenge.clone(),

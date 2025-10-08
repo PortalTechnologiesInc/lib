@@ -1,4 +1,4 @@
-use portal::profile::Profile;
+use portal::conversation::profile::Profile;
 use portal::protocol::model::payment::{
     Currency, InvoiceRequestContent, RecurringPaymentRequestContent, SinglePaymentRequestContent,
 };

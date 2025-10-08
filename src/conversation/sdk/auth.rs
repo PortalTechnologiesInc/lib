@@ -14,9 +14,10 @@ use crate::{
         },
         event_kinds::*,
     },
-    router::{
+    router::conversation::{
         ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender,
-        MultiKeySenderAdapter, Response, adapters::ConversationWithNotification,
+        MultiKeySenderAdapter, ConversationWithNotification,
+        response::Response,
     },
     utils::random_string,
 };
@@ -47,7 +48,7 @@ impl MultiKeyListener for KeyHandshakeReceiverConversation {
     type Error = ConversationError;
     type Message = KeyHandshakeContent;
 
-    fn init(state: &crate::router::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::from(KEY_HANDSHAKE)])
             .since(nostr::types::Timestamp::now())
@@ -61,8 +62,8 @@ impl MultiKeyListener for KeyHandshakeReceiverConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeyListenerAdapter<Self>,
-        event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeyListenerAdapter<Self>,
+        event: &crate::router::conversation::message::CleartextEvent,
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         if message.token == state.token {
@@ -123,7 +124,7 @@ impl MultiKeySender for AuthChallengeSenderConversation {
     type Message = AuthResponseContent;
 
     fn get_filter(
-        state: &crate::router::MultiKeySenderAdapter<Self>,
+        state: &crate::router::conversation::MultiKeySenderAdapter<Self>,
     ) -> Result<Filter, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::from(AUTH_RESPONSE)])
@@ -138,7 +139,7 @@ impl MultiKeySender for AuthChallengeSenderConversation {
     }
 
     fn build_initial_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
         new_key: Option<PublicKey>,
     ) -> Result<Response, Self::Error> {
         let content = AuthChallengeContent {
@@ -172,8 +173,8 @@ impl MultiKeySender for AuthChallengeSenderConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
-        event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
+        event: &crate::router::conversation::message::CleartextEvent,
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         if message.challenge != state.challenge {

@@ -15,10 +15,10 @@ use crate::{
             CashuRequestContentWithKey, CashuResponseContent,
         },
     },
-    router::{
+    router::conversation::{
         ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender,
-        MultiKeySenderAdapter, Response,
-        adapters::{ConversationWithNotification, one_shot::OneShotSender},
+        MultiKeySenderAdapter, ConversationWithNotification, OneShotSender,
+        response::Response,
     },
 };
 
@@ -49,7 +49,7 @@ impl MultiKeySender for CashuRequestSenderConversation {
     type Message = CashuResponseContent;
 
     fn get_filter(
-        state: &crate::router::MultiKeySenderAdapter<Self>,
+        state: &crate::router::conversation::MultiKeySenderAdapter<Self>,
     ) -> Result<Filter, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::Custom(CASHU_RESPONSE)])
@@ -64,7 +64,7 @@ impl MultiKeySender for CashuRequestSenderConversation {
     }
 
     fn build_initial_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
         new_key: Option<PublicKey>,
     ) -> Result<Response, Self::Error> {
         let tags = state
@@ -91,8 +91,8 @@ impl MultiKeySender for CashuRequestSenderConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
-        _event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
+        _event: &crate::router::conversation::message::CleartextEvent,
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         if message.request.inner.request_id == state.content.request_id {
@@ -130,7 +130,7 @@ impl MultiKeyListener for CashuRequestReceiverConversation {
     type Error = ConversationError;
     type Message = CashuRequestContent;
 
-    fn init(state: &crate::router::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::Custom(CASHU_REQUEST)])
             .pubkey(state.local_key);
@@ -143,8 +143,8 @@ impl MultiKeyListener for CashuRequestReceiverConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeyListenerAdapter<Self>,
-        event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeyListenerAdapter<Self>,
+        event: &crate::router::conversation::message::CleartextEvent,
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         let sender_key = if let Some(subkey_proof) = state.subkey_proof.clone() {
@@ -190,7 +190,7 @@ impl OneShotSender for CashuResponseSenderConversation {
     type Error = ConversationError;
 
     fn send(
-        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+        state: &mut crate::router::conversation::OneShotSenderAdapter<Self>,
     ) -> Result<Response, Self::Error> {
         let mut keys = HashSet::new();
         keys.insert(state.content.request.recipient);
@@ -232,7 +232,7 @@ impl MultiKeySender for CashuDirectSenderConversation {
     type Message = ();
 
     fn get_filter(
-        _state: &crate::router::MultiKeySenderAdapter<Self>,
+        _state: &crate::router::conversation::MultiKeySenderAdapter<Self>,
     ) -> Result<Filter, Self::Error> {
         // Empty filter that will not match any events
         // TODO: we should avoid subscribing to relays for empty filters
@@ -240,7 +240,7 @@ impl MultiKeySender for CashuDirectSenderConversation {
     }
 
     fn build_initial_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
         new_key: Option<PublicKey>,
     ) -> Result<Response, Self::Error> {
         let tags = state
@@ -267,8 +267,8 @@ impl MultiKeySender for CashuDirectSenderConversation {
     }
 
     fn on_message(
-        _state: &mut crate::router::MultiKeySenderAdapter<Self>,
-        _event: &crate::router::CleartextEvent,
+        _state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
+        _event: &crate::router::conversation::message::CleartextEvent,
         _message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         Ok(Response::default())
@@ -298,7 +298,7 @@ impl MultiKeyListener for CashuDirectReceiverConversation {
     type Error = ConversationError;
     type Message = CashuDirectContent;
 
-    fn init(state: &crate::router::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::from(CASHU_DIRECT)])
             .pubkey(state.local_key);
@@ -311,8 +311,8 @@ impl MultiKeyListener for CashuDirectReceiverConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeyListenerAdapter<Self>,
-        event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeyListenerAdapter<Self>,
+        event: &crate::router::conversation::message::CleartextEvent,
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         let main_key = match &state.subkey_proof {

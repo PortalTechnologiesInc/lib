@@ -21,8 +21,7 @@ use portal::{
         },
     },
     router::{
-        ConversationError, MessageRouter, MessageRouterActorError, MultiKeyListenerAdapter,
-        MultiKeySenderAdapter, NotificationStream, adapters::one_shot::OneShotSenderAdapter,
+        conversation::{ConversationError, MultiKeyListenerAdapter, MultiKeySenderAdapter}, MessageRouter, MessageRouterActorError, NotificationStream, conversation::OneShotSenderAdapter,
     },
     conversation::sdk::{
         auth::{

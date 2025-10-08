@@ -10,10 +10,10 @@ use crate::{
         event_kinds::{INVOICE_REQUEST, INVOICE_RESPONSE},
         payment::{InvoiceRequestContent, InvoiceRequestContentWithKey, InvoiceResponse},
     },
-    router::{
+    router::conversation::{
         ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender,
-        MultiKeySenderAdapter, Response,
-        adapters::{ConversationWithNotification, one_shot::OneShotSender},
+        MultiKeySenderAdapter, ConversationWithNotification, OneShotSender,
+        response::Response,
     },
 };
 
@@ -41,7 +41,7 @@ impl MultiKeySender for InvoiceRequestConversation {
     type Message = InvoiceResponse;
 
     fn get_filter(
-        state: &crate::router::MultiKeySenderAdapter<Self>,
+        state: &crate::router::conversation::MultiKeySenderAdapter<Self>,
     ) -> Result<Filter, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::Custom(INVOICE_RESPONSE)])
@@ -56,7 +56,7 @@ impl MultiKeySender for InvoiceRequestConversation {
     }
 
     fn build_initial_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
         new_key: Option<PublicKey>,
     ) -> Result<Response, Self::Error> {
         let tags = state
@@ -83,8 +83,8 @@ impl MultiKeySender for InvoiceRequestConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
-        _event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
+        _event: &crate::router::conversation::message::CleartextEvent,
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         if message.request.inner.request_id == state.content.request_id {
@@ -119,7 +119,7 @@ impl MultiKeyListener for InvoiceReceiverConversation {
     type Error = ConversationError;
     type Message = InvoiceRequestContent;
 
-    fn init(state: &crate::router::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::Custom(INVOICE_REQUEST)])
             .pubkey(state.local_key);
@@ -132,8 +132,8 @@ impl MultiKeyListener for InvoiceReceiverConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeyListenerAdapter<Self>,
-        event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeyListenerAdapter<Self>,
+        event: &crate::router::conversation::message::CleartextEvent,
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         let sender_key = if let Some(subkey_proof) = state.subkey_proof.clone() {
@@ -176,7 +176,7 @@ impl OneShotSender for InvoiceSenderConversation {
     type Error = ConversationError;
 
     fn send(
-        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+        state: &mut crate::router::conversation::OneShotSenderAdapter<Self>,
     ) -> Result<Response, Self::Error> {
         let mut keys = HashSet::new();
         keys.insert(state.content.request.recipient);

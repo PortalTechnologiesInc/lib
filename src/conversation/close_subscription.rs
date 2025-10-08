@@ -9,9 +9,9 @@ use crate::{
         event_kinds::RECURRING_PAYMENT_CANCEL,
         payment::{CloseRecurringPaymentContent, CloseRecurringPaymentResponse},
     },
-    router::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender, Response,
-        adapters::ConversationWithNotification,
+    router::conversation::{
+        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, MultiKeySender, ConversationWithNotification,
+        response::Response,
     },
 };
 
@@ -41,7 +41,7 @@ impl MultiKeySender for CloseRecurringPaymentConversation {
     type Message = ();
 
     fn get_filter(
-        _state: &crate::router::MultiKeySenderAdapter<Self>,
+        _state: &crate::router::conversation::MultiKeySenderAdapter<Self>,
     ) -> Result<Filter, Self::Error> {
         // Empty filter that will not match any events
         // TODO: we should avoid subscribing to relays for empty filters
@@ -49,7 +49,7 @@ impl MultiKeySender for CloseRecurringPaymentConversation {
     }
 
     fn build_initial_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
         new_key: Option<PublicKey>,
     ) -> Result<Response, Self::Error> {
         let tags = state
@@ -76,8 +76,8 @@ impl MultiKeySender for CloseRecurringPaymentConversation {
     }
 
     fn on_message(
-        _state: &mut crate::router::MultiKeySenderAdapter<Self>,
-        _event: &crate::router::CleartextEvent,
+        _state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
+        _event: &crate::router::conversation::message::CleartextEvent,
         _message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         Ok(Response::default())
@@ -111,7 +111,7 @@ impl MultiKeyListener for CloseRecurringPaymentReceiverConversation {
     type Error = ConversationError;
     type Message = CloseRecurringPaymentContent;
 
-    fn init(state: &crate::router::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(state: &crate::router::conversation::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::from(RECURRING_PAYMENT_CANCEL)])
             //.pubkey(state.user.ok_or(ConversationError::UserNotSet)?);
@@ -125,8 +125,8 @@ impl MultiKeyListener for CloseRecurringPaymentReceiverConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeyListenerAdapter<Self>,
-        event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeyListenerAdapter<Self>,
+        event: &crate::router::conversation::message::CleartextEvent,
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         let main_key = match &state.subkey_proof {

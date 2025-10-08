@@ -14,7 +14,7 @@ use nostr::{
 use crate::protocol::model::{auth::SubkeyProof, event_kinds::SUBKEY_PROOF};
 
 use crate::router::{
-    CleartextEvent, Conversation, ConversationError, ConversationMessage, Response,
+    conversation::message::CleartextEvent, conversation::Conversation, conversation::ConversationError, conversation::message::ConversationMessage, conversation::response::Response,
 };
 
 pub trait MultiKeyListener: Sized + Send + 'static + ToString {
