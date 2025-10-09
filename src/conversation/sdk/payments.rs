@@ -1,16 +1,16 @@
 use crate::{
-    app::payments::PaymentRequestContent,
     protocol::model::{
         auth::SubkeyProof,
         event_kinds::*,
         payment::{
-            PaymentResponseContent, PaymentStatus, RecurringPaymentRequestContent,
-            RecurringPaymentResponseContent, SinglePaymentRequestContent,
+            PaymentRequestContent, PaymentResponseContent, PaymentStatus,
+            RecurringPaymentRequestContent, RecurringPaymentResponseContent,
+            SinglePaymentRequestContent,
         },
     },
-    router::{
-        ConversationError, MultiKeySender, MultiKeySenderAdapter, Response,
-        adapters::ConversationWithNotification,
+    router::conversation::{
+        ConversationError, ConversationWithNotification, MultiKeySender, MultiKeySenderAdapter,
+        response::Response,
     },
 };
 use nostr::{
@@ -56,7 +56,7 @@ impl MultiKeySender for RecurringPaymentRequestSenderConversation {
     type Message = RecurringPaymentResponseContent;
 
     fn get_filter(
-        state: &crate::router::MultiKeySenderAdapter<Self>,
+        state: &crate::router::conversation::MultiKeySenderAdapter<Self>,
     ) -> Result<Filter, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![Kind::Custom(RECURRING_PAYMENT_RESPONSE)])
@@ -71,7 +71,7 @@ impl MultiKeySender for RecurringPaymentRequestSenderConversation {
     }
 
     fn build_initial_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
         new_key: Option<PublicKey>,
     ) -> Result<Response, Self::Error> {
         let tags = state
@@ -98,8 +98,8 @@ impl MultiKeySender for RecurringPaymentRequestSenderConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
-        _event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
+        _event: &crate::router::conversation::message::CleartextEvent,
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         if message.request_id == state.payment_request.request_id {
@@ -155,7 +155,7 @@ impl MultiKeySender for SinglePaymentRequestSenderConversation {
     type Message = PaymentResponseContent;
 
     fn get_filter(
-        state: &crate::router::MultiKeySenderAdapter<Self>,
+        state: &crate::router::conversation::MultiKeySenderAdapter<Self>,
     ) -> Result<Filter, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![
@@ -173,7 +173,7 @@ impl MultiKeySender for SinglePaymentRequestSenderConversation {
     }
 
     fn build_initial_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
         new_key: Option<PublicKey>,
     ) -> Result<Response, Self::Error> {
         let tags = state
@@ -200,8 +200,8 @@ impl MultiKeySender for SinglePaymentRequestSenderConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeySenderAdapter<Self>,
-        _event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeySenderAdapter<Self>,
+        _event: &crate::router::conversation::message::CleartextEvent,
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         if message.request_id == state.payment_request.request_id {

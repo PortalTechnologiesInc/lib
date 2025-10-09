@@ -207,18 +207,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let history = db.read_history("age".to_string()).await?;
     // log::info!("History of age: {:?}", history);
 
-
     let relays = vec![
         "wss://relay.nostr.net".to_string(),
         "wss://relay.damus.io".to_string(),
     ];
 
-    let app = PortalApp::new(
-        keypair,
-        relays,
-        Arc::new(LogRelayStatusChange),
-    )
-    .await?;
+    let app = PortalApp::new(keypair, relays, Arc::new(LogRelayStatusChange)).await?;
 
     let _app = Arc::clone(&app);
 

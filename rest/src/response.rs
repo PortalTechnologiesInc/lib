@@ -1,4 +1,4 @@
-use portal::profile::Profile;
+use portal::conversation::profile::Profile;
 use portal::protocol::model::auth::AuthResponseStatus;
 use portal::protocol::model::payment::{CashuResponseStatus, RecurringPaymentResponseContent};
 use serde::Serialize;

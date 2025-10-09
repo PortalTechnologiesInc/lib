@@ -11,12 +11,14 @@ use nostr::{event::Kind, filter::Filter, key::PublicKey};
 use crate::protocol::model::{auth::SubkeyProof, event_kinds::SUBKEY_PROOF};
 
 use crate::router::{
-    CleartextEvent, Conversation, ConversationError, ConversationMessage, Response,
+    conversation::Conversation, conversation::ConversationError,
+    conversation::message::CleartextEvent, conversation::message::ConversationMessage,
+    conversation::response::Response,
 };
 
 const MAX_CLIENTS: usize = 8;
 
-pub trait MultiKeySender: Sized + Send + 'static + ToString {
+pub trait MultiKeySender: Sized + ToString {
     const VALIDITY_SECONDS: Option<u64>;
 
     type Error: std::error::Error + Send + Sync + 'static;

@@ -16,13 +16,13 @@ use crate::{
             RECURRING_PAYMENT_RESPONSE,
         },
         payment::{
-            PaymentResponseContent, RecurringPaymentRequestContent,
+            PaymentRequestContent, PaymentResponseContent, RecurringPaymentRequestContent,
             RecurringPaymentResponseContent, SinglePaymentRequestContent,
         },
     },
-    router::{
-        ConversationError, MultiKeyListener, MultiKeyListenerAdapter, Response,
-        adapters::{ConversationWithNotification, one_shot::OneShotSender},
+    router::conversation::{
+        ConversationError, ConversationWithNotification, MultiKeyListener, MultiKeyListenerAdapter,
+        OneShotSender, response::Response,
     },
 };
 
@@ -51,7 +51,9 @@ impl MultiKeyListener for PaymentRequestListenerConversation {
     type Error = ConversationError;
     type Message = PaymentRequestContent;
 
-    fn init(state: &crate::router::MultiKeyListenerAdapter<Self>) -> Result<Response, Self::Error> {
+    fn init(
+        state: &crate::router::conversation::MultiKeyListenerAdapter<Self>,
+    ) -> Result<Response, Self::Error> {
         let mut filter = Filter::new()
             .kinds(vec![
                 Kind::Custom(PAYMENT_REQUEST),
@@ -67,8 +69,8 @@ impl MultiKeyListener for PaymentRequestListenerConversation {
     }
 
     fn on_message(
-        state: &mut crate::router::MultiKeyListenerAdapter<Self>,
-        event: &crate::router::CleartextEvent,
+        state: &mut crate::router::conversation::MultiKeyListenerAdapter<Self>,
+        event: &crate::router::conversation::message::CleartextEvent,
         content: &Self::Message,
     ) -> Result<Response, Self::Error> {
         log::debug!(
@@ -119,23 +121,6 @@ impl ConversationWithNotification for MultiKeyListenerAdapter<PaymentRequestList
     type Notification = PaymentRequestEvent;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "payment_type")]
-#[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
-pub enum PaymentRequestContent {
-    Single(SinglePaymentRequestContent),
-    Recurring(RecurringPaymentRequestContent),
-}
-
-impl PaymentRequestContent {
-    pub fn expires_at(&self) -> Timestamp {
-        match self {
-            Self::Single(content) => content.expires_at,
-            Self::Recurring(content) => content.expires_at,
-        }
-    }
-}
-
 pub struct PaymentStatusSenderConversation {
     service_key: PublicKey,
     recipient: PublicKey,
@@ -169,7 +154,7 @@ impl OneShotSender for PaymentStatusSenderConversation {
     type Error = ConversationError;
 
     fn send(
-        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+        state: &mut crate::router::conversation::OneShotSenderAdapter<Self>,
     ) -> Result<Response, Self::Error> {
         let mut keys = HashSet::new();
         keys.insert(state.service_key);
@@ -222,7 +207,7 @@ impl OneShotSender for RecurringPaymentStatusSenderConversation {
     type Error = ConversationError;
 
     fn send(
-        state: &mut crate::router::adapters::one_shot::OneShotSenderAdapter<Self>,
+        state: &mut crate::router::conversation::OneShotSenderAdapter<Self>,
     ) -> Result<Response, Self::Error> {
         let mut keys = HashSet::new();
         keys.insert(state.service_key);

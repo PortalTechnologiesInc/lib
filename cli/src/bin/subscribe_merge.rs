@@ -5,8 +5,8 @@ use cli::create_app_instance;
 
 use cli::CliError;
 use cli::create_sdk_instance;
+use portal::conversation::sdk::auth::KeyHandshakeEvent;
 use portal::router::NotificationStream;
-use portal::sdk::auth::KeyHandshakeEvent;
 
 /// Reconnect to all relays
 ///
