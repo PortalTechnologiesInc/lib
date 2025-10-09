@@ -18,7 +18,7 @@ use crate::router::{
 
 const MAX_CLIENTS: usize = 8;
 
-pub trait MultiKeySender: Sized + Send + 'static + ToString {
+pub trait MultiKeySender: Sized + ToString {
     const VALIDITY_SECONDS: Option<u64>;
 
     type Error: std::error::Error + Send + Sync + 'static;

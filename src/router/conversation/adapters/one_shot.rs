@@ -7,7 +7,7 @@ use crate::router::{
     conversation::response::Response,
 };
 
-pub trait OneShotSender: Sized + Send + 'static + ToString {
+pub trait OneShotSender: Sized + ToString {
     type Error: std::error::Error + Send + Sync + 'static;
 
     fn send(_state: &mut OneShotSenderAdapter<Self>) -> Result<Response, Self::Error>;
