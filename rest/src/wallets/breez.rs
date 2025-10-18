@@ -2,7 +2,8 @@ use std::env;
 
 use axum::async_trait;
 use breez_sdk_spark::{
-    connect, default_config, BreezSdk, ConnectRequest, ListPaymentsRequest, Network, PaymentDetails, PaymentStatus, ReceivePaymentMethod, ReceivePaymentRequest, Seed
+    connect, default_config, BreezSdk, ConnectRequest, ListPaymentsRequest, Network,
+    PaymentDetails, PaymentStatus, ReceivePaymentMethod, ReceivePaymentRequest, Seed,
 };
 
 use crate::wallets::PortalWallet;
@@ -15,6 +16,8 @@ impl BreezSparkWallet {
     pub async fn new(mnemonic: String) -> anyhow::Result<Self> {
         let api_key =
             env::var("BREEZ_API_KEY").expect("BREEZ_API_KEY environment variable is required");
+        let breez_storage_dir = env::var("BREEZ_STORAGE_DIR")
+            .expect("BREEZ_STORAGE_DIR environment variable is required");
         let seed = Seed::Mnemonic {
             mnemonic,
             passphrase: None,
@@ -26,7 +29,7 @@ impl BreezSparkWallet {
         let sdk = connect(ConnectRequest {
             config,
             seed,
-            storage_dir: "./data".to_string(),
+            storage_dir: breez_storage_dir,
         })
         .await?;
 
