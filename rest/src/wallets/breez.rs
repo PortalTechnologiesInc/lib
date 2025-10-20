@@ -56,27 +56,42 @@ impl PortalWallet for BreezSparkWallet {
     }
 
     async fn is_invoice_paid(&self, invoice: String) -> anyhow::Result<(bool, Option<String>)> {
-        let list_payments_response = self
-            .sdk
-            .list_payments(ListPaymentsRequest {
-                limit: None,
-                offset: None,
-            })
-            .await?;
+        let batch_size = 100;
+        let mut offset = 0;
 
-        for payment in list_payments_response.payments {
-            match payment.details {
-                Some(PaymentDetails::Lightning {
-                    invoice: payment_invoice,
-                    preimage,
-                    ..
-                }) => {
-                    if invoice == payment_invoice {
-                        return Ok((payment.status == PaymentStatus::Completed, preimage));
-                    }
-                }
-                _ => {}
+        loop {
+            let list_payments_response = self
+                .sdk
+                .list_payments(ListPaymentsRequest {
+                    limit: Some(batch_size),
+                    offset: Some(offset),
+                })
+                .await?;
+
+            if list_payments_response.payments.len() == 0 {
+                break;
             }
+
+            for payment in list_payments_response.payments.iter() {
+                match &payment.details {
+                    Some(PaymentDetails::Lightning {
+                        invoice: payment_invoice,
+                        preimage,
+                        ..
+                    }) => {
+                        if invoice == *payment_invoice {
+                            return Ok((payment.status == PaymentStatus::Completed, preimage.clone()));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if list_payments_response.payments.len() < batch_size as usize {
+                break;
+            }
+
+            offset += batch_size;
         }
 
         Ok((false, None))
