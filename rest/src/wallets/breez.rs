@@ -47,7 +47,7 @@ impl PortalWallet for BreezSparkWallet {
             .receive_payment(ReceivePaymentRequest {
                 payment_method: ReceivePaymentMethod::Bolt11Invoice {
                     description,
-                    amount_sats: Some(sats),
+                    amount_sats: Some(sats / 1000),
                 },
             })
             .await?;
