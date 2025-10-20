@@ -19,12 +19,17 @@ use tracing::info;
 
 mod command;
 mod response;
+mod wallets;
 mod ws;
 
 // Re-export the portal types that we need
 pub use portal::nostr::key::PublicKey;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+
+use crate::wallets::breez::BreezSparkWallet;
+use crate::wallets::nwc::NwcWallet;
+use crate::wallets::PortalWallet;
 
 #[derive(Debug, thiserror::Error)]
 enum ApiError {
@@ -59,7 +64,7 @@ impl From<ApiError> for (StatusCode, Json<ErrorResponse>) {
 struct AppState {
     sdk: Arc<PortalSDK>,
     auth_token: String,
-    nwc: Option<Arc<nwc::NWC>>,
+    wallet: Option<Arc<dyn PortalWallet>>,
 }
 
 #[derive(Serialize)]
@@ -130,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
     let nwc_url = env::var("NWC_URL").ok();
     let nostr_key = env::var("NOSTR_KEY").expect("NOSTR_KEY environment variable is required");
     let nostr_subkey_proof = env::var("NOSTR_SUBKEY_PROOF").ok();
+    let breez_mnemonic = env::var("BREEZ_MNEMONIC").ok();
 
     // Only use default relays if NOSTR_RELAYS is not set or empty
     let relays: Vec<String> = match env::var("NOSTR_RELAYS") {
@@ -161,23 +167,20 @@ async fn main() -> anyhow::Result<()> {
     // Initialize SDK
     let sdk = PortalSDK::new(keypair, relays).await?;
 
-    // Initialize NWC
-    let nwc =
-        nwc_url.map(|url| Arc::new(nwc::NWC::new(url.parse().expect("Failed to parse NWC_URL"))));
-    let nwc_clone = nwc.clone();
-
-    tokio::spawn(async move {
-        if let Some(nwc) = nwc_clone {
-            let info = nwc.get_info().await;
-            info!("NWC info: {:?}", info);
-        }
-    });
+    // Initialize the wallet, based on the env variables set
+    let wallet: Option<Arc<dyn PortalWallet>> = if let Some(mnemonic) = breez_mnemonic {
+        Some(Arc::new(BreezSparkWallet::new(mnemonic).await?))
+    } else if let Some(url) = nwc_url {
+        Some(Arc::new(NwcWallet::new(url)?))
+    } else {
+        None
+    };
 
     // Create app state
     let state = AppState {
         sdk: Arc::new(sdk),
         auth_token,
-        nwc,
+        wallet,
     };
 
     // Create router with middleware
