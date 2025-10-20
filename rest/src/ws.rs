@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::command::{Command, CommandWithId};
 use crate::response::*;
-use crate::wallets::PortalWallet;
 use crate::{AppState, PublicKey};
 use axum::extract::ws::{Message, WebSocket};
 use cdk::amount::SplitTarget;
@@ -30,7 +29,7 @@ use uuid::Uuid;
 
 struct SocketContext {
     sdk: Arc<PortalSDK>,
-    wallet: Option<Arc<dyn PortalWallet>>,
+    nwc: Option<Arc<nwc::NWC>>,
     tx_message: mpsc::Sender<Message>,
     tx_notification: mpsc::Sender<Response>,
     active_streams: ActiveStreams,
@@ -39,13 +38,13 @@ struct SocketContext {
 impl SocketContext {
     fn new(
         sdk: Arc<PortalSDK>,
-        wallet: Option<Arc<dyn PortalWallet>>,
+        nwc: Option<Arc<nwc::NWC>>,
         tx_message: mpsc::Sender<Message>,
         tx_notification: mpsc::Sender<Response>,
     ) -> Self {
         Self {
             sdk,
-            wallet,
+            nwc,
             tx_message,
             tx_notification,
             active_streams: ActiveStreams::new(),
@@ -156,7 +155,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 
     let ctx = Arc::new(SocketContext::new(
         state.sdk.clone(),
-        state.wallet,
+        state.nwc,
         tx_message.clone(),
         tx_notification,
     ));
@@ -450,10 +449,10 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             subkeys,
             payment_request,
         } => {
-            let wallet = match &ctx.wallet {
+            let nwc = match &ctx.nwc {
                 Some(nwc) => nwc,
                 None => {
-                    let _ = ctx.send_error_message(&command.id, "Backend wallet is not available: set the NWC_URL or the BREEZ_MNEMONIC environment variable to enable it").await;
+                    let _ = ctx.send_error_message(&command.id, "Nostr Wallet Connect is not available: set the NWC_URL environment variable to enable it").await;
                     return;
                 }
             };
@@ -481,11 +480,13 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
             // TODO: fetch and apply fiat exchange rate
 
-            let invoice = match wallet
-                .make_invoice(
-                    payment_request.amount,
-                    Some(payment_request.description.clone()),
-                )
+            let invoice = match nwc
+                .make_invoice(portal::nostr::nips::nip47::MakeInvoiceRequest {
+                    amount: payment_request.amount,
+                    description: Some(payment_request.description.clone()),
+                    description_hash: None,
+                    expiry: None,
+                })
                 .await
             {
                 Ok(invoice) => invoice,
@@ -502,7 +503,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 amount: payment_request.amount,
                 currency: payment_request.currency,
                 expires_at,
-                invoice: invoice.clone(),
+                invoice: invoice.invoice.clone(),
                 current_exchange_rate: None,
                 subscription_id: payment_request.subscription_id,
                 auth_token: payment_request.auth_token,
@@ -530,7 +531,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             // Generate a unique stream ID
             let stream_id = Uuid::new_v4().to_string();
             let tx_clone = ctx.tx_notification.clone();
-            let wallet_clone = wallet.clone();
+            let nwc_clone = nwc.clone();
 
             let stream_id_clone = stream_id.clone();
             let monitor = Mutex::new(None);
@@ -586,11 +587,11 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                                 return;
                             }
 
-                            // Let's start monitoring the invoice
+                            // Let's start monitoring the invoice via NWC
                             let stream_id_clone = stream_id_clone.clone();
                             let tx_clone = tx_clone.clone();
-                            let wallet_clone = wallet_clone.clone();
-                            let invoice_clone = invoice.clone();
+                            let nwc_clone = nwc_clone.clone();
+                            let invoice_clone = invoice.invoice.clone();
 
                             *monitor.lock().await = Some(tokio::spawn(async move {
                                 let mut count = 0;
@@ -608,21 +609,32 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                                         };
                                     }
 
-                                    match wallet_clone.is_invoice_paid(invoice_clone.clone()).await
-                                    {
-                                        Ok((true, preimage)) => {
-                                            break NotificationData::PaymentStatusUpdate {
-                                                status: InvoiceStatus::Paid { preimage: preimage },
-                                            };
-                                        }
-                                        Ok((false, _)) => {
-                                            // TODO: incremental delay
-                                            tokio::time::sleep(tokio::time::Duration::from_millis(
-                                                1000,
-                                            ))
-                                            .await;
+                                    let invoice = nwc_clone
+                                        .lookup_invoice(
+                                            portal::nostr::nips::nip47::LookupInvoiceRequest {
+                                                invoice: Some(invoice_clone.clone()),
+                                                payment_hash: None,
+                                            },
+                                        )
+                                        .await;
 
-                                            continue;
+                                    match invoice {
+                                        Ok(invoice) => {
+                                            if invoice.settled_at.is_some() {
+                                                break NotificationData::PaymentStatusUpdate {
+                                                    status: InvoiceStatus::Paid {
+                                                        preimage: invoice.preimage,
+                                                    },
+                                                };
+                                            } else {
+                                                // TODO: incremental delay
+                                                tokio::time::sleep(
+                                                    tokio::time::Duration::from_millis(1000),
+                                                )
+                                                .await;
+
+                                                continue;
+                                            }
                                         }
                                         Err(e) => {
                                             error!("Failed to lookup invoice: {}", e);

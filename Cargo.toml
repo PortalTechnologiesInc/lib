@@ -31,7 +31,7 @@ reqwest = { version = "0.12.20", default-features = false, features = ["rustls-t
 
 # Additional dependencies used across workspace
 async-trait = "0.1.88"
-bip39 = { version = "2.2.0", features = ["rand"] }
+bip39 = { version = "2.1.0", features = ["rand"] }
 bitcoin = "0.32.5"
 nostrstore = "0.43.0"
 async-utility = "0.3.1"

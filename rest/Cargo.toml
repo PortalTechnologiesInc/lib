@@ -30,7 +30,5 @@ cdk = { workspace = true, features = ["wallet"] }
 cdk-sqlite = { workspace = true }
 rand = { workspace = true }
 
-breez-sdk-spark = { git = "https://github.com/piergiorgies/spark-sdk", rev = "13d7f65fc048897d4332dcaabd6908c941a4cee0"}
-
 [features]
 task-tracing = ["console-subscriber"]
