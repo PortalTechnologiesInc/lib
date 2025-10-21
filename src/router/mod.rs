@@ -1,5 +1,6 @@
 use std::{
     collections::HashSet,
+    fmt::{Debug, Display},
     ops::{Deref, DerefMut},
 };
 
@@ -20,7 +21,7 @@ pub mod ids;
 
 pub use adapters::multi_key_listener::{MultiKeyListener, MultiKeyListenerAdapter};
 pub use adapters::multi_key_sender::{MultiKeySender, MultiKeySenderAdapter};
-pub use ids::PortalId;
+pub use ids::ConversationId;
 
 // Re-export MessageRouterActor as MessageRouter for backward compatibility
 pub use actor::{MessageRouterActor as MessageRouter, MessageRouterActorError};
@@ -199,7 +200,7 @@ pub enum ConversationError {
     ConversationNotFound,
 }
 
-pub trait Conversation {
+pub trait Conversation: ToString {
     fn on_message(&mut self, message: ConversationMessage) -> Result<Response, ConversationError>;
     fn is_expired(&self) -> bool;
     fn init(&mut self) -> Result<Response, ConversationError> {

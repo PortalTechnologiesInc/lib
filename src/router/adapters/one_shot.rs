@@ -4,7 +4,7 @@ use nostr::key::PublicKey;
 
 use crate::router::{Conversation, ConversationError, ConversationMessage, Response};
 
-pub trait OneShotSender: Sized + Send + 'static {
+pub trait OneShotSender: Sized + Send + 'static + ToString {
     type Error: std::error::Error + Send + Sync + 'static;
 
     fn send(_state: &mut OneShotSenderAdapter<Self>) -> Result<Response, Self::Error>;
@@ -15,6 +15,12 @@ pub struct OneShotSenderAdapter<Inner> {
     pub user: PublicKey,
     pub subkeys: HashSet<PublicKey>,
     pub inner: Inner,
+}
+
+impl<T: OneShotSender> ToString for OneShotSenderAdapter<T> {
+    fn to_string(&self) -> String {
+        self.inner.to_string()
+    }
 }
 
 impl<T: OneShotSender> Conversation for OneShotSenderAdapter<T> {

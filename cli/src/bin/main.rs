@@ -178,8 +178,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let keypair = Arc::new(mnemonic.get_keypair()?);
 
     // Testing database so commented for now
-    let nwc_str = std::env::var("CLI_NWC_URL").expect("CLI_NWC_URL is not set");
-    let nwc = nwc::NWC::new(nwc_str.parse()?);
+    // let nwc_str = std::env::var("CLI_NWC_URL").expect("CLI_NWC_URL is not set");
+    // let nwc = nwc::NWC::new(nwc_str.parse()?);
 
     log::info!(
         "Public key: {:?}",
@@ -207,12 +207,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let history = db.read_history("age".to_string()).await?;
     // log::info!("History of age: {:?}", history);
 
+
+    let relays = vec![
+        "wss://relay.nostr.net".to_string(),
+        "wss://relay.damus.io".to_string(),
+    ];
+
     let app = PortalApp::new(
         keypair,
-        vec![
-            "wss://relay.nostr.net".to_string(),
-            "wss://relay.getportal.cc".to_string(),
-        ],
+        relays,
         Arc::new(LogRelayStatusChange),
     )
     .await?;
@@ -243,12 +246,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap();
     });
 
-    let _app = Arc::clone(&app);
-    tokio::spawn(async move {
-        _app.listen_for_payment_request(Arc::new(ApprovePayment(Arc::new(nwc))))
-            .await
-            .unwrap();
-    });
+    // let _app = Arc::clone(&app);
+    // tokio::spawn(async move {
+    //     _app.listen_for_payment_request(Arc::new(ApprovePayment(Arc::new(nwc))))
+    //         .await
+    //         .unwrap();
+    // });
 
     let _app = Arc::clone(&app);
     tokio::spawn(async move {

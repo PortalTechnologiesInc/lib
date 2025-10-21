@@ -25,6 +25,15 @@ pub struct InvoiceRequestConversation {
     content: InvoiceRequestContent,
 }
 
+impl ToString for InvoiceRequestConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "InvoiceRequestConversation{{local_key: {}, subkey_proof: {:?}, content: {:?}}}",
+            self.local_key, self.subkey_proof, self.content
+        )
+    }
+}
+
 impl MultiKeySender for InvoiceRequestConversation {
     const VALIDITY_SECONDS: Option<u64> = Some(60 * 5);
 
@@ -95,6 +104,15 @@ pub struct InvoiceReceiverConversation {
     local_key: PublicKey,
 }
 
+impl ToString for InvoiceReceiverConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "InvoiceReceiverConversation{{local_key: {}}}",
+            self.local_key
+        )
+    }
+}
+
 impl MultiKeyListener for InvoiceReceiverConversation {
     const VALIDITY_SECONDS: Option<u64> = Some(60 * 5);
 
@@ -146,6 +164,12 @@ impl ConversationWithNotification for MultiKeyListenerAdapter<InvoiceReceiverCon
 #[derive(new)]
 pub struct InvoiceSenderConversation {
     content: InvoiceResponse,
+}
+
+impl ToString for InvoiceSenderConversation {
+    fn to_string(&self) -> String {
+        format!("InvoiceSenderConversation{{content: {:?}}}", self.content)
+    }
 }
 
 impl OneShotSender for InvoiceSenderConversation {

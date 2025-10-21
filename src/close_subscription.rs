@@ -25,6 +25,15 @@ impl CloseRecurringPaymentConversation {
     }
 }
 
+impl ToString for CloseRecurringPaymentConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "CloseRecurringPaymentConversation{{content: {:?}}}",
+            self.content
+        )
+    }
+}
+
 impl MultiKeySender for CloseRecurringPaymentConversation {
     const VALIDITY_SECONDS: Option<u64> = Some(60 * 5);
 
@@ -79,6 +88,15 @@ impl MultiKeySender for CloseRecurringPaymentConversation {
 
 pub struct CloseRecurringPaymentReceiverConversation {
     local_key: PublicKey,
+}
+
+impl ToString for CloseRecurringPaymentReceiverConversation {
+    fn to_string(&self) -> String {
+        format!(
+            "CloseRecurringPaymentReceiverConversation{{local_key: {}}}",
+            self.local_key
+        )
+    }
 }
 
 impl CloseRecurringPaymentReceiverConversation {
