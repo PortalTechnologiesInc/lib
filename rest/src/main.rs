@@ -15,11 +15,10 @@ use sdk::PortalSDK;
 use serde::Serialize;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
-use tracing::info;
+use tracing::{info, warn};
 
 mod command;
 mod response;
-mod wallets;
 mod ws;
 
 // Re-export the portal types that we need
@@ -27,9 +26,7 @@ pub use portal::nostr::key::PublicKey;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::wallets::breez::BreezSparkWallet;
-use crate::wallets::nwc::NwcWallet;
-use crate::wallets::PortalWallet;
+use wallet::{BreezSparkWallet, NwcWallet, PortalWallet};
 
 #[derive(Debug, thiserror::Error)]
 enum ApiError {
@@ -169,10 +166,13 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize the wallet, based on the env variables set
     let wallet: Option<Arc<dyn PortalWallet>> = if let Some(mnemonic) = breez_mnemonic {
+        info!("Using Breez Spark wallet");
         Some(Arc::new(BreezSparkWallet::new(mnemonic).await?))
     } else if let Some(url) = nwc_url {
+        info!("Using NWC wallet");
         Some(Arc::new(NwcWallet::new(url)?))
     } else {
+        warn!("No wallet configured");
         None
     };
 
