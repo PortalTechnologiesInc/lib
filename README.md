@@ -21,6 +21,7 @@ Portal provides a comprehensive solution for:
 - `/rest` - SDK wrapper exposing a REST/websocket interface
 - `/sdk` - Core SDK implementation
 - `/rest/clients/ts` - TypeScript client for the REST API
+- `/wallet` - Supported wallets(NWC, Breez)
 
 ## Getting Started
 

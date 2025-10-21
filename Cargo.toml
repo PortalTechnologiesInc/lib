@@ -1,5 +1,5 @@
 [workspace]
-members = [ "app" , "cli", "rest", "sdk", "rates", "fetch-git-hash"]
+members = [ "app" , "cli", "rest", "sdk", "rates", "fetch-git-hash", "wallet"]
 
 [workspace.dependencies]
 # Core dependencies

@@ -93,6 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         relays,
         token: token.clone(),
         subkey: subkey.map(|k| k.into()),
+        no_request: false,
     };
 
     log::info!("Auth init URL: {}", url);
