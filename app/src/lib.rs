@@ -181,10 +181,10 @@ pub struct Keypair {
 #[uniffi::export]
 impl Keypair {
     #[uniffi::constructor]
-    pub fn new(keypair: Arc<Keypair>) -> Result<Self, KeypairError> {
-        Ok(Self {
-            inner: keypair.inner.clone(),
-        })
+    pub fn new(nsec: String) -> Result<Self, KeypairError> {
+        let keys = portal::nostr::Keys::from_str(&nsec).map_err(|_| KeypairError::InvalidNsec)?;
+        let keypair = portal::protocol::LocalKeypair::new(keys, None);
+        Ok(Self { inner: keypair })
     }
 
     pub fn public_key(&self) -> portal::protocol::model::bindings::PublicKey {
