@@ -38,6 +38,7 @@
             outputHashes = {
               "cashu-0.11.0" = "sha256-kwwfQX5vDclfa86xPbbkbu+bh1VQXlX+imunUUoTYV4=";
               "nostr-0.43.0" = "sha256-1TLthpGnDLUmnBoq2CneWnfTMwRocitbD4+wnrlCA44=";
+              "breez-sdk-common-0.1.0" = "sha256-b8R4V8L7lM0AOy9NxhiIt+RsIBHJdQPpfw9SN1/P//E=";
             };
           };
           buildAndTestSubdir = "rest";
