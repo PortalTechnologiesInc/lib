@@ -116,6 +116,14 @@
               ];
             };
           };
+
+          docs = pkgs.stdenv.mkDerivation {
+            name = "portal-docs";
+            src = ./docs;
+            buildInputs = [ pkgs.mdbook ];
+            buildPhase = "mdbook build";
+            installPhase = "cp -R book $out";
+          };
         };
 
         devShells.default = pkgs.mkShell {
