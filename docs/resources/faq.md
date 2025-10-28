@@ -4,7 +4,7 @@
 
 ### What is Portal?
 
-Portal is a toolkit for businesses to authenticate users, process payments, and issue tickets using Nostr and the Lightning Network, all without intermediaries.
+Portal is a toolkit for businesses to process payments, authenticate users, issue tickets and much more. Portal is based on freedom tech (Nostr, Lightning Network and Cashu) all without intermediaries.
 
 ### Do users need a Nostr account?
 
@@ -12,14 +12,7 @@ Yes, users need a nostr key to interact with businesses using Portal. A key is g
 
 ### Is Portal free?
 
-Portal is open-source (MIT license). There are no fees for using Portal itself, but:
-- Lightning Network routing fees apply (typically < 1%)
-- Relay costs if using paid relays
-- Infrastructure costs (server hosting)
-
-### What cryptocurrencies are supported?
-
-Currently only Bitcoin via Lightning Network.
+Portal is free and open-source (MIT license). 
 
 ## Technical Questions
 
@@ -29,21 +22,13 @@ Yes! You can build and run from source using Cargo. See [Building from Source](.
 
 ### Do I need to run a Lightning node?
 
-Not necessarily. You can use Nostr Wallet Connect (NWC) with a hosted wallet service like Alby.
-
-### Can I use Portal in the browser?
-
-Yes, the TypeScript SDK works in both Node.js and browser environments.
+Not necessarily. You can use Nostr Wallet Connect (NWC) with a hosted wallet service like Alby, or use the built-in wallet powered by the Breez SDK.
 
 ### How do I handle user sessions?
 
 Use JWT tokens issued by Portal for session management. See [JWT Tokens Guide](../guides/jwt-tokens.md).
 
 ## Payment Questions
-
-### What's the minimum payment amount?
-
-Technically 1 millisat, but practically ~1 sat due to Lightning Network routing.
 
 ### What happens if a payment fails?
 
@@ -55,17 +40,17 @@ Yes, but you'll need to initiate a reverse payment to the user's Lightning walle
 
 ### How long do payments take?
 
-Lightning payments are nearly instant, typically under 5 seconds.
+Lightning fast.
 
 ## Security Questions
 
 ### Is Portal secure?
 
-Portal uses cryptographic signatures for authentication and doesn't handle private keys. Always use HTTPS in production and follow security best practices.
+Portal uses cryptographic signatures for authentication and doesn't handle private keys.
 
 ### Where are private keys stored?
 
-Your Portal instance has its own private key (set via env var). User private keys never leave their devices.
+Your Portal instance has its own private key. User private keys are stored in the secure storage and never leave their devices
 
 ### Can users be tracked?
 
