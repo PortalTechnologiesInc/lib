@@ -173,6 +173,40 @@ impl From<bip39::Error> for MnemonicError {
     }
 }
 
+
+#[derive(uniffi::Object)]
+pub struct Nsec {
+    keys: portal::nostr::Keys,
+}
+
+#[uniffi::export]
+impl Nsec {
+    #[uniffi::constructor]
+    pub fn new(nsec: &str) -> Result<Self, KeypairError> {
+        let keys = portal::nostr::Keys::from_str(nsec).map_err(|_| KeypairError::InvalidNsec)?;
+
+        Ok(Self { keys })
+    }
+
+    pub fn get_keypair(&self) -> Keypair {
+        Keypair {
+            inner: portal::protocol::LocalKeypair::new(self.keys.clone(), None),
+        }
+    }
+
+    pub fn derive_cashu(&self) -> Vec<u8> {
+        use bitcoin::hashes::sha256;
+        use bitcoin::hashes::Hash;
+        use bitcoin::hashes::HashEngine;
+    
+        let mut engine = sha256::HashEngine::default();
+        engine.input(&self.keys.secret_key().secret_bytes());
+        engine.input("cashu".as_bytes());
+        let hash = sha256::Hash::from_engine(engine);
+        hash.to_byte_array().to_vec()
+    }
+}
+
 #[derive(uniffi::Object)]
 pub struct Keypair {
     pub inner: portal::protocol::LocalKeypair,
@@ -180,12 +214,6 @@ pub struct Keypair {
 
 #[uniffi::export]
 impl Keypair {
-    #[uniffi::constructor]
-    pub fn new(keypair: Arc<Keypair>) -> Result<Self, KeypairError> {
-        Ok(Self {
-            inner: keypair.inner.clone(),
-        })
-    }
 
     pub fn public_key(&self) -> portal::protocol::model::bindings::PublicKey {
         portal::protocol::model::bindings::PublicKey(self.inner.public_key())
