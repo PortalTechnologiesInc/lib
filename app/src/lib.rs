@@ -195,18 +195,18 @@ impl Nsec {
     }
 
     pub fn derive_cashu(&self) -> Vec<u8> {
-        //TODO USE BTC STUFF HERE TO HASH
-        use sha2::{Digest, Sha256};
-
-        let mut hasher = Sha256::new();
-        hasher.update(self.keys.secret_key().secret_bytes());
-        hasher.update("cashu".as_bytes());
-        let hash = hasher.finalize();
-
-        hash.to_vec()
+        use bitcoin::hashes::sha256;
+        use bitcoin::hashes::Hash;
+    
+        let mut engine = sha256::HashEngine::default();
+        engine.input(self.keys.secret_key().secret_bytes());
+        engine.input("cashu".as_bytes());
+        let hash = sha256::Hash::from_engine(engine);
+        hash.to_byte_array().to_vec()
     }
 }
 
+#[derive(uniffi::Object)]
 pub struct Keypair {
     pub inner: portal::protocol::LocalKeypair,
 }
