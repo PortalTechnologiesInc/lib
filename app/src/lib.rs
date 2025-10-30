@@ -173,19 +173,45 @@ impl From<bip39::Error> for MnemonicError {
     }
 }
 
+
 #[derive(uniffi::Object)]
+pub struct Nsec {
+    keys: portal::nostr::Keys,
+}
+
+#[uniffi::export]
+impl Nsec {
+    #[uniffi::constructor]
+    pub fn new(nsec: &str) -> Result<Self, KeypairError> {
+        let keys = portal::nostr::Keys::from_str(nsec).map_err(|_| KeypairError::InvalidNsec)?;
+
+        Ok(Self { keys })
+    }
+
+    pub fn get_keypair(&self) -> Keypair {
+        Keypair {
+            inner: portal::protocol::LocalKeypair::new(self.keys.clone(), None),
+        }
+    }
+
+    pub fn derive_cashu(&self) -> Vec<u8> {
+        use sha2::{Digest, Sha256};
+
+        let mut hasher = Sha256::new();
+        hasher.update(self.keys.secret_key().secret_bytes());
+        hasher.update("cashu".as_bytes());
+        let hash = hasher.finalize();
+
+        hash.to_vec()
+    }
+}
+
 pub struct Keypair {
     pub inner: portal::protocol::LocalKeypair,
 }
 
 #[uniffi::export]
 impl Keypair {
-    #[uniffi::constructor]
-    pub fn new(keypair: Arc<Keypair>) -> Result<Self, KeypairError> {
-        Ok(Self {
-            inner: keypair.inner.clone(),
-        })
-    }
 
     pub fn public_key(&self) -> portal::protocol::model::bindings::PublicKey {
         portal::protocol::model::bindings::PublicKey(self.inner.public_key())
