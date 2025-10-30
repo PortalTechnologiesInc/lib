@@ -197,6 +197,7 @@ impl Nsec {
     pub fn derive_cashu(&self) -> Vec<u8> {
         use bitcoin::hashes::sha256;
         use bitcoin::hashes::Hash;
+        use bitcoin::hashes::HashEngine;
     
         let mut engine = sha256::HashEngine::default();
         engine.input(self.keys.secret_key().secret_bytes());
