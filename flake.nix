@@ -48,6 +48,11 @@
           nativeBuildInputs = with pkgs; [
             # Needed to build cashu
             protobuf
+            pkg-config
+          ];
+
+          buildInputs = with pkgs; [
+            openssl
           ];
 
           meta.mainProgram = "rest";
