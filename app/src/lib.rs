@@ -200,7 +200,7 @@ impl Nsec {
         use bitcoin::hashes::HashEngine;
     
         let mut engine = sha256::HashEngine::default();
-        engine.input(self.keys.secret_key().secret_bytes());
+        engine.input(&self.keys.secret_key().secret_bytes());
         engine.input("cashu".as_bytes());
         let hash = sha256::Hash::from_engine(engine);
         hash.to_byte_array().to_vec()
