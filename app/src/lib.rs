@@ -214,13 +214,6 @@ pub struct Keypair {
 #[uniffi::export]
 impl Keypair {
 
-    #[uniffi::constructor]
-    pub fn new(keypair: Arc<Keypair>) -> Result<Self, KeypairError> {
-        Ok(Self {
-            inner: keypair.inner.clone(),
-        })
-    }
-
     pub fn public_key(&self) -> portal::protocol::model::bindings::PublicKey {
         portal::protocol::model::bindings::PublicKey(self.inner.public_key())
     }
