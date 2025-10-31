@@ -1,13 +1,12 @@
+use core::f64;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
 
+// use std::time::Duration inside async blocks
 use nostr::{
-    event::{Event, EventBuilder, Kind},
-    filter::{Filter, MatchEventOptions},
-    message::{RelayMessage, SubscriptionId},
-    nips::nip44,
+    event::{Event, EventBuilder, Kind}, filter::{Filter, MatchEventOptions}, message::{RelayMessage, SubscriptionId}, nips::nip44, types::RelayUrl
 };
 use nostr_relay_pool::RelayPoolNotification;
 use serde::{Serialize, de::DeserializeOwned};
@@ -15,10 +14,9 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_stream::StreamExt;
 
 use crate::{
-    protocol::{LocalKeypair, model::event_kinds::SUBKEY_PROOF},
+    protocol::{model::event_kinds::SUBKEY_PROOF, LocalKeypair},
     router::{
-        CleartextEvent, Conversation, ConversationError, ConversationMessage, NotificationStream,
-        PortalId, Response, channel::Channel,
+        channel::{BroadcastResult, Channel}, CleartextEvent, Conversation, ConversationError, ConversationMessage, NotificationStream, PortalId, Response
     },
 };
 
@@ -857,12 +855,12 @@ impl MessageRouterActorState {
         // check if Response has selected relays
         if let Some(selected_relays) = selected_relays_optional {
             for event in events_to_broadcast {
-                self.queue_event(channel, event, Some(selected_relays.clone()))
+                self.queue_event(channel, QueuedEvent::new_with_relays(event, selected_relays.clone()))
                     .await?;
             }
         } else {
             for event in events_to_broadcast {
-                self.queue_event(channel, event, None).await?;
+                self.queue_event(channel, QueuedEvent::new(event)).await?;
             }
 
             // TODO: wait for confirmation from relays
@@ -879,25 +877,52 @@ impl MessageRouterActorState {
     async fn queue_event<C: Channel>(
         &self,
         channel: &Arc<C>,
-        event: Event,
-        relays: Option<HashSet<String>>,
+        queue_event: QueuedEvent,
     ) -> Result<(), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        if let Some(relays) = relays {
-            // if selected relays, broadcast to selected relays
-            channel
-                .broadcast_to(relays, event)
-                .await
-                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-        } else {
-            // if not selected relays, broadcast to all relays
-            channel
-                .broadcast(event)
-                .await
-                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        let result = queue_event.broadcast(channel).await?;
+        if !result.failed().is_empty() {
+            // incrementally delay until it is confirmed
+            log::warn!("New event with id {} is queued, delaying until it is confirmed", queue_event.event.id);
+
+            let channel = channel.clone();
+            let event = queue_event.clone();
+
+            tokio::spawn(async move {
+                let mut attempt = 0.0;
+                let base_delay = 1.0; // seconds
+                let multiplier = f64::consts::E;
+                let mut remaining_relays = result;
+                while !remaining_relays.failed().is_empty() {
+                    attempt += 1.0;
+
+                    log::warn!("Attempt {} of event {} on relays {:?}", attempt, event.event.id, remaining_relays.failed());
+                    let mut secs = base_delay * multiplier.powf(attempt);
+                    if secs > 300.0 {
+                        secs = 300.0;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs_f64(secs)).await;
+                    match event.broadcast_remaining(&channel, &remaining_relays).await {
+                        Ok(result) => {
+                            remaining_relays = result;
+                        },
+                        Err(_) => {
+                            log::error!("Event {} failed to broadcast on relays {:?}", event.event.id, remaining_relays.failed());
+                        },
+                    }
+
+                    if attempt > 25.0 {
+                        log::error!("Event {} failed to broadcast after 25 attempts", event.event.id);
+                        break;
+                    }
+                    
+                }
+            });
+
         }
+
         Ok(())
     }
 
@@ -1230,4 +1255,44 @@ impl std::fmt::Debug for ConversationBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Conversation").finish()
     }
+}
+
+
+#[derive(Clone)]
+pub struct QueuedEvent {
+    event: Event,
+    relays: Option<HashSet<String>>,
+}
+
+impl QueuedEvent {
+    pub fn new(event: Event ) -> Self {
+        Self { event, relays: None }
+    }
+    pub fn new_with_relays(event: Event, relays: HashSet<String>) -> Self {
+        Self { event, relays: Some(relays) }
+    }
+
+    pub async fn broadcast<C: Channel>(&self, channel: &Arc<C>)
+     -> Result<BroadcastResult, ConversationError>
+     where
+        C::Error: From<nostr::types::url::Error>,
+    {
+        let relays = self.relays.clone();
+
+        let result = if let Some(relays) = relays {
+            channel.broadcast_to(relays, &self.event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?
+        } else {
+            channel.broadcast(&self.event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?
+        };
+        Ok(result)
+    }
+
+    pub async fn broadcast_remaining<C: Channel>(&self, channel: &Arc<C>, relays: &BroadcastResult) -> Result<BroadcastResult, ConversationError>
+     where
+        C::Error: From<nostr::types::url::Error>,
+    {
+        let result = channel.broadcast_to(relays.failed().clone(), &self.event).await.map_err(|e| ConversationError::Inner(Box::new(e)))?;
+        Ok(result)
+    }
+
 }
