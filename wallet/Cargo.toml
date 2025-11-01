@@ -1,0 +1,14 @@
+[package]
+name = "wallet"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+portal = { path = "../" }
+
+nwc = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+axum = { workspace = true }
+thiserror = { workspace = true }
+
+breez-sdk-spark = { git = "https://github.com/piergiorgies/spark-sdk", rev = "13d7f65fc048897d4332dcaabd6908c941a4cee0"}

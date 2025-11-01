@@ -4139,6 +4139,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "wallet",
 ]
 
 [[package]]
@@ -5806,6 +5807,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.107",
+]
+
+[[package]]
+name = "wallet"
+version = "0.1.0"
+dependencies = [
+ "axum 0.6.20",
+ "breez-sdk-spark",
+ "nwc",
+ "portal",
+ "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]
