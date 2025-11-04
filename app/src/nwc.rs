@@ -1,6 +1,7 @@
-use std::collections::HashMap;
 use std::sync::Arc;
+use std::{collections::HashMap, str::FromStr};
 
+use lightning_invoice::Bolt11Invoice;
 use nostr_relay_pool::{
     RelayOptions,
     monitor::{Monitor, MonitorNotification},
@@ -55,11 +56,14 @@ impl NWC {
     }
 
     pub async fn lookup_invoice(&self, invoice: String) -> Result<LookupInvoiceResponse, AppError> {
+        let bolt11_invoice = Bolt11Invoice::from_str(invoice.as_str())
+            .map_err(|e| AppError::NWC(format!("Invoice parse error: {}", e)))?;
+        let payment_hash = bolt11_invoice.payment_hash();
         let response = self
             .inner
             .lookup_invoice(portal::nostr::nips::nip47::LookupInvoiceRequest {
                 invoice: None,
-                payment_hash: Some(invoice),
+                payment_hash: Some(payment_hash.to_string()),
             })
             .await?;
 
