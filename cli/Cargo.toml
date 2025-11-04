@@ -13,3 +13,4 @@ tokio = { workspace = true, features = [] }
 nwc = { workspace = true }
 base64 = { workspace = true }
 sdk = { path = "../sdk", features = [] }
+lightning-invoice = "0.33.2"

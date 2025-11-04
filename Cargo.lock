@@ -1167,6 +1167,7 @@ dependencies = [
  "async-trait",
  "base64 0.21.7",
  "env_logger",
+ "lightning-invoice",
  "log",
  "nwc",
  "portal",

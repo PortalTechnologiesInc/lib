@@ -22,6 +22,7 @@ use portal::{
     },
 };
 
+use lightning_invoice::Bolt11Invoice;
 struct LogRelayStatusChange;
 
 #[async_trait::async_trait]
@@ -303,7 +304,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let result = nwc.lookup_invoice(invoice_str.to_string()).await;
     match result {
         Ok(lur) => {
-            info!("{}", lur.invoice.unwrap());
+            info!("invoice from lookup_invoice -> {}", lur.invoice.unwrap());
+        }
+        Err(e) => {
+            info!("{}", e);
+        }
+    }
+
+    let bolt11_invoice = Bolt11Invoice::from_str(invoice_str)?;
+    let payment_hash_string = bolt11_invoice.payment_hash().to_string();
+    let result = nwc.lookup_invoice_from_payment_hash(payment_hash_string).await;
+    match result {
+        Ok(lur) => {
+            info!("invoice from lookup_invoice_with_payment_hash -> {}", lur.invoice.unwrap());
         }
         Err(e) => {
             info!("{}", e);
