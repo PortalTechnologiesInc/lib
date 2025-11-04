@@ -58,8 +58,23 @@ impl NWC {
         let response = self
             .inner
             .lookup_invoice(portal::nostr::nips::nip47::LookupInvoiceRequest {
+                invoice: Some(invoice),
+                payment_hash: None,
+            })
+            .await?;
+
+        Ok(response.into())
+    }
+
+    pub async fn lookup_invoice_from_payment_hash(
+        &self,
+        payment_hash: String,
+    ) -> Result<LookupInvoiceResponse, AppError> {
+        let response = self
+            .inner
+            .lookup_invoice(portal::nostr::nips::nip47::LookupInvoiceRequest {
                 invoice: None,
-                payment_hash: Some(invoice),
+                payment_hash: Some(payment_hash),
             })
             .await?;
 

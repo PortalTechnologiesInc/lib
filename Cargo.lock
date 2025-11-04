@@ -169,7 +169,7 @@ checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
 name = "app"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "android_logger",
  "async",
@@ -1167,6 +1167,7 @@ dependencies = [
  "async-trait",
  "base64 0.21.7",
  "env_logger",
+ "lightning-invoice",
  "log",
  "nwc",
  "portal",

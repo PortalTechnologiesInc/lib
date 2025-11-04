@@ -4,8 +4,9 @@ use app::{
     AuthChallengeListener, CallbackError, CashuDirectListener, CashuRequestListener,
     ClosedRecurringPaymentListener, Mnemonic, PaymentRequestListener, PaymentStatusNotifier,
     PortalApp, RecurringPaymentRequest, RelayStatus, RelayStatusListener, RelayUrl,
-    SinglePaymentRequest, auth::AuthChallengeEvent, get_git_hash, parse_bolt11,
+    SinglePaymentRequest, auth::AuthChallengeEvent, get_git_hash, nwc::NWC, parse_bolt11,
 };
+use log::info;
 use portal::{
     nostr::nips::{nip19::ToBech32, nip47::PayInvoiceRequest},
     protocol::{
@@ -21,6 +22,7 @@ use portal::{
     },
 };
 
+use lightning_invoice::Bolt11Invoice;
 struct LogRelayStatusChange;
 
 #[async_trait::async_trait]
@@ -179,7 +181,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Testing database so commented for now
     let nwc_str = std::env::var("CLI_NWC_URL").expect("CLI_NWC_URL is not set");
-    let nwc = nwc::NWC::new(nwc_str.parse()?);
+    let nwc = NWC::new(nwc_str.parse()?, Arc::new(LogRelayStatusChange)).unwrap_or_else(|e| {
+        dbg!(e);
+        panic!();
+    });
 
     log::info!(
         "Public key: {:?}",
@@ -245,7 +250,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let _app = Arc::clone(&app);
     tokio::spawn(async move {
-        _app.listen_for_payment_request(Arc::new(ApprovePayment(Arc::new(nwc))))
+        _app.listen_for_payment_request(Arc::new(ApprovePayment(Arc::new(nwc::NWC::new(nwc_str.parse().unwrap())))))
             .await
             .unwrap();
     });
@@ -294,6 +299,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     "randomid".to_string(),
     // )
     // .await?;
+
+    let invoice_str = "lnbc10n1p5s34dcdry2pshjmt9de6zqgrxdaezqum4vfekxunfwp6xjmmwyqmrzvmxvv6kvdpdxg6nsefdx3snwwpdv9jkywfdv43kyd33xuenzv33vscsnp4qwkwylw8hza20g7t7a0d9az7yq0hyckv6hv00nmrpqru53z07mjvvpp5yxjzjjegtzrkeflkt6mx39fpe0n7w8v3gllj757d4gh9swk2w3jqsp5j59vg5wp5cw9f749x4qff5a4qkx6t736t2efaqm6ykdx3hxgctaq9qyysgqcqpcxqyz5vqrzjqvdnqyc82a9maxu6c7mee0shqr33u4z9z04wpdwhf96gxzpln8jcrapyqqqqqqpmqgqqqqqqqqqqqqqq2qy0z70pp236cqspe2kkj7uyk9xp0lwrz9gnsr02z6y9nj9qlf9xdsmg4zqyggqea7nwva22mqn49c45n7x5rzf986krjg25c6gmk7nrcpqalrcl";
+    let result = nwc.lookup_invoice(invoice_str.to_string()).await;
+    match result {
+        Ok(lur) => {
+            info!("invoice from lookup_invoice -> {}", lur.invoice.unwrap());
+        }
+        Err(e) => {
+            info!("{}", e);
+        }
+    }
+
+    let bolt11_invoice = Bolt11Invoice::from_str(invoice_str)?;
+    let payment_hash_string = bolt11_invoice.payment_hash().to_string();
+    let result = nwc.lookup_invoice_from_payment_hash(payment_hash_string).await;
+    match result {
+        Ok(lur) => {
+            info!("invoice from lookup_invoice_with_payment_hash -> {}", lur.invoice.unwrap());
+        }
+        Err(e) => {
+            info!("{}", e);
+        }
+    }
 
     dbg!(get_git_hash());
     tokio::spawn(async move {
