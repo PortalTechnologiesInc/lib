@@ -135,6 +135,8 @@
           buildInputs = with pkgs; [
             rustToolchain
             protobuf
+	    openssl
+	    pkg-config
           ];
         };
         devShells.nodejs = pkgs.mkShell rec {
