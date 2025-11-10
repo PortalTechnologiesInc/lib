@@ -18,7 +18,7 @@ interface PaymentRequest {
   amount: number;
   description: string;
   payment_type: 'single' | 'recurring';
-  frequency: 'minutely' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'semiannually' | 'yearly';
+  frequency: 'minutely' | '*-*-* *:0..59/10:0' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'semiannually' | 'yearly';
 }
 
 const app = express();
@@ -685,6 +685,8 @@ function calculateNextPayment(fromTimestamp: number, frequency: string): number 
   switch (frequency) {
     case 'minutely':
       return Math.floor(date.setMinutes(date.getMinutes() + 1) / 1000);
+    case '*-*-* *:0..59/10:0':
+      return Math.floor(date.setMinutes(Math.floor(date.getMinutes() / 10) * 10 + 10) / 1000);
     case 'hourly':
       return Math.floor(date.setHours(date.getHours() + 1) / 1000);
     case 'daily':
