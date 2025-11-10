@@ -513,6 +513,31 @@ impl Calendar {
     fn get_frequency_text(&self) -> Option<String> {
         // If not following a specific pattern, describe the recurring schedule
         // Based on what components are Any vs specific
+        if matches!(self.year, TimeComponent::Any)
+            && matches!(self.month, TimeComponent::Any)
+            && matches!(self.day, TimeComponent::Any)
+            && matches!(self.hour, TimeComponent::Any)
+        {
+            if let TimeComponent::Range { step: Some(step), .. } = &self.minute {
+                return Some(format!("Every {} minutes", step));
+            }
+        }
+
+        if matches!(self.year, TimeComponent::Any)
+            && matches!(self.month, TimeComponent::Any)
+            && matches!(self.day, TimeComponent::Any)
+        {
+            if let TimeComponent::Range { step: Some(step), .. } = &self.hour {
+                return Some(format!("Every {} hours", step));
+            }
+        }
+
+        if matches!(self.year, TimeComponent::Any) && matches!(self.month, TimeComponent::Any) {
+            if let TimeComponent::Range { step: Some(step), .. } = &self.day {
+                return Some(format!("Every {} days", step));
+            }
+        }
+
         if matches!(self.day, TimeComponent::Any)
             && matches!(self.month, TimeComponent::Any)
             && matches!(self.year, TimeComponent::Any)
@@ -1052,6 +1077,24 @@ mod tests {
         let cal = dbg!("*-*-* *:*:00").parse::<Calendar>().unwrap();
         let next_occurrence = cal.next_occurrence(Timestamp::new(x));
         assert!(next_occurrence.unwrap() > Timestamp::new(x));
+
+        let x = 1745499045;
+        let cal = dbg!("*-*-* *:0..59/10:0").parse::<Calendar>().unwrap();
+        dbg!(cal.to_human_readable(false));
+        let next_occurrence = cal.next_occurrence(Timestamp::new(x));
+        assert!(next_occurrence.unwrap() > Timestamp::new(x));
+        dbg!(
+            chrono::DateTime::from_timestamp(x as i64, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Europe::Rome)
+        );
+        dbg!(
+            chrono::DateTime::from_timestamp(next_occurrence.unwrap().as_u64() as i64, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Europe::Rome)
+        );
+
+
     }
 
     #[test]
@@ -1227,6 +1270,63 @@ mod tests {
         assert_eq!(
             cal_tz.to_human_readable(true),
             "On the 15th day of each month at 02:30 PM (Europe/London)"
+        );
+
+        let cal_every_10 = Calendar {
+            weekdays: None,
+            year: TimeComponent::Any,
+            month: TimeComponent::Any,
+            day: TimeComponent::Any,
+            hour: TimeComponent::Any,
+            minute: TimeComponent::Range {
+                start: 0,
+                end: 59,
+                step: Some(10),
+            },
+            second: TimeComponent::Values(vec![0]),
+            timezone: None,
+        };
+        assert_eq!(
+            cal_every_10.to_human_readable(true),
+            "Every 10 minutes"
+        );
+
+        let cal_every_6h = Calendar {
+            weekdays: None,
+            year: TimeComponent::Any,
+            month: TimeComponent::Any,
+            day: TimeComponent::Any,
+            hour: TimeComponent::Range {
+                start: 0,
+                end: 23,
+                step: Some(6),
+            },
+            minute: TimeComponent::Values(vec![0]),
+            second: TimeComponent::Values(vec![0]),
+            timezone: None,
+        };
+        assert_eq!(
+            cal_every_6h.to_human_readable(true),
+            "Every 6 hours"
+        );
+
+        let cal_every_3d = Calendar {
+            weekdays: None,
+            year: TimeComponent::Any,
+            month: TimeComponent::Any,
+            day: TimeComponent::Range {
+                start: 1,
+                end: 31,
+                step: Some(3),
+            },
+            hour: TimeComponent::Values(vec![0]),
+            minute: TimeComponent::Values(vec![0]),
+            second: TimeComponent::Values(vec![0]),
+            timezone: None,
+        };
+        assert_eq!(
+            cal_every_3d.to_human_readable(true),
+            "Every 3 days at midnight"
         );
     }
 }
