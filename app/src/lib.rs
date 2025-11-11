@@ -536,6 +536,13 @@ impl PortalApp {
         Ok(())
     }
 
+    pub async fn inject_event(&self, event: String) -> Result<(), AppError> {
+        let event: nostr::Event =
+            serde_json::from_str(&event).map_err(|e| AppError::ParseError(e.to_string()))?;
+        self.router.inject_event(event).await?;
+        Ok(())
+    }
+
     pub async fn send_key_handshake(&self, url: KeyHandshakeUrl) -> Result<(), AppError> {
         let our_relays = self
             .relay_pool
@@ -1155,6 +1162,9 @@ pub enum AppError {
 
     #[error("Profile fetching error: {0}")]
     ProfileFetchingError(String),
+
+    #[error("Parse error: {0}")]
+    ParseError(String),
 }
 
 impl From<portal::router::ConversationError> for AppError {

@@ -8,6 +8,7 @@ use nostr::{
     filter::{Filter, MatchEventOptions},
     message::{RelayMessage, SubscriptionId},
     nips::nip44,
+    types::RelayUrl,
 };
 use nostr_relay_pool::RelayPoolNotification;
 use serde::{Serialize, de::DeserializeOwned};
@@ -175,6 +176,20 @@ where
             keypair,
             sender: tx,
         }
+    }
+
+    pub async fn inject_event(&self, event: Event) -> Result<(), MessageRouterActorError> {
+        self.sender
+            .send(MessageRouterActorMessage::HandleRelayPoolNotification(
+                RelayPoolNotification::Event {
+                    event: Box::new(event),
+                    subscription_id: SubscriptionId::new("".to_string()),
+                    relay_url: RelayUrl::parse("wss://localhost").unwrap(),
+                },
+            ))
+            .await
+            .map_err(|e| MessageRouterActorError::Channel(Box::new(e)))?;
+        Ok(())
     }
 
     pub fn channel(&self) -> Arc<C> {
