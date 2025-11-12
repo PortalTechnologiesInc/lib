@@ -65,6 +65,7 @@ struct AppState {
     sdk: Arc<PortalSDK>,
     auth_token: String,
     wallet: Option<Arc<dyn PortalWallet>>,
+    market_api: Arc<rates::MarketAPI>,
 }
 
 #[derive(Serialize)]
@@ -181,6 +182,7 @@ async fn main() -> anyhow::Result<()> {
         sdk: Arc::new(sdk),
         auth_token,
         wallet,
+        market_api: rates::MarketAPI::new().expect("Failed to create market API"),
     };
 
     // Create router with middleware

@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 sdk = { path = "../sdk" }
 portal = { version = "0.1.0", path = "../" }
+rates = { path = "../rates" }
 nwc = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 axum = { workspace = true }

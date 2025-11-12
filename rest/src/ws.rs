@@ -18,7 +18,7 @@ use futures::{SinkExt, StreamExt};
 use portal::nostr_relay_pool::RelayOptions;
 use portal::protocol::jwt::CustomClaims;
 use portal::protocol::model::payment::{
-    CashuDirectContent, CashuRequestContent, PaymentStatus, SinglePaymentRequestContent,
+    CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, PaymentStatus, SinglePaymentRequestContent
 };
 use portal::protocol::model::Timestamp;
 use rand::RngCore;
@@ -30,6 +30,7 @@ use uuid::Uuid;
 
 struct SocketContext {
     sdk: Arc<PortalSDK>,
+    market_api: Arc<rates::MarketAPI>,
     wallet: Option<Arc<dyn PortalWallet>>,
     tx_message: mpsc::Sender<Message>,
     tx_notification: mpsc::Sender<Response>,
@@ -39,12 +40,14 @@ struct SocketContext {
 impl SocketContext {
     fn new(
         sdk: Arc<PortalSDK>,
+        market_api: Arc<rates::MarketAPI>,
         wallet: Option<Arc<dyn PortalWallet>>,
         tx_message: mpsc::Sender<Message>,
         tx_notification: mpsc::Sender<Response>,
     ) -> Self {
         Self {
             sdk,
+            market_api,
             wallet,
             tx_message,
             tx_notification,
@@ -156,6 +159,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
 
     let ctx = Arc::new(SocketContext::new(
         state.sdk.clone(),
+        state.market_api.clone(),
         state.wallet,
         tx_message.clone(),
         tx_notification,
@@ -479,11 +483,36 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 }
             };
 
-            // TODO: fetch and apply fiat exchange rate
+            let amount = payment_request.amount;
+            let mut msat_amount = payment_request.amount;
 
+
+            // If the currency is fiat, we need to convert it to millisats
+            let mut current_exchange_rate = None;
+            if let Currency::Fiat(currency) = &payment_request.currency {
+                let fiat_amount = amount as f64 / 100.0;
+                let market_data = ctx.market_api.clone().fetch_market_data(&currency).await;
+                match market_data {
+                    Ok(market_data) => {
+                        msat_amount = market_data.calculate_millisats(fiat_amount) as u64;                        
+                        current_exchange_rate = Some(ExchangeRate {
+                            rate: market_data.rate,
+                            source: "coinbase".to_string(),
+                            time: Timestamp::now(),
+                        });
+                    }
+                    Err(e) => {
+                        let _ = ctx.send_error_message(&command.id, &format!("Failed to fetch market data: {}", e)).await;
+                        return;
+                    }
+                }
+            }
+
+
+            // TODO: fetch and apply fiat exchange rate
             let invoice = match wallet
                 .make_invoice(
-                    payment_request.amount,
+                    msat_amount,
                     Some(payment_request.description.clone()),
                 )
                 .await
@@ -499,11 +528,11 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
             let expires_at = Timestamp::now_plus_seconds(300);
             let payment_request = SinglePaymentRequestContent {
-                amount: payment_request.amount,
+                amount,
                 currency: payment_request.currency,
                 expires_at,
                 invoice: invoice.clone(),
-                current_exchange_rate: None,
+                current_exchange_rate,
                 subscription_id: payment_request.subscription_id,
                 auth_token: payment_request.auth_token,
                 request_id: command.id.clone(),

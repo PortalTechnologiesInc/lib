@@ -4131,6 +4131,7 @@ dependencies = [
  "nwc",
  "portal",
  "rand 0.8.5",
+ "rates",
  "sdk",
  "serde",
  "serde_json",
