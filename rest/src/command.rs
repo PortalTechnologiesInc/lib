@@ -1,4 +1,5 @@
 use portal::profile::Profile;
+use portal::protocol::model::Timestamp;
 use portal::protocol::model::payment::{
     Currency, InvoiceRequestContent, RecurringPaymentRequestContent, SinglePaymentRequestContent,
 };
@@ -99,6 +100,10 @@ pub enum Command {
     },
     RemoveRelay {
         relay: String,
+    },
+    CalculateNextOccurrence {
+        calendar: String,
+        from: Timestamp,
     },
 }
 

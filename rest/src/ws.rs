@@ -16,6 +16,7 @@ use dashmap::DashMap;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use portal::nostr_relay_pool::RelayOptions;
+use portal::protocol::calendar::Calendar;
 use portal::protocol::jwt::CustomClaims;
 use portal::protocol::model::payment::{
     CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, PaymentStatus, SinglePaymentRequestContent
@@ -1143,7 +1144,6 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 }
             }
         }
-
         Command::SendCashuDirect {
             main_key,
             subkeys,
@@ -1408,6 +1408,21 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
                 let _ = ctx_clone.send_message(response).await;
             });
+        }
+        Command::CalculateNextOccurrence { calendar, from } => {
+            let calendar = match Calendar::from_str(&calendar) {
+                Ok(calendar) => calendar,
+                Err(e) => {
+                    let _ = ctx.send_error_message(&command.id, &format!("Invalid calendar: {}", e)).await;
+                    return;
+                }
+            };
+            let next_occurrence = calendar.next_occurrence(from);
+            let response = Response::Success {
+                id: command.id,
+                data: ResponseData::CalculateNextOccurrence { next_occurrence },
+            };
+            let _ = ctx.send_message(response).await;
         }
     }
 }

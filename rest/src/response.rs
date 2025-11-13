@@ -1,4 +1,5 @@
 use portal::profile::Profile;
+use portal::protocol::model::Timestamp;
 use portal::protocol::model::auth::AuthResponseStatus;
 use portal::protocol::model::payment::{CashuResponseStatus, RecurringPaymentResponseContent};
 use serde::Serialize;
@@ -75,6 +76,9 @@ pub enum ResponseData {
 
     #[serde(rename = "remove_relay")]
     RemoveRelay { relay: String },
+
+    #[serde(rename = "calculate_next_occurrence")]
+    CalculateNextOccurrence { next_occurrence: Option<Timestamp> },
 }
 
 #[derive(Debug, Serialize)]
