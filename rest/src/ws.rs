@@ -19,7 +19,7 @@ use portal::nostr_relay_pool::RelayOptions;
 use portal::protocol::calendar::Calendar;
 use portal::protocol::jwt::CustomClaims;
 use portal::protocol::model::payment::{
-    CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, PaymentStatus, SinglePaymentRequestContent
+    CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, PaymentStatus, RecurringPaymentRequestContent, SinglePaymentRequestContent
 };
 use portal::protocol::model::Timestamp;
 use rand::RngCore;
@@ -427,6 +427,38 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 }
             };
 
+            // If the currency is fiat, we need to fetch the exchange rate
+            let mut current_exchange_rate = None;
+            if let Currency::Fiat(currency) = &payment_request.currency {
+                let market_data = ctx.market_api.clone().fetch_market_data(&currency).await;
+                match market_data {
+                    Ok(market_data) => {
+                        current_exchange_rate = Some(ExchangeRate {
+                            rate: market_data.rate,
+                            source: "coinbase".to_string(), // TODO: use the actual source
+                            time: Timestamp::now(),
+                        });
+                    }
+                    Err(e) => {
+                        let _ = ctx.send_error_message(&command.id, &format!("Failed to fetch market data: {}", e)).await;
+                        return;
+                    }
+                }
+            }
+
+            let payment_request = RecurringPaymentRequestContent {
+                description: payment_request.description,
+                amount: payment_request.amount,
+                currency: payment_request.currency,
+                auth_token: payment_request.auth_token,
+
+                recurrence: payment_request.recurrence,
+                expires_at: payment_request.expires_at,
+
+                request_id: command.id.clone(),
+                current_exchange_rate,
+            };
+
             match ctx
                 .sdk
                 .request_recurring_payment(main_key, subkeys, payment_request)
@@ -498,7 +530,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                         msat_amount = market_data.calculate_millisats(fiat_amount) as u64;                        
                         current_exchange_rate = Some(ExchangeRate {
                             rate: market_data.rate,
-                            source: "coinbase".to_string(),
+                            source: "coinbase".to_string(), // TODO: use the actual source
                             time: Timestamp::now(),
                         });
                     }

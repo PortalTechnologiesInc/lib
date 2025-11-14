@@ -1,7 +1,7 @@
 use portal::profile::Profile;
 use portal::protocol::model::Timestamp;
 use portal::protocol::model::payment::{
-    Currency, InvoiceRequestContent, RecurringPaymentRequestContent, SinglePaymentRequestContent,
+    Currency, InvoiceRequestContent, RecurrenceInfo, RecurringPaymentRequestContent, SinglePaymentRequestContent
 };
 use serde::Deserialize;
 
@@ -22,6 +22,7 @@ pub enum Command {
     },
 
     // SDK methods
+
     NewKeyHandshakeUrl {
         static_token: Option<String>,
         no_request: Option<bool>,
@@ -33,7 +34,7 @@ pub enum Command {
     RequestRecurringPayment {
         main_key: String,
         subkeys: Vec<String>,
-        payment_request: RecurringPaymentRequestContent,
+        payment_request: RecurringPaymentParams,
     },
     RequestSinglePayment {
         main_key: String,
@@ -112,6 +113,19 @@ pub struct SinglePaymentParams {
     pub description: String,
     pub amount: u64,
     pub currency: Currency,
-    pub subscription_id: Option<String>,
     pub auth_token: Option<String>,
+    
+    pub subscription_id: Option<String>,
+}
+
+
+#[derive(Debug, Deserialize)]
+pub struct RecurringPaymentParams {
+    pub description: Option<String>,
+    pub amount: u64,
+    pub currency: Currency,
+    pub auth_token: Option<String>,
+
+    pub recurrence: RecurrenceInfo,
+    pub expires_at: Timestamp,
 }
