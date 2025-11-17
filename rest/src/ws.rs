@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::command::{Command, CommandWithId};
 use crate::response::*;
-use crate::wallets::PortalWallet;
+use wallet::PortalWallet;
 use crate::{AppState, PublicKey};
 use axum::extract::ws::{Message, WebSocket};
 use cdk::amount::SplitTarget;

@@ -6,14 +6,15 @@ use breez_sdk_spark::{
     PaymentDetails, PaymentStatus, ReceivePaymentMethod, ReceivePaymentRequest, Seed,
 };
 
-use crate::wallets::PortalWallet;
+use crate::{PortalWallet, Result};
 
+/// Breez Spark Wallet implementation
 pub struct BreezSparkWallet {
     sdk: BreezSdk,
 }
 
 impl BreezSparkWallet {
-    pub async fn new(mnemonic: String) -> anyhow::Result<Self> {
+    pub async fn new(mnemonic: String) -> Result<Self> {
         let api_key =
             env::var("BREEZ_API_KEY").expect("BREEZ_API_KEY environment variable is required");
         let breez_storage_dir = env::var("BREEZ_STORAGE_DIR")
@@ -39,7 +40,7 @@ impl BreezSparkWallet {
 
 #[async_trait]
 impl PortalWallet for BreezSparkWallet {
-    async fn make_invoice(&self, sats: u64, description: Option<String>) -> anyhow::Result<String> {
+    async fn make_invoice(&self, sats: u64, description: Option<String>) -> Result<String> {
         let description = description.unwrap_or("Portal invoice".into());
 
         let receive_response = self
@@ -55,7 +56,7 @@ impl PortalWallet for BreezSparkWallet {
         Ok(receive_response.payment_request)
     }
 
-    async fn is_invoice_paid(&self, invoice: String) -> anyhow::Result<(bool, Option<String>)> {
+    async fn is_invoice_paid(&self, invoice: String) -> Result<(bool, Option<String>)> {
         let batch_size = 100;
         let mut offset = 0;
 

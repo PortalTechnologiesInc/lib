@@ -3,14 +3,15 @@ use std::sync::Arc;
 use axum::async_trait;
 use nwc::NWC;
 
-use crate::wallets::PortalWallet;
+use crate::{PortalWallet, Result};
 
+/// NWC Wallet implementation
 pub struct NwcWallet {
     nwc: Arc<NWC>,
 }
 
 impl NwcWallet {
-    pub fn new(nwc_url: String) -> anyhow::Result<Self> {
+    pub fn new(nwc_url: String) -> Result<Self> {
         Ok(Self {
             nwc: Arc::new(NWC::new(nwc_url.parse()?)),
         })
@@ -19,7 +20,7 @@ impl NwcWallet {
 
 #[async_trait]
 impl PortalWallet for NwcWallet {
-    async fn make_invoice(&self, sats: u64, description: Option<String>) -> anyhow::Result<String> {
+    async fn make_invoice(&self, sats: u64, description: Option<String>) -> Result<String> {
         let payment_response = self
             .nwc
             .make_invoice(portal::nostr::nips::nip47::MakeInvoiceRequest {
@@ -33,7 +34,7 @@ impl PortalWallet for NwcWallet {
         Ok(payment_response.invoice)
     }
 
-    async fn is_invoice_paid(&self, invoice: String) -> anyhow::Result<(bool, Option<String>)> {
+    async fn is_invoice_paid(&self, invoice: String) -> Result<(bool, Option<String>)> {
         let invoice = self
             .nwc
             .lookup_invoice(portal::nostr::nips::nip47::LookupInvoiceRequest {
