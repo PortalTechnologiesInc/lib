@@ -30,7 +30,7 @@
         rest' = platform: platform.buildRustPackage {
           pname = "portal-rest";
           version = (pkgs.lib.importTOML ./rest/Cargo.toml).package.version;
-          src = pkgs.lib.sources.sourceFilesBySuffices ./. [ ".rs" "Cargo.toml" "Cargo.lock" ];
+          src = pkgs.lib.sources.sourceFilesBySuffices ./. [ ".rs" "Cargo.toml" "Cargo.lock" "fiatUnits.json" ];
 
           cargoHash = "";
           cargoLock = {
