@@ -60,7 +60,17 @@ docker run --rm --name portal-sdk-daemon -d \
 - `NOSTR_SUBKEY_PROOF`: (Optional) Nostr subkey proof
 - `NOSTR_RELAYS`: (Optional) Comma-separated list of relay URLs
 
-## Using the TypeScript Client
+## Start programming
+
+Since this is a REST API, you can use it from any programming language that supports websocket connections.
+
+But best is to use the official SDK for your programming language.
+
+Currently supported SDKs:
+- [TypeScript](rest/clients/ts/README.md)
+- [Java](https://github.com/PortalTechnologiesInc/jvm-client)
+
+### Using the TypeScript Client
 
 ### Installation
 

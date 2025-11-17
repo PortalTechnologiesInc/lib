@@ -2,6 +2,12 @@
 
 This crate provides a RESTful API for the Portal SDK, allowing it to be used from any programming language via a local REST API server.
 
+## Getting Started
+
+- [Setup](#setup)
+- [Start programming](#start-programming)
+- [API Endpoints](#api-endpoints)
+
 ## Setup
 
 ### Environment Variables
@@ -60,15 +66,26 @@ docker manifest create getportal/sdk-daemon:latest \
 docker manifest push getportal/sdk-daemon:latest
 ```
 
-## Authentication
+## Start programming
+
+Since this is a REST API, you can use it from any programming language that supports websocket connections.
+
+But best is to use the official SDK for your programming language.
+
+Currently supported SDKs:
+- [TypeScript](clients/ts/README.md)
+- [Java](https://github.com/PortalTechnologiesInc/jvm-client)
+
+
+## API Endpoints
+
+### Authentication
 
 All REST API endpoints require a Bearer token for authentication:
 
 ```
 Authorization: Bearer <AUTH_TOKEN>
 ```
-
-## API Endpoints
 
 ### REST Endpoints
 
