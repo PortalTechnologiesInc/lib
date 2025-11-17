@@ -1,22 +1,19 @@
 use std::{io::Write, str::FromStr, sync::Arc};
 
 use app::{
-    AuthChallengeListener, CallbackError, CashuDirectListener, CashuRequestListener,
-    ClosedRecurringPaymentListener, Mnemonic, NostrConnectRequestListener, PaymentRequestListener,
-    PaymentStatusNotifier, PortalApp, RecurringPaymentRequest, RelayStatus, RelayStatusListener,
-    RelayUrl, SinglePaymentRequest, auth::AuthChallengeEvent, get_git_hash, nwc::NWC, parse_bolt11,
+    CallbackError, IncomingPaymentRequest, Mnemonic, PortalApp, RelayStatus, RelayStatusListener,
+    RelayUrl, SinglePaymentRequest, get_git_hash, nwc, nwc::NWC, parse_bolt11,
 };
-use log::info;
+use log::{error, info};
 use portal::{
-    nostr::nips::nip47::PayInvoiceRequest,
+    nostr::nips::{nip19::ToBech32, nip47::PayInvoiceRequest},
     protocol::{
         key_handshake::KeyHandshakeUrl,
         model::{
             auth::AuthResponseStatus,
             nip46::{NostrConnectRequestEvent, NostrConnectResponseStatus},
             payment::{
-                CashuDirectContentWithKey, CashuRequestContentWithKey, CashuResponseStatus,
-                CloseRecurringPaymentResponse, PaymentResponseContent, PaymentStatus,
+                CashuResponseStatus, PaymentResponseContent, PaymentStatus,
                 RecurringPaymentResponseContent, RecurringPaymentStatus,
             },
         },
@@ -35,138 +32,6 @@ impl RelayStatusListener for LogRelayStatusChange {
         status: RelayStatus,
     ) -> Result<(), CallbackError> {
         log::info!("Relay {:?} status changed: {:?}", relay_url.0, status);
-        Ok(())
-    }
-}
-
-struct ApproveLogin(Arc<PortalApp>);
-
-#[async_trait::async_trait]
-impl AuthChallengeListener for ApproveLogin {
-    async fn on_auth_challenge(
-        &self,
-        event: AuthChallengeEvent,
-    ) -> Result<AuthResponseStatus, CallbackError> {
-        log::info!("Received auth challenge: {:?}", event);
-
-        dbg!(self.0.fetch_profile(event.service_key).await);
-
-        Ok(AuthResponseStatus::Approved {
-            granted_permissions: vec![],
-            session_token: String::from("ABC"),
-        })
-    }
-}
-
-struct ApprovePayment(Arc<nwc::NWC>);
-
-#[async_trait::async_trait]
-impl PaymentRequestListener for ApprovePayment {
-    async fn on_single_payment_request(
-        &self,
-        event: SinglePaymentRequest,
-        notifier: Arc<dyn PaymentStatusNotifier>,
-    ) -> Result<(), CallbackError> {
-        log::info!("Received single payment request: {:?}", event);
-
-        notifier
-            .notify(PaymentResponseContent {
-                status: PaymentStatus::Approved,
-                request_id: event.content.request_id.clone(),
-            })
-            .await?;
-
-        let nwc = self.0.clone();
-        tokio::task::spawn(async move {
-            let payment_result = nwc
-                .pay_invoice(PayInvoiceRequest {
-                    id: None,
-                    invoice: event.content.invoice,
-                    amount: None,
-                })
-                .await;
-            log::info!("Payment result: {:?}", payment_result);
-
-            match payment_result {
-                Ok(payment) => {
-                    notifier
-                        .notify(PaymentResponseContent {
-                            status: PaymentStatus::Success {
-                                preimage: Some(payment.preimage),
-                            },
-                            request_id: event.content.request_id,
-                        })
-                        .await
-                        .unwrap();
-                }
-                Err(e) => {
-                    log::error!("Payment failed: {:?}", e);
-                    notifier
-                        .notify(PaymentResponseContent {
-                            status: PaymentStatus::Failed {
-                                reason: Some(e.to_string()),
-                            },
-                            request_id: event.content.request_id,
-                        })
-                        .await
-                        .unwrap();
-                }
-            }
-        });
-
-        Ok(())
-    }
-
-    async fn on_recurring_payment_request(
-        &self,
-        event: RecurringPaymentRequest,
-    ) -> Result<RecurringPaymentResponseContent, CallbackError> {
-        log::info!("Received recurring payment request: {:?}", event);
-        Ok(RecurringPaymentResponseContent {
-            status: RecurringPaymentStatus::Confirmed {
-                subscription_id: "randomid".to_string(),
-                authorized_amount: event.content.amount,
-                authorized_currency: event.content.currency,
-                authorized_recurrence: event.content.recurrence,
-            },
-            request_id: event.content.request_id,
-        })
-    }
-}
-
-struct LogClosedRecurringPayment;
-
-#[async_trait::async_trait]
-impl ClosedRecurringPaymentListener for LogClosedRecurringPayment {
-    async fn on_closed_recurring_payment(
-        &self,
-        event: CloseRecurringPaymentResponse,
-    ) -> Result<(), CallbackError> {
-        log::warn!("Received closed recurring payment: {:?}", event);
-        Ok(())
-    }
-}
-
-struct LogCashuRequestListener;
-
-#[async_trait::async_trait]
-impl CashuRequestListener for LogCashuRequestListener {
-    async fn on_cashu_request(
-        &self,
-        event: CashuRequestContentWithKey,
-    ) -> Result<CashuResponseStatus, CallbackError> {
-        log::info!("Received Cashu request: {:?}", event);
-        // Always approve for test
-        Ok(CashuResponseStatus::Success {
-            token: "testtoken123".to_string(),
-        })
-    }
-}
-
-#[async_trait::async_trait]
-impl CashuDirectListener for LogCashuRequestListener {
-    async fn on_cashu_direct(&self, event: CashuDirectContentWithKey) -> Result<(), CallbackError> {
-        log::info!("Received Cashu direct: {:?}", event);
         Ok(())
     }
 }
@@ -212,10 +77,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Testing database so commented for now
     let nwc_str = std::env::var("CLI_NWC_URL").expect("CLI_NWC_URL is not set");
-    let nwc = NWC::new(nwc_str.parse()?, Arc::new(LogRelayStatusChange)).unwrap_or_else(|e| {
-        dbg!(e);
-        panic!();
-    });
+    let nwc = Arc::new(
+        NWC::new(nwc_str.parse()?, Arc::new(LogRelayStatusChange)).unwrap_or_else(|e| {
+            dbg!(e);
+            panic!();
+        }),
+    );
 
     log::info!("Public key: {:?}", keypair.public_key());
 
@@ -269,48 +136,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     .await?
     // );
 
-    let _app = Arc::clone(&app);
+    let auth_app = Arc::clone(&app);
     tokio::spawn(async move {
-        _app.listen_for_auth_challenge(Arc::new(ApproveLogin(Arc::clone(&_app))))
-            .await
-            .unwrap();
+        auth_challenge_loop(auth_app).await;
     });
 
-    let _app = Arc::clone(&app);
+    let payment_app = Arc::clone(&app);
+    let payment_nwc = Arc::clone(&nwc);
     tokio::spawn(async move {
-        _app.listen_for_nip46_request(Arc::new(DeclineNostrConnectRequestListener))
-            .await
-            .unwrap();
+        payment_request_loop(payment_app, payment_nwc).await;
     });
 
-    let _app = Arc::clone(&app);
+    let closed_app = Arc::clone(&app);
     tokio::spawn(async move {
-        _app.listen_for_payment_request(Arc::new(ApprovePayment(Arc::new(nwc::NWC::new(
-            nwc_str.parse().unwrap(),
-        )))))
-        .await
-        .unwrap();
+        closed_recurring_loop(closed_app).await;
     });
 
-    let _app = Arc::clone(&app);
+    let cashu_request_app = Arc::clone(&app);
     tokio::spawn(async move {
-        _app.listen_closed_recurring_payment(Arc::new(LogClosedRecurringPayment))
-            .await
-            .unwrap();
+        cashu_request_loop(cashu_request_app).await;
     });
 
-    let _app = Arc::clone(&app);
+    let cashu_direct_app = Arc::clone(&app);
     tokio::spawn(async move {
-        _app.listen_cashu_direct(Arc::new(LogCashuRequestListener))
-            .await
-            .unwrap();
-    });
-
-    let _app = Arc::clone(&app);
-    tokio::spawn(async move {
-        _app.listen_cashu_requests(Arc::new(LogCashuRequestListener))
-            .await
-            .unwrap();
+        cashu_direct_loop(cashu_direct_app).await;
     });
 
     // let _app = Arc::clone(&app);
@@ -368,8 +217,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dbg!(get_git_hash());
     tokio::spawn(async move {
         const INVOICE: &str = "lnbc100n1p5fvqfdsp586d9yz88deyfxm2mxgh39n39lezmpnkcv0a35uh38fvnjzlaxdzqpp59nwc8zac6psv09wysxvulgwj0t23jh3g5r4l5qzgpdsnel94w5zshp5mndu23huxkp6jgynf8agfjfaypgfjs2z8glq8fs9zqjfpnf34jnqcqpjrzjqgc7enr9zr4ju8yhezsep4h2p9ncf2nuxkp423pq2k4v3vsx2nunyz60tsqqj9qqqqqqqqqpqqqqqysqjq9qxpqysgqala28sswmp68uc9axqt893n48lzzt7l3uzkzjzlmlzurczpc647sxn4vrt4hvm30v5vv2ysvxhxeej78j903emrrjh02xdrl6z9alzqqns0w5s";
-        let invoice_data = parse_bolt11(INVOICE);
-        dbg!(invoice_data);
+        match parse_bolt11(INVOICE) {
+            Ok(invoice_data) => {
+                dbg!(invoice_data);
+            }
+            Err(e) => {
+                error!("Failed to parse bolt11 invoice: {:?}", e);
+            }
+        }
     });
 
     println!("\nEnter the auth init URL:");
@@ -383,4 +238,155 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::time::sleep(std::time::Duration::from_secs(600)).await;
 
     Ok(())
+}
+
+async fn auth_challenge_loop(app: Arc<PortalApp>) {
+    loop {
+        match app.next_auth_challenge().await {
+            Ok(event) => {
+                info!("Received auth challenge: {:?}", event);
+                let _ = app.fetch_profile(event.service_key.clone()).await;
+                let status = AuthResponseStatus::Approved {
+                    granted_permissions: vec![],
+                    session_token: String::from("ABC"),
+                };
+                if let Err(e) = app.reply_auth_challenge(event, status).await {
+                    error!("Failed to reply to auth challenge: {:?}", e);
+                }
+            }
+            Err(e) => {
+                error!("Auth challenge loop error: {:?}", e);
+                break;
+            }
+        }
+    }
+}
+
+async fn payment_request_loop(app: Arc<PortalApp>, nwc: Arc<nwc::NWC>) {
+    loop {
+        match app.next_payment_request().await {
+            Ok(IncomingPaymentRequest::Single(request)) => {
+                info!("Received single payment request: {:?}", request);
+                let single_app = Arc::clone(&app);
+                let single_nwc = Arc::clone(&nwc);
+                tokio::spawn(async move {
+                    process_single_payment_request(single_app, single_nwc, request).await;
+                });
+            }
+            Ok(IncomingPaymentRequest::Recurring(request)) => {
+                info!("Received recurring payment request: {:?}", request);
+                let content = request.content.clone();
+                let status = RecurringPaymentResponseContent {
+                    status: RecurringPaymentStatus::Confirmed {
+                        subscription_id: "randomid".to_string(),
+                        authorized_amount: content.amount,
+                        authorized_currency: content.currency,
+                        authorized_recurrence: content.recurrence,
+                    },
+                    request_id: content.request_id,
+                };
+                if let Err(e) = app.reply_recurring_payment_request(request, status).await {
+                    error!("Failed to reply to recurring payment request: {:?}", e);
+                }
+            }
+            Err(e) => {
+                error!("Payment request loop error: {:?}", e);
+                break;
+            }
+        }
+    }
+}
+
+async fn process_single_payment_request(
+    app: Arc<PortalApp>,
+    nwc: Arc<nwc::NWC>,
+    request: SinglePaymentRequest,
+) {
+    if let Err(e) = app
+        .reply_single_payment_request(
+            request.clone(),
+            PaymentResponseContent {
+                status: PaymentStatus::Approved,
+                request_id: request.content.request_id.clone(),
+            },
+        )
+        .await
+    {
+        error!("Failed to send approval for payment request: {:?}", e);
+        return;
+    }
+
+    let payment_result = nwc.pay_invoice(request.content.invoice.clone()).await;
+    info!("Payment result: {:?}", payment_result);
+
+    let status = match payment_result {
+        Ok(preimage) => PaymentResponseContent {
+            status: PaymentStatus::Success {
+                preimage: Some(preimage),
+            },
+            request_id: request.content.request_id.clone(),
+        },
+        Err(e) => {
+            error!("Payment failed: {:?}", e);
+            PaymentResponseContent {
+                status: PaymentStatus::Failed {
+                    reason: Some(e.to_string()),
+                },
+                request_id: request.content.request_id.clone(),
+            }
+        }
+    };
+
+    if let Err(e) = app.reply_single_payment_request(request, status).await {
+        error!("Failed to send payment status update: {:?}", e);
+    }
+}
+
+async fn closed_recurring_loop(app: Arc<PortalApp>) {
+    loop {
+        match app.next_closed_recurring_payment().await {
+            Ok(event) => info!("Received closed recurring payment: {:?}", event),
+            Err(e) => {
+                error!("Closed recurring payment loop error: {:?}", e);
+                break;
+            }
+        }
+    }
+}
+
+async fn cashu_request_loop(app: Arc<PortalApp>) {
+    loop {
+        match app.next_cashu_request().await {
+            Ok(event) => {
+                info!("Received Cashu request: {:?}", event);
+                if let Err(e) = app
+                    .reply_cashu_request(
+                        event,
+                        CashuResponseStatus::Success {
+                            token: "testtoken123".to_string(),
+                        },
+                    )
+                    .await
+                {
+                    error!("Failed to reply to Cashu request: {:?}", e);
+                }
+            }
+            Err(e) => {
+                error!("Cashu request loop error: {:?}", e);
+                break;
+            }
+        }
+    }
+}
+
+async fn cashu_direct_loop(app: Arc<PortalApp>) {
+    loop {
+        match app.next_cashu_direct().await {
+            Ok(event) => info!("Received Cashu direct: {:?}", event),
+            Err(e) => {
+                error!("Cashu direct loop error: {:?}", e);
+                break;
+            }
+        }
+    }
 }

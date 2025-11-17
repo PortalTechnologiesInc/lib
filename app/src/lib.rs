@@ -11,6 +11,7 @@ use fetch_git_hash::fetch_git_hash;
 use bitcoin::{Network, bip32};
 use lightning_invoice::{Bolt11Invoice, ParseOrSemanticError};
 use std::{str::FromStr, time::UNIX_EPOCH};
+use tokio::sync::Mutex;
 
 use cdk_common::SECP256K1;
 use chrono::Duration;
@@ -26,7 +27,7 @@ use portal::{
             KeyHandshakeConversation,
         },
         payments::{
-            PaymentRequestContent, PaymentRequestEvent, PaymentRequestListenerConversation,
+            PaymentRequestContent, PaymentRequestListenerConversation,
             PaymentStatusSenderConversation, RecurringPaymentStatusSenderConversation,
         },
     },
@@ -53,9 +54,9 @@ use portal::{
             payment::{
                 CashuDirectContentWithKey, CashuRequestContentWithKey, CashuResponseContent,
                 CashuResponseStatus, CloseRecurringPaymentContent, CloseRecurringPaymentResponse,
-                InvoiceRequestContent, InvoiceRequestContentWithKey, InvoiceResponse,
-                PaymentResponseContent, RecurringPaymentRequestContent,
-                RecurringPaymentResponseContent, SinglePaymentRequestContent,
+                InvoiceRequestContent, InvoiceResponse, PaymentResponseContent,
+                RecurringPaymentRequestContent, RecurringPaymentResponseContent,
+                SinglePaymentRequestContent,
             },
         },
     },
@@ -272,6 +273,15 @@ pub struct PortalApp {
     router: Arc<MessageRouter<Arc<RelayPool>>>,
     relay_pool: Arc<RelayPool>,
     runtime: Arc<BindingsRuntime>,
+
+    auth_challenge_rx: Mutex<NotificationStream<portal::app::auth::AuthChallengeEvent>>,
+    payment_request_rx: Mutex<NotificationStream<portal::app::payments::PaymentRequestEvent>>,
+    closed_recurring_payment_rx:
+        Mutex<NotificationStream<portal::protocol::model::payment::CloseRecurringPaymentResponse>>,
+    invoice_request_rx:
+        Mutex<NotificationStream<portal::protocol::model::payment::InvoiceRequestContentWithKey>>,
+    cashu_request_rx: Mutex<NotificationStream<CashuRequestContentWithKey>>,
+    cashu_direct_rx: Mutex<NotificationStream<CashuDirectContentWithKey>>,
 }
 #[derive(uniffi::Record, Debug)]
 pub struct Bolt11InvoiceData {
@@ -345,106 +355,12 @@ pub enum CallbackError {
 
 #[uniffi::export(with_foreign)]
 #[async_trait::async_trait]
-pub trait AuthChallengeListener: Send + Sync {
-    async fn on_auth_challenge(
-        &self,
-        event: AuthChallengeEvent,
-    ) -> Result<AuthResponseStatus, CallbackError>;
-}
-
-#[uniffi::export(with_foreign)]
-#[async_trait::async_trait]
-pub trait PaymentStatusNotifier: Send + Sync {
-    async fn notify(&self, status: PaymentResponseContent) -> Result<(), CallbackError>;
-}
-
-struct LocalStatusNotifier {
-    router: Arc<MessageRouter<Arc<RelayPool>>>,
-    request: PaymentRequestEvent,
-}
-
-#[async_trait::async_trait]
-impl PaymentStatusNotifier for LocalStatusNotifier {
-    async fn notify(&self, status: PaymentResponseContent) -> Result<(), CallbackError> {
-        let conv = PaymentStatusSenderConversation::new(
-            self.request.service_key.into(),
-            self.request.recipient.into(),
-            status,
-        );
-        self.router
-            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                self.request.recipient.into(),
-                vec![],
-                conv,
-            )))
-            .await
-            .map_err(|e| CallbackError::Error(e.to_string()))?;
-
-        Ok(())
-    }
-}
-
-#[uniffi::export(with_foreign)]
-#[async_trait::async_trait]
-pub trait PaymentRequestListener: Send + Sync {
-    async fn on_single_payment_request(
-        &self,
-        event: SinglePaymentRequest,
-        notifier: Arc<dyn PaymentStatusNotifier>,
-    ) -> Result<(), CallbackError>;
-    async fn on_recurring_payment_request(
-        &self,
-        event: RecurringPaymentRequest,
-    ) -> Result<RecurringPaymentResponseContent, CallbackError>;
-}
-
-#[uniffi::export(with_foreign)]
-#[async_trait::async_trait]
-pub trait ClosedRecurringPaymentListener: Send + Sync {
-    async fn on_closed_recurring_payment(
-        &self,
-        event: CloseRecurringPaymentResponse,
-    ) -> Result<(), CallbackError>;
-}
-
-#[uniffi::export(with_foreign)]
-#[async_trait::async_trait]
-pub trait InvoiceRequestListener: Send + Sync {
-    async fn on_invoice_requests(
-        &self,
-        event: InvoiceRequestContentWithKey,
-    ) -> Result<MakeInvoiceResponse, CallbackError>;
-}
-
-#[uniffi::export(with_foreign)]
-#[async_trait::async_trait]
-pub trait InvoiceResponseListener: Send + Sync {
-    async fn on_invoice_response(&self, event: InvoiceResponse) -> Result<(), CallbackError>;
-}
-
-#[uniffi::export(with_foreign)]
-#[async_trait::async_trait]
 pub trait RelayStatusListener: Send + Sync {
     async fn on_relay_status_change(
         &self,
         relay_url: RelayUrl,
         status: RelayStatus,
     ) -> Result<(), CallbackError>;
-}
-
-#[uniffi::export(with_foreign)]
-#[async_trait::async_trait]
-pub trait CashuRequestListener: Send + Sync {
-    async fn on_cashu_request(
-        &self,
-        event: CashuRequestContentWithKey,
-    ) -> Result<CashuResponseStatus, CallbackError>;
-}
-
-#[uniffi::export(with_foreign)]
-#[async_trait::async_trait]
-pub trait CashuDirectListener: Send + Sync {
-    async fn on_cashu_direct(&self, event: CashuDirectContentWithKey) -> Result<(), CallbackError>;
 }
 
 #[uniffi::export(with_foreign)]
@@ -508,10 +424,59 @@ impl PortalApp {
             router.add_relay(relay.clone(), false).await?;
         }
 
+        let auth_challenge_rx: NotificationStream<portal::app::auth::AuthChallengeEvent> = router
+            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
+                AuthChallengeListenerConversation::new(router.keypair().public_key()),
+                router.keypair().subkey_proof().cloned(),
+            )))
+            .await?;
+        let payment_request_rx: NotificationStream<portal::app::payments::PaymentRequestEvent> =
+            router
+                .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
+                    PaymentRequestListenerConversation::new(router.keypair().public_key()),
+                    router.keypair().subkey_proof().cloned(),
+                )))
+                .await?;
+        let closed_recurring_payment_rx: NotificationStream<
+            portal::protocol::model::payment::CloseRecurringPaymentResponse,
+        > = router
+            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
+                CloseRecurringPaymentReceiverConversation::new(router.keypair().public_key()),
+                router.keypair().subkey_proof().cloned(),
+            )))
+            .await?;
+        let invoice_request_rx: NotificationStream<
+            portal::protocol::model::payment::InvoiceRequestContentWithKey,
+        > = router
+            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
+                InvoiceReceiverConversation::new(router.keypair().public_key()),
+                router.keypair().subkey_proof().cloned(),
+            )))
+            .await?;
+        let cashu_request_rx: NotificationStream<CashuRequestContentWithKey> = router
+            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
+                CashuRequestReceiverConversation::new(router.keypair().public_key()),
+                router.keypair().subkey_proof().cloned(),
+            )))
+            .await?;
+        let cashu_direct_rx: NotificationStream<CashuDirectContentWithKey> = router
+            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
+                CashuDirectReceiverConversation::new(router.keypair().public_key()),
+                router.keypair().subkey_proof().cloned(),
+            )))
+            .await?;
+
         Ok(Arc::new(Self {
             router,
             relay_pool,
             runtime,
+
+            auth_challenge_rx: Mutex::new(auth_challenge_rx),
+            payment_request_rx: Mutex::new(payment_request_rx),
+            closed_recurring_payment_rx: Mutex::new(closed_recurring_payment_rx),
+            invoice_request_rx: Mutex::new(invoice_request_rx),
+            cashu_request_rx: Mutex::new(cashu_request_rx),
+            cashu_direct_rx: Mutex::new(cashu_direct_rx),
         }))
     }
 
@@ -619,109 +584,116 @@ impl PortalApp {
         Ok(())
     }
 
-    pub async fn listen_for_auth_challenge(
+    pub async fn next_auth_challenge(&self) -> Result<AuthChallengeEvent, AppError> {
+        let auth_challenge = self
+            .auth_challenge_rx
+            .lock()
+            .await
+            .next()
+            .await
+            .ok_or(AppError::ListenerDisconnected)?
+            .map_err(|e| AppError::ParseError(e.to_string()))?;
+        log::debug!("Received auth challenge: {:?}", auth_challenge);
+        Ok(auth_challenge)
+    }
+
+    pub async fn reply_auth_challenge(
         &self,
-        evt: Arc<dyn AuthChallengeListener>,
+        event: AuthChallengeEvent,
+        status: AuthResponseStatus,
     ) -> Result<(), AppError> {
-        let inner = AuthChallengeListenerConversation::new(self.router.keypair().public_key());
-        let mut rx: NotificationStream<portal::conversation::app::auth::AuthChallengeEvent> = self
-            .router
-            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
-                inner,
-                self.router.keypair().subkey_proof().cloned(),
+        let recipient = event.recipient.clone();
+
+        let conv = AuthResponseConversation::new(
+            event,
+            self.router.keypair().subkey_proof().cloned(),
+            status,
+        );
+        self.router
+            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                recipient.into(),
+                vec![],
+                conv,
             )))
             .await?;
-
-        while let Ok(response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            let evt = Arc::clone(&evt);
-            let router = Arc::clone(&self.router);
-
-            let _ = self.runtime.add_task(async move {
-                log::debug!("Received auth challenge: {:?}", response);
-
-                let status = evt.on_auth_challenge(response.clone()).await?;
-                log::debug!("Auth challenge callback result: {:?}", status);
-
-                let conv = AuthResponseConversation::new(
-                    response.clone(),
-                    router.keypair().subkey_proof().cloned(),
-                    status,
-                );
-                router
-                    .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                        response.recipient.into(),
-                        vec![],
-                        conv,
-                    )))
-                    .await?;
-
-                Ok::<(), AppError>(())
-            });
-        }
 
         Ok(())
     }
 
-    pub async fn listen_for_payment_request(
+    pub async fn next_payment_request(&self) -> Result<IncomingPaymentRequest, AppError> {
+        let request = self
+            .payment_request_rx
+            .lock()
+            .await
+            .next()
+            .await
+            .ok_or(AppError::ListenerDisconnected)?;
+        let request = request.map_err(|e| AppError::ParseError(e.to_string()))?;
+
+        log::debug!("Received payment request: {:?}", request);
+
+        match &request.content {
+            PaymentRequestContent::Single(content) => {
+                Ok(IncomingPaymentRequest::Single(SinglePaymentRequest {
+                    service_key: request.service_key.clone(),
+                    recipient: request.recipient.clone(),
+                    expires_at: request.expires_at,
+                    content: content.clone(),
+                    event_id: request.event_id.clone(),
+                }))
+            }
+            PaymentRequestContent::Recurring(content) => {
+                Ok(IncomingPaymentRequest::Recurring(RecurringPaymentRequest {
+                    service_key: request.service_key.clone(),
+                    recipient: request.recipient.clone(),
+                    expires_at: request.expires_at,
+                    content: content.clone(),
+                    event_id: request.event_id.clone(),
+                }))
+            }
+        }
+    }
+
+    pub async fn reply_single_payment_request(
         &self,
-        evt: Arc<dyn PaymentRequestListener>,
+        request: SinglePaymentRequest,
+        status: PaymentResponseContent,
     ) -> Result<(), AppError> {
-        let inner = PaymentRequestListenerConversation::new(self.router.keypair().public_key());
-        let mut rx: NotificationStream<portal::conversation::app::payments::PaymentRequestEvent> = self
-            .router
-            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
-                inner,
-                self.router.keypair().subkey_proof().cloned(),
+        let conv = PaymentStatusSenderConversation::new(
+            request.service_key.clone().into(),
+            request.recipient.clone().into(),
+            status,
+        );
+        let recipient = request.recipient.into();
+        self.router
+            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                recipient,
+                vec![],
+                conv,
             )))
             .await?;
 
-        while let Ok(request) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            let evt = Arc::clone(&evt);
-            let router = Arc::clone(&self.router);
+        Ok(())
+    }
 
-            let _ = self.runtime.add_task(async move {
-                match &request.content {
-                    PaymentRequestContent::Single(content) => {
-                        let req = SinglePaymentRequest {
-                            service_key: request.service_key,
-                            recipient: request.recipient,
-                            expires_at: request.expires_at,
-                            content: content.clone(),
-                            event_id: request.event_id.clone(),
-                        };
-                        evt.on_single_payment_request(
-                            req,
-                            Arc::new(LocalStatusNotifier { router, request }),
-                        )
-                        .await?;
-                    }
-                    PaymentRequestContent::Recurring(content) => {
-                        let req = RecurringPaymentRequest {
-                            service_key: request.service_key,
-                            recipient: request.recipient,
-                            expires_at: request.expires_at,
-                            content: content.clone(),
-                            event_id: request.event_id.clone(),
-                        };
-                        let status = evt.on_recurring_payment_request(req).await?;
-                        let conv = RecurringPaymentStatusSenderConversation::new(
-                            request.service_key.into(),
-                            request.recipient.into(),
-                            status,
-                        );
-                        router
-                            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                                request.recipient.into(),
-                                vec![],
-                                conv,
-                            )))
-                            .await?;
-                    }
-                }
-
-                Ok::<(), AppError>(())
-            });
-        }
+    pub async fn reply_recurring_payment_request(
+        &self,
+        request: RecurringPaymentRequest,
+        status: RecurringPaymentResponseContent,
+    ) -> Result<(), AppError> {
+        let conv = RecurringPaymentStatusSenderConversation::new(
+            request.service_key.clone().into(),
+            request.recipient.clone().into(),
+            status,
+        );
+        let recipient = request.recipient.into();
+        self.router
+            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                recipient,
+                vec![],
+                conv,
+            )))
+            .await?;
 
         Ok(())
     }
@@ -806,34 +778,19 @@ impl PortalApp {
         Ok(())
     }
 
-    pub async fn listen_closed_recurring_payment(
+    pub async fn next_closed_recurring_payment(
         &self,
-        evt: Arc<dyn ClosedRecurringPaymentListener>,
-    ) -> Result<(), AppError> {
-        let inner =
-            CloseRecurringPaymentReceiverConversation::new(self.router.keypair().public_key());
-        let mut rx: NotificationStream<
-            portal::protocol::model::payment::CloseRecurringPaymentResponse,
-        > = self
-            .router
-            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
-                inner,
-                self.router.keypair().subkey_proof().cloned(),
-            )))
-            .await?;
-
-        while let Ok(response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            let evt = Arc::clone(&evt);
-
-            let _ = self.runtime.add_task(async move {
-                log::debug!("Received closed recurring payment: {:?}", response);
-
-                let _ = evt.on_closed_recurring_payment(response).await?;
-
-                Ok::<(), AppError>(())
-            });
-        }
-        Ok(())
+    ) -> Result<CloseRecurringPaymentResponse, AppError> {
+        let response = self
+            .closed_recurring_payment_rx
+            .lock()
+            .await
+            .next()
+            .await
+            .ok_or(AppError::ListenerDisconnected)?;
+        let response = response.map_err(|e| AppError::ParseError(e.to_string()))?;
+        log::debug!("Received closed recurring payment: {:?}", response);
+        Ok(response)
     }
 
     pub async fn listen_for_nip46_request(
@@ -1002,51 +959,42 @@ impl PortalApp {
         Ok(())
     }
 
-    pub async fn listen_invoice_requests(
+    pub async fn next_invoice_request(
         &self,
-        evt: Arc<dyn InvoiceRequestListener>,
+    ) -> Result<portal::protocol::model::payment::InvoiceRequestContentWithKey, AppError> {
+        let request = self
+            .invoice_request_rx
+            .lock()
+            .await
+            .next()
+            .await
+            .ok_or(AppError::ListenerDisconnected)?;
+        let request = request.map_err(|e| AppError::ParseError(e.to_string()))?;
+        log::debug!("Received invoice request payment: {:?}", request);
+        Ok(request)
+    }
+
+    pub async fn reply_invoice_request(
+        &self,
+        request: portal::protocol::model::payment::InvoiceRequestContentWithKey,
+        invoice: MakeInvoiceResponse,
     ) -> Result<(), AppError> {
-        let inner = InvoiceReceiverConversation::new(self.router.keypair().public_key());
-        let mut rx: NotificationStream<
-            portal::protocol::model::payment::InvoiceRequestContentWithKey,
-        > = self
-            .router
-            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
-                inner,
-                self.router.keypair().subkey_proof().cloned(),
+        let recipient = request.recipient.clone().into();
+        let invoice_response = InvoiceResponse {
+            request,
+            invoice: invoice.invoice,
+            payment_hash: invoice.payment_hash,
+        };
+
+        let conv = InvoiceSenderConversation::new(invoice_response);
+
+        self.router
+            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                recipient,
+                vec![],
+                conv,
             )))
             .await?;
-
-        while let Ok(request) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            log::debug!("Received invoice request payment: {:?}", request);
-
-            let recipient: nostr::key::PublicKey = request.recipient.into();
-
-            let evt = Arc::clone(&evt);
-            let router = Arc::clone(&self.router);
-
-            let _ = self.runtime.add_task(async move {
-                let invoice = evt.on_invoice_requests(request.clone()).await?;
-
-                let invoice_response = InvoiceResponse {
-                    request: request,
-                    invoice: invoice.invoice,
-                    payment_hash: invoice.payment_hash,
-                };
-
-                let conv = InvoiceSenderConversation::new(invoice_response);
-
-                router
-                    .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                        recipient.to_owned(),
-                        vec![],
-                        conv,
-                    )))
-                    .await?;
-
-                Ok::<(), AppError>(())
-            });
-        }
 
         Ok(())
     }
@@ -1064,8 +1012,7 @@ impl PortalApp {
         &self,
         recipient: PublicKey,
         content: InvoiceRequestContent,
-        evt: Arc<dyn InvoiceResponseListener>,
-    ) -> Result<(), AppError> {
+    ) -> Result<Option<InvoiceResponse>, AppError> {
         let conv = InvoiceRequestConversation::new(
             self.router.keypair().public_key(),
             self.router.keypair().subkey_proof().cloned(),
@@ -1081,70 +1028,53 @@ impl PortalApp {
             .await?;
 
         if let Ok(invoice_response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            let _ = evt.on_invoice_response(invoice_response.clone()).await?;
+            return Ok(Some(invoice_response));
         }
+        Ok(None)
+    }
+
+    pub async fn next_cashu_request(&self) -> Result<CashuRequestContentWithKey, AppError> {
+        let request = self
+            .cashu_request_rx
+            .lock()
+            .await
+            .next()
+            .await
+            .ok_or(AppError::ListenerDisconnected)?;
+        let request = request.map_err(|e| AppError::ParseError(e.to_string()))?;
+        log::debug!("Received cashu request: {:?}", request);
+        Ok(request)
+    }
+
+    pub async fn reply_cashu_request(
+        &self,
+        request: CashuRequestContentWithKey,
+        status: CashuResponseStatus,
+    ) -> Result<(), AppError> {
+        let recipient = request.recipient.clone().into();
+        let response = CashuResponseContent { request, status };
+        let conv = CashuResponseSenderConversation::new(response);
+        self.router
+            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                recipient,
+                vec![],
+                conv,
+            )))
+            .await?;
         Ok(())
     }
 
-    pub async fn listen_cashu_requests(
-        &self,
-        evt: Arc<dyn CashuRequestListener>,
-    ) -> Result<(), AppError> {
-        let inner = CashuRequestReceiverConversation::new(self.router.keypair().public_key());
-        let mut rx: NotificationStream<CashuRequestContentWithKey> = self
-            .router
-            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
-                inner,
-                self.router.keypair().subkey_proof().cloned(),
-            )))
-            .await?;
-
-        while let Ok(request) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            let evt = Arc::clone(&evt);
-            let router = Arc::clone(&self.router);
-            let _ = self.runtime.add_task(async move {
-                let status = evt.on_cashu_request(request.clone()).await?;
-
-                let recipient = request.recipient.into();
-                let response = CashuResponseContent {
-                    request: request,
-                    status: status,
-                };
-                let conv = CashuResponseSenderConversation::new(response);
-                router
-                    .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                        recipient,
-                        vec![],
-                        conv,
-                    )))
-                    .await?;
-                Ok::<(), AppError>(())
-            });
-        }
-        Ok(())
-    }
-
-    pub async fn listen_cashu_direct(
-        &self,
-        evt: Arc<dyn CashuDirectListener>,
-    ) -> Result<(), AppError> {
-        let inner = CashuDirectReceiverConversation::new(self.router.keypair().public_key());
-        let mut rx: NotificationStream<CashuDirectContentWithKey> = self
-            .router
-            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
-                inner,
-                self.router.keypair().subkey_proof().cloned(),
-            )))
-            .await?;
-
-        while let Ok(response) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            let evt = Arc::clone(&evt);
-            let _ = self.runtime.add_task(async move {
-                let _ = evt.on_cashu_direct(response.clone()).await?;
-                Ok::<(), AppError>(())
-            });
-        }
-        Ok(())
+    pub async fn next_cashu_direct(&self) -> Result<CashuDirectContentWithKey, AppError> {
+        let response = self
+            .cashu_direct_rx
+            .lock()
+            .await
+            .next()
+            .await
+            .ok_or(AppError::ListenerDisconnected)?;
+        let response = response.map_err(|e| AppError::ParseError(e.to_string()))?;
+        log::debug!("Received cashu direct: {:?}", response);
+        Ok(response)
     }
 
     pub async fn single_payment_request(
@@ -1286,7 +1216,7 @@ impl From<nostr_relay_pool::relay::RelayStatus> for RelayStatus {
     }
 }
 
-#[derive(Debug, uniffi::Record)]
+#[derive(Debug, Clone, uniffi::Record)]
 pub struct SinglePaymentRequest {
     pub service_key: PublicKey,
     pub recipient: PublicKey,
@@ -1295,13 +1225,19 @@ pub struct SinglePaymentRequest {
     pub event_id: String,
 }
 
-#[derive(Debug, uniffi::Record)]
+#[derive(Debug, Clone, uniffi::Record)]
 pub struct RecurringPaymentRequest {
     pub service_key: PublicKey,
     pub recipient: PublicKey,
     pub expires_at: Timestamp,
     pub content: RecurringPaymentRequestContent,
     pub event_id: String,
+}
+
+#[derive(Debug, Clone, uniffi::Enum)]
+pub enum IncomingPaymentRequest {
+    Single(SinglePaymentRequest),
+    Recurring(RecurringPaymentRequest),
 }
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
