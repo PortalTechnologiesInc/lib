@@ -435,7 +435,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                     Ok(market_data) => {
                         current_exchange_rate = Some(ExchangeRate {
                             rate: market_data.rate,
-                            source: "coinbase".to_string(), // TODO: use the actual source
+                            source: market_data.source,
                             time: Timestamp::now(),
                         });
                     }
@@ -530,7 +530,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                         msat_amount = market_data.calculate_millisats(fiat_amount) as u64;                        
                         current_exchange_rate = Some(ExchangeRate {
                             rate: market_data.rate,
-                            source: "coinbase".to_string(), // TODO: use the actual source
+                            source: market_data.source,
                             time: Timestamp::now(),
                         });
                     }
