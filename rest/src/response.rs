@@ -1,8 +1,8 @@
 use nostr::nips::nip05::Nip05Profile;
 use portal::profile::Profile;
-use portal::protocol::model::Timestamp;
 use portal::protocol::model::auth::AuthResponseStatus;
 use portal::protocol::model::payment::{CashuResponseStatus, RecurringPaymentResponseContent};
+use portal::protocol::model::Timestamp;
 use serde::Serialize;
 
 // Response structs for each API

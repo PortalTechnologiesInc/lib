@@ -20,7 +20,8 @@ use portal::nostr_relay_pool::RelayOptions;
 use portal::protocol::calendar::Calendar;
 use portal::protocol::jwt::CustomClaims;
 use portal::protocol::model::payment::{
-    CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, PaymentStatus, RecurringPaymentRequestContent, SinglePaymentRequestContent
+    CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, PaymentStatus,
+    RecurringPaymentRequestContent, SinglePaymentRequestContent,
 };
 use portal::protocol::model::Timestamp;
 use rand::RngCore;
@@ -441,7 +442,12 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                         });
                     }
                     Err(e) => {
-                        let _ = ctx.send_error_message(&command.id, &format!("Failed to fetch market data: {}", e)).await;
+                        let _ = ctx
+                            .send_error_message(
+                                &command.id,
+                                &format!("Failed to fetch market data: {}", e),
+                            )
+                            .await;
                         return;
                     }
                 }
@@ -520,7 +526,6 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             let amount = payment_request.amount;
             let mut msat_amount = payment_request.amount;
 
-
             // If the currency is fiat, we need to convert it to millisats
             let mut current_exchange_rate = None;
             if let Currency::Fiat(currency) = &payment_request.currency {
@@ -528,7 +533,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 let market_data = ctx.market_api.clone().fetch_market_data(&currency).await;
                 match market_data {
                     Ok(market_data) => {
-                        msat_amount = market_data.calculate_millisats(fiat_amount) as u64;                        
+                        msat_amount = market_data.calculate_millisats(fiat_amount) as u64;
                         current_exchange_rate = Some(ExchangeRate {
                             rate: market_data.rate,
                             source: market_data.source,
@@ -536,19 +541,20 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                         });
                     }
                     Err(e) => {
-                        let _ = ctx.send_error_message(&command.id, &format!("Failed to fetch market data: {}", e)).await;
+                        let _ = ctx
+                            .send_error_message(
+                                &command.id,
+                                &format!("Failed to fetch market data: {}", e),
+                            )
+                            .await;
                         return;
                     }
                 }
             }
 
-
             // TODO: fetch and apply fiat exchange rate
             let invoice = match wallet
-                .make_invoice(
-                    msat_amount,
-                    Some(payment_request.description.clone()),
-                )
+                .make_invoice(msat_amount, Some(payment_request.description.clone()))
                 .await
             {
                 Ok(invoice) => invoice,
@@ -1446,7 +1452,9 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             let calendar = match Calendar::from_str(&calendar) {
                 Ok(calendar) => calendar,
                 Err(e) => {
-                    let _ = ctx.send_error_message(&command.id, &format!("Invalid calendar: {}", e)).await;
+                    let _ = ctx
+                        .send_error_message(&command.id, &format!("Invalid calendar: {}", e))
+                        .await;
                     return;
                 }
             };
