@@ -2,6 +2,7 @@
 //! ported to Rust. Original logic and fiat currency definitions are taken
 //! from BlueWallet (https://github.com/BlueWallet/BlueWallet).
 
+use core::fmt;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
@@ -81,11 +82,29 @@ enum Source {
     CoinDesk,
 }
 
+impl fmt::Display for Source {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Source::Yadio => write!(f, "yadio"),
+            Source::YadioConvert => write!(f, "yadio_convert"),
+            Source::Exir => write!(f, "exir"),
+            Source::Coinpaprika => write!(f, "coinpaprika"),
+            Source::Bitstamp => write!(f, "bitstamp"),
+            Source::Coinbase => write!(f, "coinbase"),
+            Source::CoinGecko => write!(f, "coingecko"),
+            Source::BNR => write!(f, "bnr"),
+            Source::Kraken => write!(f, "kraken"),
+            Source::CoinDesk => write!(f, "coindesk"),
+        }
+    }
+}
+
 #[derive(Debug)]
 #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
 pub struct MarketData {
     pub price: String,
     pub rate: f64,
+    pub source: String,
 }
 
 impl MarketData {
@@ -252,12 +271,14 @@ impl MarketAPI {
     ) -> Result<MarketData, RatesError> {
         let start = Instant::now();
         let symbol = self.fiat_units[currency].symbol.clone();
+        let source = self.fiat_units[currency].source.to_string();
 
         if let Some(price_str) = self.fetch_price(currency).await? {
             if let Ok(rate) = price_str.parse::<f64>() {
                 let data = MarketData {
                     price: format!("{} {:.0}", symbol, rate),
                     rate: rate,
+                    source,
                 };
                 log::debug!("Market data fetched in {:?}", start.elapsed());
                 return Ok(data);
