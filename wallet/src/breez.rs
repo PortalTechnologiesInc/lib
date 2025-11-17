@@ -81,7 +81,10 @@ impl PortalWallet for BreezSparkWallet {
                         ..
                     }) => {
                         if invoice == *payment_invoice {
-                            return Ok((payment.status == PaymentStatus::Completed, preimage.clone()));
+                            return Ok((
+                                payment.status == PaymentStatus::Completed,
+                                preimage.clone(),
+                            ));
                         }
                     }
                     _ => {}
