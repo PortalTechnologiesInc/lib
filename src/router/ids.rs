@@ -6,7 +6,7 @@ use std::str::FromStr;
 use crate::utils::random_string;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub enum PortalId {
+pub enum PortalConversationId {
     Conversation(String),
     ConversationAlias(String, u64),
     // Add more ID types here as needed
@@ -25,28 +25,28 @@ impl Display for ParseIdError {
 
 impl Error for ParseIdError {}
 
-impl Display for PortalId {
+impl Display for PortalConversationId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            PortalId::Conversation(id) => write!(f, "p1{}", id),
-            PortalId::ConversationAlias(id, alias) => write!(f, "p2{}_{}", id, alias),
+            PortalConversationId::Conversation(id) => write!(f, "p1{}", id),
+            PortalConversationId::ConversationAlias(id, alias) => write!(f, "p2{}_{}", id, alias),
         }
     }
 }
 
-impl Debug for PortalId {
+impl Debug for PortalConversationId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
     }
 }
 
-impl From<PortalId> for String {
-    fn from(id: PortalId) -> Self {
+impl From<PortalConversationId> for String {
+    fn from(id: PortalConversationId) -> Self {
         id.to_string()
     }
 }
 
-impl FromStr for PortalId {
+impl FromStr for PortalConversationId {
     type Err = ParseIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -60,13 +60,13 @@ impl FromStr for PortalId {
                 if id.is_empty() {
                     return Err(ParseIdError);
                 }
-                Ok(PortalId::Conversation(id.to_string()))
+                Ok(PortalConversationId::Conversation(id.to_string()))
             }
             "p2" => {
                 let rest = &s[2..];
                 if let Some((id, alias_str)) = rest.split_once('_') {
                     if let Ok(alias) = alias_str.parse::<u64>() {
-                        return Ok(PortalId::ConversationAlias(id.to_string(), alias));
+                        return Ok(PortalConversationId::ConversationAlias(id.to_string(), alias));
                     }
                 }
                 Err(ParseIdError)
@@ -76,7 +76,7 @@ impl FromStr for PortalId {
     }
 }
 
-impl PortalId {
+impl PortalConversationId {
     /// Create a new conversation ID
     pub fn new_conversation() -> Self {
         Self::Conversation(random_string(30))
@@ -84,31 +84,31 @@ impl PortalId {
 
     /// Create a new conversation alias ID
     pub fn new_conversation_alias(conversation_id: &str, alias: u64) -> Self {
-        Self::ConversationAlias(conversation_id.to_string(), alias)
+        PortalConversationId::ConversationAlias(conversation_id.to_string(), alias)
     }
 
     /// Get the underlying ID string (without prefix)
     pub fn id(&self) -> &str {
         match self {
-            PortalId::Conversation(id) => id,
-            PortalId::ConversationAlias(id, _) => id,
+            PortalConversationId::Conversation(id) => id,
+            PortalConversationId::ConversationAlias(id, _) => id,
         }
     }
 
     /// Check if this is a conversation ID
     pub fn is_conversation(&self) -> bool {
-        matches!(self, PortalId::Conversation(_))
+        matches!(self, PortalConversationId::Conversation(_))
     }
 
     /// Check if this is a conversation alias ID
     pub fn is_conversation_alias(&self) -> bool {
-        matches!(self, PortalId::ConversationAlias(_, _))
+        matches!(self, PortalConversationId::ConversationAlias(_, _))
     }
 
     /// Get the alias if this is a conversation alias ID
     pub fn alias(&self) -> Option<u64> {
         match self {
-            PortalId::ConversationAlias(_, alias) => Some(*alias),
+            PortalConversationId::ConversationAlias(_, alias) => Some(*alias),
             _ => None,
         }
     }
@@ -151,40 +151,40 @@ mod tests {
 
     #[test]
     fn test_conversation_id_creation() {
-        let id = PortalId::new_conversation();
+        let id = PortalConversationId::new_conversation();
         assert!(id.is_conversation());
         assert!(!id.is_conversation_alias());
     }
 
     #[test]
     fn test_conversation_id_display() {
-        let id = PortalId::Conversation("abc123".to_string());
+        let id = PortalConversationId::Conversation("abc123".to_string());
         assert_eq!(id.to_string(), "p1abc123");
     }
 
     #[test]
     fn test_conversation_id_parsing() {
-        let parsed = PortalId::from_str("p1abc123").unwrap();
+        let parsed = PortalConversationId::from_str("p1abc123").unwrap();
         assert!(parsed.is_conversation());
         assert_eq!(parsed.id(), "abc123");
     }
 
     #[test]
     fn test_conversation_alias_creation() {
-        let id = PortalId::new_conversation_alias("abc123", 42);
+        let id = PortalConversationId::new_conversation_alias("abc123", 42);
         assert!(id.is_conversation_alias());
         assert_eq!(id.alias(), Some(42));
     }
 
     #[test]
     fn test_conversation_alias_display() {
-        let id = PortalId::ConversationAlias("abc123".to_string(), 42);
+        let id = PortalConversationId::ConversationAlias("abc123".to_string(), 42);
         assert_eq!(id.to_string(), "p2abc123_42");
     }
 
     #[test]
     fn test_conversation_alias_parsing() {
-        let parsed = PortalId::from_str("p2abc123_42").unwrap();
+        let parsed = PortalConversationId::from_str("p2abc123_42").unwrap();
         assert!(parsed.is_conversation_alias());
         assert_eq!(parsed.id(), "abc123");
         assert_eq!(parsed.alias(), Some(42));
@@ -192,10 +192,10 @@ mod tests {
 
     #[test]
     fn test_invalid_parsing() {
-        assert!(PortalId::from_str("invalid").is_err());
-        assert!(PortalId::from_str("p1").is_err());
-        assert!(PortalId::from_str("p2abc").is_err());
-        assert!(PortalId::from_str("p2abc_").is_err());
-        assert!(PortalId::from_str("p2abc_invalid").is_err());
+        assert!(PortalConversationId::from_str("invalid").is_err());
+        assert!(PortalConversationId::from_str("p1").is_err());
+        assert!(PortalConversationId::from_str("p2abc").is_err());
+        assert!(PortalConversationId::from_str("p2abc_").is_err());
+        assert!(PortalConversationId::from_str("p2abc_invalid").is_err());
     }
 }

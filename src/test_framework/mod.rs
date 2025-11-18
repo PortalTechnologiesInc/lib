@@ -12,7 +12,7 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 use crate::{
     protocol::LocalKeypair,
     router::{
-        Conversation, ConversationError, MessageRouter, MessageRouterActorError, PortalId,
+        Conversation, ConversationError, MessageRouter, MessageRouterActorError, PortalConversationId,
         channel::Channel,
     },
 };
@@ -21,7 +21,7 @@ pub mod logger;
 
 /// A simulated channel that broadcasts messages to all connected nodes
 pub struct SimulatedChannel {
-    subscribers: Arc<RwLock<HashMap<PortalId, (Filter, mpsc::Sender<RelayPoolNotification>)>>>,
+    subscribers: Arc<RwLock<HashMap<PortalConversationId, (Filter, mpsc::Sender<RelayPoolNotification>)>>>,
     messages: Arc<Mutex<Vec<Event>>>,
     senders: Arc<Mutex<Vec<mpsc::Sender<RelayPoolNotification>>>>,
     receiver: Mutex<mpsc::Receiver<RelayPoolNotification>>,
@@ -71,7 +71,7 @@ pub enum SimulatedChannelError {
 impl Channel for SimulatedChannel {
     type Error = SimulatedChannelError;
 
-    async fn subscribe(&self, id: PortalId, filter: Filter) -> Result<usize, Self::Error> {
+    async fn subscribe(&self, id: PortalConversationId, filter: Filter) -> Result<usize, Self::Error> {
         let mut subscribers = self.subscribers.write().await;
         subscribers.insert(id.clone(), (filter, self.my_sender.clone()));
         Ok(subscribers.len())
@@ -94,7 +94,7 @@ impl Channel for SimulatedChannel {
     async fn subscribe_to<I, U>(
         &self,
         urls: I,
-        id: PortalId,
+        id: PortalConversationId,
         filter: nostr::Filter,
     ) -> Result<(), Self::Error>
     where
@@ -111,7 +111,7 @@ impl Channel for SimulatedChannel {
         Ok(())
     }
 
-    async fn unsubscribe(&self, id: PortalId) -> Result<(), Self::Error> {
+    async fn unsubscribe(&self, id: PortalConversationId) -> Result<(), Self::Error> {
         self.subscribers.write().await.remove(&id);
         Ok(())
     }
