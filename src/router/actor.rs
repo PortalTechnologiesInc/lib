@@ -915,6 +915,7 @@ impl MessageRouterActorState {
     fn internal_add_with_id(
         &mut self,
         id: &PortalConversationId,
+        subscription_id: PortalSubscriptionId,
         mut conversation: ConversationBox,
         relays: Option<Vec<String>>,
         subscriber: Option<mpsc::Sender<serde_json::Value>>,
@@ -925,14 +926,14 @@ impl MessageRouterActorState {
             // Create conversation with specific relays
             let relay_set: HashSet<String> = relays.into_iter().collect();
             let mut conv_state =
-                ConversationState::new_with_relays(id.clone(), conversation, relay_set, PortalSubscriptionId::generate());
+                ConversationState::new_with_relays(id.clone(), conversation, relay_set, subscription_id.clone());
             if let Some(subscriber) = subscriber {
                 conv_state.add_subscriber(subscriber);
             }
             conv_state
         } else {
             // Create global conversation (subscribed to all relays)
-            let mut conv_state = ConversationState::new(id.clone(), conversation, PortalSubscriptionId::generate());
+            let mut conv_state = ConversationState::new(id.clone(), conversation, subscription_id.clone());
             if let Some(subscriber) = subscriber {
                 conv_state.add_subscriber(subscriber);
             }
@@ -964,8 +965,9 @@ impl MessageRouterActorState {
     {
         let conversation_id = PortalConversationId::new_conversation();
 
-        let response = self.internal_add_with_id(&conversation_id, conversation, None, None)?;
-        self.process_response(channel, &conversation_id, response, PortalSubscriptionId::generate())
+        let subscription_id = PortalSubscriptionId::generate();
+        let response = self.internal_add_with_id(&conversation_id, subscription_id.clone(), conversation, None, None)?;
+        self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
 
         Ok(conversation_id)
@@ -982,9 +984,10 @@ impl MessageRouterActorState {
     {
         let conversation_id = PortalConversationId::new_conversation();
 
+        let subscription_id = PortalSubscriptionId::generate();
         let response =
-            self.internal_add_with_id(&conversation_id, conversation, Some(relays), None)?;
-        self.process_response(channel, &conversation_id, response, PortalSubscriptionId::generate())
+            self.internal_add_with_id(&conversation_id, subscription_id.clone(), conversation, Some(relays), None)?;
+        self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
 
         Ok(conversation_id)
@@ -1053,8 +1056,9 @@ impl MessageRouterActorState {
         let rx = NotificationStream::new(rx);
 
         // Now add the conversation
-        let response = self.internal_add_with_id(&conversation_id, conversation, None, Some(tx))?;
-        self.process_response(channel, &conversation_id, response, PortalSubscriptionId::generate())
+        let subscription_id = PortalSubscriptionId::generate();
+        let response = self.internal_add_with_id(&conversation_id, subscription_id.clone(), conversation, None, Some(tx))?;
+        self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
 
         Ok(rx)
