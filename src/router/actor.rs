@@ -1,6 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
+    collections::{HashMap, HashSet}, str::FromStr, sync::Arc
 };
 
 use nostr::{
@@ -18,8 +17,7 @@ use tokio_stream::StreamExt;
 use crate::{
     protocol::{LocalKeypair, model::event_kinds::SUBKEY_PROOF},
     router::{
-        CleartextEvent, Conversation, ConversationError, ConversationMessage, NotificationStream,
-        PortalConversationId, Response, channel::Channel,
+        CleartextEvent, Conversation, ConversationError, ConversationMessage, NotificationStream, PortalConversationId, PortalSubscriptionId, Response, channel::Channel
     },
 };
 
@@ -405,14 +403,14 @@ impl MessageRouterActorState {
             for (conversation_id, conv_state) in self.conversations.iter() {
                 if conv_state.is_global() {
                     if let Some(filter) = conv_state.filter.as_ref() {
-                        global_conversations.push((conversation_id.clone(), filter.clone()));
+                        global_conversations.push((conversation_id.clone(), filter.clone(), conv_state.subscription_id.clone()));
                     }
 
                     // Collect aliases
                     for alias in conv_state.aliases() {
                         if let Some(alias_state) = self.conversations.get(&alias) {
                             if let Some(filter) = &alias_state.filter {
-                                aliases_to_subscribe.push((alias, filter.clone()));
+                                aliases_to_subscribe.push((alias, filter.clone(), conv_state.subscription_id.clone()));
                             }
                         }
                     }
@@ -420,17 +418,17 @@ impl MessageRouterActorState {
             }
 
             // Subscribe to the new relay
-            for (conversation_id, filter) in global_conversations {
+            for (conversation_id, filter, subscription_id) in global_conversations {
                 log::trace!("Subscribing {} to new relay = {:?}", conversation_id, &url);
                 channel
-                    .subscribe_to(vec![url.clone()], conversation_id.clone(), filter)
+                    .subscribe_to(vec![url.clone()], subscription_id.clone(), filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
 
-            for (alias_id, filter) in aliases_to_subscribe {
+            for (alias_id, filter, subscription_id) in aliases_to_subscribe {
                 channel
-                    .subscribe_to(vec![url.clone()], alias_id.clone(), filter)
+                    .subscribe_to(vec![url.clone()], subscription_id.clone(), filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
@@ -513,7 +511,7 @@ impl MessageRouterActorState {
         if let Some(conv_state) = self.conversations.remove(conversation) {
             // Remove filters from relays
             channel
-                .unsubscribe(conversation.clone())
+                .unsubscribe(conv_state.subscription_id.clone())
                 .await
                 .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
@@ -521,7 +519,7 @@ impl MessageRouterActorState {
             for alias in conv_state.aliases() {
                 let alias_clone = alias.clone();
                 channel
-                    .unsubscribe(alias_clone)
+                    .unsubscribe(conv_state.subscription_id.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
@@ -589,18 +587,15 @@ impl MessageRouterActorState {
                 ..
             } => {
                 // Parse the subscription ID to get the PortalId
-                let portal_id = match PortalConversationId::parse(subscription_id.as_str()) {
-                    Some(id) => id,
-                    None => {
-                        log::warn!(
-                            "Invalid subscription ID format for EOSE: {:?}",
-                            subscription_id
-                        );
+                let portal_subscription_id = match PortalSubscriptionId::from_str(subscription_id.as_str()) {
+                    Ok(id) => id,
+                    Err(e) => {
+                        log::warn!("Invalid subscription ID format: {:?}: {}", e, subscription_id);
                         return Ok(());
                     }
                 };
 
-                let remaining = if let Some(conv_state) = self.conversations.get_mut(&portal_id) {
+                let remaining = if let Some((conv_id, conv_state)) = self.conversations.iter_mut().find(|(_, conv_state)| conv_state.subscription_id == portal_subscription_id) {
                     let remaining = conv_state.decrement_eose();
                     if remaining == Some(0) {
                         conv_state.clear_eose();
@@ -610,7 +605,7 @@ impl MessageRouterActorState {
                     None
                 };
 
-                log::trace!("{:?} EOSE left for {}", remaining, portal_id);
+                log::trace!("{:?} EOSE left for {}", remaining, portal_subscription_id);
 
                 if remaining == Some(0) {
                     (subscription_id.into_owned(), LocalEvent::EndOfStoredEvents)
@@ -657,6 +652,14 @@ impl MessageRouterActorState {
             LocalEvent::EndOfStoredEvents => ConversationMessage::EndOfStoredEvents,
         };
 
+        let subscription_id = match PortalSubscriptionId::from_str(subscription_id.as_str()) {
+            Ok(id) => id,
+            Err(e) => {
+                log::warn!("Invalid subscription ID format: {:?}: {}", e, subscription_id);
+                return Ok(());
+            }
+        };
+
         self.dispatch_event(channel, subscription_id.clone(), message.clone())
             .await?;
 
@@ -665,7 +668,7 @@ impl MessageRouterActorState {
 
         // Check if there are other potential conversations to dispatch to
         for (id, conv_state) in self.conversations.iter() {
-            if id.to_string() == subscription_id.as_str() {
+            if conv_state.subscription_id == subscription_id {
                 continue;
             }
 
@@ -677,7 +680,7 @@ impl MessageRouterActorState {
             if let LocalEvent::Message(event) = &event {
                 if let Some(filter) = &conv_state.filter {
                     if filter.match_event(&event, MatchEventOptions::default()) {
-                        other_conversations.push(id.clone());
+                        other_conversations.push(conv_state.subscription_id.clone());
                     }
                 }
             }
@@ -688,7 +691,7 @@ impl MessageRouterActorState {
         }
 
         for id in other_conversations {
-            self.dispatch_event(channel, SubscriptionId::new(id.clone()), message.clone())
+            self.dispatch_event(channel, id, message.clone())
                 .await?;
         }
         Ok(())
@@ -697,28 +700,19 @@ impl MessageRouterActorState {
     async fn dispatch_event<C: Channel>(
         &mut self,
         channel: &Arc<C>,
-        subscription_id: SubscriptionId,
+        subscription_id: PortalSubscriptionId,
         message: ConversationMessage,
     ) -> Result<(), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        let subscription_str = subscription_id.as_str();
-        log::debug!("Dispatching event to subscription: {}", subscription_str);
+        log::debug!("Dispatching event to subscription: {}", subscription_id);
 
-        // Parse the subscription ID to get the PortalId
-        let conversation_id = match PortalConversationId::parse(subscription_str) {
-            Some(id) => id,
-            None => {
-                log::warn!("Invalid subscription ID format: {:?}", subscription_str);
-                return Ok(());
-            }
-        };
 
-        log::debug!("Looking for conversation: {}", conversation_id);
-        let response = match self.conversations.get_mut(&conversation_id) {
-            Some(conv_state) => {
+        let (response, conversation_id) = match self.conversations.iter_mut().find(|(_, conv_state)| conv_state.subscription_id == subscription_id) {
+            Some((conversation_id, conv_state)) => {
                 log::debug!("Found conversation, processing message");
+                
                 let response = match conv_state.conversation.on_message(message) {
                     Ok(response) => response,
                     Err(e) => {
@@ -727,12 +721,12 @@ impl MessageRouterActorState {
                     }
                 };
 
-                response
+                (response, conversation_id.clone())
             }
             None => {
-                log::warn!("No conversation found for id: {}", conversation_id);
+                log::warn!("No conversation found for subscription id: {}", subscription_id);
                 channel
-                    .unsubscribe(conversation_id)
+                    .unsubscribe(subscription_id.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
@@ -741,7 +735,7 @@ impl MessageRouterActorState {
         };
 
         log::debug!("Processing response for conversation: {}", conversation_id);
-        self.process_response(channel, &conversation_id, response)
+        self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
 
         Ok(())
@@ -752,6 +746,7 @@ impl MessageRouterActorState {
         channel: &Arc<C>,
         id: &PortalConversationId,
         response: Response,
+        subscription_id: PortalSubscriptionId,
     ) -> Result<(), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
@@ -771,7 +766,7 @@ impl MessageRouterActorState {
                 let num_relays = selected_relays.len();
                 log::trace!("Subscribing to relays = {:?}", selected_relays);
                 channel
-                    .subscribe_to(selected_relays, id.clone(), response.filter.clone())
+                    .subscribe_to(selected_relays, subscription_id.clone(), response.filter.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
 
@@ -779,7 +774,7 @@ impl MessageRouterActorState {
             } else {
                 log::trace!("Subscribing to all relays");
                 channel
-                    .subscribe(id.clone(), response.filter.clone())
+                    .subscribe(subscription_id.clone(), response.filter.clone())
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?
             };
@@ -849,21 +844,22 @@ impl MessageRouterActorState {
                 .kinds(vec![Kind::Custom(SUBKEY_PROOF)])
                 .events(events_to_broadcast.iter().map(|e| e.id));
 
+            let subscription_id = PortalSubscriptionId::generate();
             // Create a new ConversationState for the alias
             self.conversations.insert(
                 alias.clone(),
-                ConversationState::new_alias(alias.clone(), filter.clone()),
+                ConversationState::new_alias(alias.clone(), filter.clone(), subscription_id.clone()),
             );
 
             if let Some(selected_relays) = selected_relays_optional.clone() {
                 channel
-                    .subscribe_to(selected_relays, alias, filter)
+                    .subscribe_to(selected_relays, subscription_id.clone(), filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             } else {
                 // Subscribe to subkey proofs to all
                 channel
-                    .subscribe(alias, filter)
+                    .subscribe(subscription_id.clone(), filter)
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
@@ -929,14 +925,14 @@ impl MessageRouterActorState {
             // Create conversation with specific relays
             let relay_set: HashSet<String> = relays.into_iter().collect();
             let mut conv_state =
-                ConversationState::new_with_relays(id.clone(), conversation, relay_set);
+                ConversationState::new_with_relays(id.clone(), conversation, relay_set, PortalSubscriptionId::generate());
             if let Some(subscriber) = subscriber {
                 conv_state.add_subscriber(subscriber);
             }
             conv_state
         } else {
             // Create global conversation (subscribed to all relays)
-            let mut conv_state = ConversationState::new(id.clone(), conversation);
+            let mut conv_state = ConversationState::new(id.clone(), conversation, PortalSubscriptionId::generate());
             if let Some(subscriber) = subscriber {
                 conv_state.add_subscriber(subscriber);
             }
@@ -969,7 +965,7 @@ impl MessageRouterActorState {
         let conversation_id = PortalConversationId::new_conversation();
 
         let response = self.internal_add_with_id(&conversation_id, conversation, None, None)?;
-        self.process_response(channel, &conversation_id, response)
+        self.process_response(channel, &conversation_id, response, PortalSubscriptionId::generate())
             .await?;
 
         Ok(conversation_id)
@@ -988,7 +984,7 @@ impl MessageRouterActorState {
 
         let response =
             self.internal_add_with_id(&conversation_id, conversation, Some(relays), None)?;
-        self.process_response(channel, &conversation_id, response)
+        self.process_response(channel, &conversation_id, response, PortalSubscriptionId::generate())
             .await?;
 
         Ok(conversation_id)
@@ -1058,7 +1054,7 @@ impl MessageRouterActorState {
 
         // Now add the conversation
         let response = self.internal_add_with_id(&conversation_id, conversation, None, Some(tx))?;
-        self.process_response(channel, &conversation_id, response)
+        self.process_response(channel, &conversation_id, response, PortalSubscriptionId::generate())
             .await?;
 
         Ok(rx)
@@ -1084,6 +1080,8 @@ struct ConversationState {
     relay_urls: HashSet<String>,
     /// Whether this conversation is subscribed to all relays (global)
     is_global: bool,
+    /// The subscription ID for this conversation
+    subscription_id: PortalSubscriptionId,
 }
 
 #[derive(Debug)]
@@ -1109,7 +1107,7 @@ impl InnerConversationState {
 }
 
 impl ConversationState {
-    fn new(id: PortalConversationId, conversation: ConversationBox) -> Self {
+    fn new(id: PortalConversationId, conversation: ConversationBox, subscription_id: PortalSubscriptionId) -> Self {
         Self {
             id,
             conversation: InnerConversationState::Standard(conversation),
@@ -1119,6 +1117,7 @@ impl ConversationState {
             end_of_stored_events: None,
             relay_urls: HashSet::new(),
             is_global: true, // Default to global subscription
+            subscription_id,
         }
     }
 
@@ -1126,6 +1125,7 @@ impl ConversationState {
         id: PortalConversationId,
         conversation: ConversationBox,
         relay_urls: HashSet<String>,
+        subscription_id: PortalSubscriptionId,
     ) -> Self {
         Self {
             id,
@@ -1136,10 +1136,11 @@ impl ConversationState {
             end_of_stored_events: None,
             relay_urls,
             is_global: false,
+            subscription_id,
         }
     }
 
-    fn new_alias(id: PortalConversationId, filter: Filter) -> Self {
+    fn new_alias(id: PortalConversationId, filter: Filter, subscription_id: PortalSubscriptionId) -> Self {
         Self {
             id,
             conversation: InnerConversationState::Alias,
@@ -1149,6 +1150,7 @@ impl ConversationState {
             end_of_stored_events: None,
             relay_urls: HashSet::new(),
             is_global: true, // Aliases default to global
+            subscription_id,
         }
     }
     /// Get the ID of this conversation
