@@ -20,7 +20,7 @@ use nostr::{
 };
 use nostr_relay_pool::monitor::{Monitor, MonitorNotification};
 use portal::{
-    app::{
+    conversation::app::{
         auth::{
             AuthChallengeEvent, AuthChallengeListenerConversation, AuthResponseConversation,
             KeyHandshakeConversation,
@@ -30,18 +30,18 @@ use portal::{
             PaymentStatusSenderConversation, RecurringPaymentStatusSenderConversation,
         },
     },
-    cashu::{
+    conversation::cashu::{
         CashuDirectReceiverConversation, CashuRequestReceiverConversation,
         CashuResponseSenderConversation,
     },
-    close_subscription::{
+    conversation::close_subscription::{
         CloseRecurringPaymentConversation, CloseRecurringPaymentReceiverConversation,
     },
-    invoice::{InvoiceReceiverConversation, InvoiceRequestConversation, InvoiceSenderConversation},
     nip46::{Nip46Request, Nip46RequestListenerConversation, SigningResponseSenderConversation},
+    conversation::invoice::{InvoiceReceiverConversation, InvoiceRequestConversation, InvoiceSenderConversation},
     nostr::nips::nip19::ToBech32,
     nostr_relay_pool::{RelayOptions, RelayPool},
-    profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
+    conversation::profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
     protocol::{
         jwt::CustomClaims,
         key_handshake::KeyHandshakeUrl,
@@ -63,11 +63,11 @@ use portal::{
         MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream,
         adapters::one_shot::OneShotSenderAdapter,
     },
-    sdk::payments::SinglePaymentRequestSenderConversation,
+    conversation::sdk::payments::SinglePaymentRequestSenderConversation,
     utils::verify_nip05,
 };
 
-pub use portal::app::*;
+pub use portal::conversation::app::*;
 pub use rates;
 
 use crate::{
@@ -624,7 +624,7 @@ impl PortalApp {
         evt: Arc<dyn AuthChallengeListener>,
     ) -> Result<(), AppError> {
         let inner = AuthChallengeListenerConversation::new(self.router.keypair().public_key());
-        let mut rx: NotificationStream<portal::app::auth::AuthChallengeEvent> = self
+        let mut rx: NotificationStream<portal::conversation::app::auth::AuthChallengeEvent> = self
             .router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 inner,
@@ -667,7 +667,7 @@ impl PortalApp {
         evt: Arc<dyn PaymentRequestListener>,
     ) -> Result<(), AppError> {
         let inner = PaymentRequestListenerConversation::new(self.router.keypair().public_key());
-        let mut rx: NotificationStream<portal::app::payments::PaymentRequestEvent> = self
+        let mut rx: NotificationStream<portal::conversation::app::payments::PaymentRequestEvent> = self
             .router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 inner,
@@ -728,7 +728,7 @@ impl PortalApp {
 
     pub async fn fetch_profile(&self, pubkey: PublicKey) -> Result<Option<Profile>, AppError> {
         let conv = FetchProfileInfoConversation::new(pubkey.into());
-        let mut notification: NotificationStream<Option<portal::profile::Profile>> =
+        let mut notification: NotificationStream<Option<portal::conversation::profile::Profile>> =
             self.router.add_and_subscribe(Box::new(conv)).await?;
         let metadata = notification
             .next()

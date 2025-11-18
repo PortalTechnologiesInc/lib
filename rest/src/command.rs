@@ -1,9 +1,10 @@
-use portal::profile::Profile;
+
+use portal::conversation::profile::Profile;
+use portal::protocol::model::Timestamp; 
 use portal::protocol::model::payment::{
     Currency, InvoiceRequestContent, RecurrenceInfo, RecurringPaymentRequestContent,
     SinglePaymentRequestContent,
 };
-use portal::protocol::model::Timestamp;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
