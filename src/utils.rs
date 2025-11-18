@@ -1,4 +1,5 @@
-use nostr::{key::PublicKey, nips::nip05::Nip05Address};
+
+use nostr::{key::PublicKey, nips::nip05::{Nip05Address, Nip05Profile}};
 use rand::Rng;
 
 pub fn random_string(lenght: usize) -> String {
@@ -26,4 +27,17 @@ pub async fn verify_nip05(nip05: &str, main_key: &PublicKey) -> bool {
     };
 
     nostr::nips::nip05::verify_from_json(&main_key, &address, &nip05)
+}
+
+
+pub async fn fetch_nip05_profile(nip05: &str) -> anyhow::Result<Nip05Profile> {
+
+    let address = Nip05Address::parse(nip05)?;
+
+    let url = address.url();
+    let req = reqwest::get(url.to_string()).await?;
+    let json = req.json().await?;
+
+    let nip05 = Nip05Profile::from_json(&address, &json)?;
+    Ok(nip05)
 }

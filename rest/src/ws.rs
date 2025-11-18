@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::command::{Command, CommandWithId};
 use crate::response::*;
+use portal::utils::fetch_nip05_profile;
 use wallet::PortalWallet;
 use crate::{AppState, PublicKey};
 use axum::extract::ws::{Message, WebSocket};
@@ -1453,6 +1454,20 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             let response = Response::Success {
                 id: command.id,
                 data: ResponseData::CalculateNextOccurrence { next_occurrence },
+            };
+            let _ = ctx.send_message(response).await;
+        }
+        Command::FetchNip05Profile { nip05 } => {
+            let profile = match fetch_nip05_profile(&nip05).await {
+                Ok(profile) => profile,
+                Err(e) => {
+                    let _ = ctx.send_error_message(&command.id, &format!("Failed to fetch nip05 profile: {}", e)).await;
+                    return;
+                }
+            };
+            let response = Response::Success {
+                id: command.id,
+                data: ResponseData::FetchNip05Profile { profile },
             };
             let _ = ctx.send_message(response).await;
         }

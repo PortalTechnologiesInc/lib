@@ -1,3 +1,4 @@
+use nostr::nips::nip05::Nip05Profile;
 use portal::profile::Profile;
 use portal::protocol::model::Timestamp;
 use portal::protocol::model::auth::AuthResponseStatus;
@@ -79,6 +80,9 @@ pub enum ResponseData {
 
     #[serde(rename = "calculate_next_occurrence")]
     CalculateNextOccurrence { next_occurrence: Option<Timestamp> },
+
+    #[serde(rename = "fetch_nip05_profile")]
+    FetchNip05Profile { profile: Nip05Profile },
 }
 
 #[derive(Debug, Serialize)]

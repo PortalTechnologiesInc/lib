@@ -4128,6 +4128,7 @@ dependencies = [
  "dashmap",
  "dotenv",
  "futures",
+ "nostr",
  "nwc",
  "portal",
  "rand 0.8.5",

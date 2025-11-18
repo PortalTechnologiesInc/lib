@@ -106,6 +106,9 @@ pub enum Command {
         calendar: String,
         from: Timestamp,
     },
+    FetchNip05Profile {
+        nip05: String,
+    },
 }
 
 #[derive(Debug, Deserialize)]

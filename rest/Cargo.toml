@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+nostr = { workspace = true }
 wallet = { path = "../wallet" }
 sdk = { path = "../sdk" }
 portal = { version = "0.1.0", path = "../" }

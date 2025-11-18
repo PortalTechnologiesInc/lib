@@ -19,7 +19,7 @@ use portal::{
                 RecurringPaymentResponseContent, RecurringPaymentStatus,
             },
         },
-    },
+    }, utils::fetch_nip05_profile,
 };
 
 use lightning_invoice::Bolt11Invoice;
@@ -172,6 +172,9 @@ impl CashuDirectListener for LogCashuRequestListener {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
+
+    let nip05_profile = fetch_nip05_profile("johng@getportal.cc").await?;
+    dbg!(nip05_profile);
 
     let mnemonic = Mnemonic::new(
         "mass derive myself benefit shed true girl orange family spawn device theme",
