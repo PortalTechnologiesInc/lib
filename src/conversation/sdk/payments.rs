@@ -1,5 +1,5 @@
 use crate::{
-    app::payments::PaymentRequestContent,
+    conversation::app::payments::PaymentRequestContent,
     protocol::model::{
         auth::SubkeyProof,
         event_kinds::*,

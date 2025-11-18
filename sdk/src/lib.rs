@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use portal::{
-    cashu::{CashuDirectSenderConversation, CashuRequestSenderConversation},
-    close_subscription::{
+    conversation::cashu::{CashuDirectSenderConversation, CashuRequestSenderConversation},
+    conversation::close_subscription::{
         CloseRecurringPaymentConversation, CloseRecurringPaymentReceiverConversation,
     },
-    invoice::InvoiceRequestConversation,
+    conversation::invoice::InvoiceRequestConversation,
     nostr::key::PublicKey,
     nostr_relay_pool::{RelayOptions, RelayPool},
-    profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
+    conversation::profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
     protocol::{
         LocalKeypair,
         key_handshake::KeyHandshakeUrl,
@@ -24,7 +24,7 @@ use portal::{
         ConversationError, MessageRouter, MessageRouterActorError, MultiKeyListenerAdapter,
         MultiKeySenderAdapter, NotificationStream, adapters::one_shot::OneShotSenderAdapter,
     },
-    sdk::{
+    conversation::sdk::{
         auth::{
             AuthChallengeSenderConversation, AuthResponseEvent, KeyHandshakeEvent,
             KeyHandshakeReceiverConversation,
