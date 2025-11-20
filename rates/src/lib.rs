@@ -45,6 +45,9 @@ pub enum RatesError {
     #[error("Missing CoinDesk field")]
     MissingCoinDeskField,
 
+    #[error("Unsupported currency")]
+    UnsupportedCurrency,
+
     #[error("Unsupported source or malformed JSON")]
     UnsupportedSource,
 
@@ -55,7 +58,7 @@ pub enum RatesError {
     PriceParseFailed(String),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
 struct FiatUnit {
     #[serde(rename = "endPointKey")]
@@ -66,7 +69,7 @@ struct FiatUnit {
     country: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
 enum Source {
     Yadio,
@@ -239,12 +242,7 @@ impl MarketAPI {
         }
     }
 
-    async fn fetch_price(self: Arc<Self>, currency: &str) -> Result<Option<String>, RatesError> {
-        let unit = match self.fiat_units.get(currency) {
-            Some(unit) => unit,
-            None => return Ok(None),
-        };
-
+    async fn fetch_price(self: Arc<Self>, unit: &FiatUnit) -> Result<Option<String>, RatesError> {
         let url = Self::build_url(&unit.source, &unit.end_point_key);
         let res = self
             .client
@@ -270,15 +268,18 @@ impl MarketAPI {
         currency: &str,
     ) -> Result<MarketData, RatesError> {
         let start = Instant::now();
-        let symbol = self.fiat_units[currency].symbol.clone();
-        let source = self.fiat_units[currency].source.to_string();
 
-        if let Some(price_str) = self.fetch_price(currency).await? {
+        let unit = match self.fiat_units.get(currency) {
+            Some(unit) => unit.clone(),
+            None => return Err(RatesError::UnsupportedCurrency),
+        };
+
+        if let Some(price_str) = self.fetch_price(&unit).await? {
             if let Ok(rate) = price_str.parse::<f64>() {
                 let data = MarketData {
-                    price: format!("{} {:.0}", symbol, rate),
+                    price: format!("{} {:.0}", unit.symbol, rate),
                     rate: rate,
-                    source,
+                    source: unit.source.to_string(),
                 };
                 log::debug!("Market data fetched in {:?}", start.elapsed());
                 return Ok(data);
