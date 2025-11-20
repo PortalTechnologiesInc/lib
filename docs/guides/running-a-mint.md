@@ -68,15 +68,15 @@ location = "Worldwide"
 engine = "sqlite"
 
 [auth]
-[auth.method.Static]
-token = "your-secure-static-token"
-
 mint_max_bat = 50
 enabled_mint = true
 enabled_melt = true
 enabled_swap = false
 enabled_restore = false
 enabled_check_proof_state = false
+
+[auth.method.Static]
+token = "your-secure-static-token"
 ```
 
 #### Advanced Configuration (Event Tickets)
@@ -143,15 +143,15 @@ location = "New York, USA"
 engine = "sqlite"
 
 [auth]
-[auth.method.Static]
-token = "your-secure-static-token-here"
-
 mint_max_bat = 50
 enabled_mint = true
 enabled_melt = true
 enabled_swap = false
 enabled_restore = false
 enabled_check_proof_state = false
+
+[auth.method.Static]
+token = "your-secure-static-token-here"
 ```
 
 ### 3. Run the Mint
@@ -164,6 +164,7 @@ docker run -d \
   -p 3338:3338 \
   -v $(pwd)/config.toml:/config.toml:ro \
   -v mint-data:/data \
+  -e CDK_MINTD_MNEMONIC="<your mnemonic here>" \
   getportal/cdk-mintd:latest
 ```
 
@@ -175,6 +176,7 @@ docker run -d \
   -p 3338:3338 \
   -v /path/to/config.toml:/config.toml:ro \
   -v /path/to/data:/data \
+  -e CDK_MINTD_MNEMONIC="<your mnemonic here>" \
   getportal/cdk-mintd:latest
 ```
 
@@ -182,6 +184,7 @@ docker run -d \
 - `-p 3338:3338` - Expose port 3338
 - `-v config.toml:/config.toml:ro` - Mount config file (read-only)
 - `-v mint-data:/data` - Persist database
+- `-e CDK_MINTD_MNEMONIC="<your mnemonic here>"` - Set mnemonic as evironment variable
 - `getportal/cdk-mintd:latest` - Use latest image
 
 **Quick Test (Temporary):**
@@ -193,6 +196,7 @@ docker run --rm \
   --name test-mint \
   -p 3338:3338 \
   -v $(pwd)/config.toml:/config.toml:ro \
+  -e CDK_MINTD_MNEMONIC="<your mnemonic here>" \
   getportal/cdk-mintd:latest
 ```
 
