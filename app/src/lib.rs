@@ -14,7 +14,7 @@ use std::{str::FromStr, time::UNIX_EPOCH};
 
 use cdk_common::SECP256K1;
 use chrono::Duration;
-use nostr::event::EventBuilder;
+use nostr::{event::EventBuilder, nips::nip46::NostrConnectMethod, util::JsonUtil};
 use nostr_relay_pool::monitor::{Monitor, MonitorNotification};
 use portal::{
     app::{
@@ -57,6 +57,9 @@ use portal::{
     router::{
         MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream,
         adapters::one_shot::OneShotSenderAdapter,
+    },
+    signing::{
+        SigningRequest, SigningRequestListenerConversation, SigningResponseSenderConversation,
     },
     utils::verify_nip05,
 };
@@ -173,7 +176,6 @@ impl From<bip39::Error> for MnemonicError {
     }
 }
 
-
 #[derive(uniffi::Object)]
 pub struct Nsec {
     keys: portal::nostr::Keys,
@@ -195,10 +197,10 @@ impl Nsec {
     }
 
     pub fn derive_cashu(&self) -> Vec<u8> {
-        use bitcoin::hashes::sha256;
         use bitcoin::hashes::Hash;
         use bitcoin::hashes::HashEngine;
-    
+        use bitcoin::hashes::sha256;
+
         let mut engine = sha256::HashEngine::default();
         engine.input(&self.keys.secret_key().secret_bytes());
         engine.input("cashu".as_bytes());
@@ -214,7 +216,6 @@ pub struct Keypair {
 
 #[uniffi::export]
 impl Keypair {
-
     pub fn public_key(&self) -> portal::protocol::model::bindings::PublicKey {
         portal::protocol::model::bindings::PublicKey(self.inner.public_key())
     }
@@ -823,6 +824,72 @@ impl PortalApp {
         Ok(())
     }
 
+    pub async fn listen_for_signing_request(
+        &self,
+        // evt: Arc<dyn SigningRequestListener>,
+    ) -> Result<(), AppError> {
+        let inner = SigningRequestListenerConversation::new(self.router.keypair().public_key());
+        let mut rx: NotificationStream<SigningRequest> = self
+            .router
+            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
+                inner,
+                self.router.keypair().subkey_proof().cloned(),
+            )))
+            .await?;
+
+        while let Ok(signing_request) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
+            let router = Arc::clone(&self.router);
+
+            let _ = self.runtime.add_task(async move {
+                log::debug!("Received signing request: {:?}", signing_request);
+                let Ok(request_message) = signing_request.message.to_request() else {
+                    return Err(AppError::InvalidSigningRequest(
+                        "Signing request is not a request".to_string(),
+                    ));
+                };
+
+                if request_message.method() != NostrConnectMethod::SignEvent {
+                    return Err(AppError::InvalidSigningRequest(
+                        "Signing request method is not SignEvent".to_string(),
+                    ));
+                }
+
+                let params = request_message.params();
+                let serialized_unsigned_event =
+                    params.first().ok_or(AppError::InvalidSigningRequest(
+                        "No event to sign in the signing request".to_string(),
+                    ))?;
+                let unsigned_event: nostr::UnsignedEvent =
+                    nostr::UnsignedEvent::from_json(serialized_unsigned_event)
+                        .map_err(|e| AppError::InvalidSigningRequest(e.to_string()))?;
+                let signed_event = unsigned_event
+                    .sign_with_keys(router.keypair().get_keys())
+                    .map_err(|e| {
+                        AppError::EventSigningError(format!(
+                            "Impossible to sign event: {}",
+                            e.to_string()
+                        ))
+                    })?;
+
+                let conv = SigningResponseSenderConversation::new(
+                    signing_request.user_pubkey,
+                    signing_request.event_id,
+                    serde_json::to_string(&signed_event)
+                        .map_err(|e| AppError::EventSigningError(e.to_string()))?,
+                );
+                router
+                    .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                        signing_request.user_pubkey,
+                        vec![],
+                        conv,
+                    )))
+                    .await?;
+                Ok::<(), AppError>(())
+            });
+        }
+        Ok(())
+    }
+
     pub async fn add_relay(&self, url: String) -> Result<(), AppError> {
         self.relay_pool
             .add_relay(&url, RelayOptions::default().reconnect(false))
@@ -1165,6 +1232,12 @@ pub enum AppError {
 
     #[error("Parse error: {0}")]
     ParseError(String),
+
+    #[error("Invalid signing request: {0}")]
+    InvalidSigningRequest(String),
+
+    #[error("Error while signing the event: {0}")]
+    EventSigningError(String),
 }
 
 impl From<portal::router::ConversationError> for AppError {

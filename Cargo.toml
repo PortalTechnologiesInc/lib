@@ -3,7 +3,7 @@ members = [ "app" , "cli", "rest", "sdk", "rates", "fetch-git-hash", "wallet"]
 
 [workspace.dependencies]
 # Core dependencies
-nostr = { git = "https://github.com/rust-nostr/nostr.git", rev = "36cc4bbf921044527b03b7e63bf7113d60ac935b" , features = ["nip44"] }
+nostr = { git = "https://github.com/rust-nostr/nostr.git", rev = "36cc4bbf921044527b03b7e63bf7113d60ac935b" , features = ["nip44", "nip46"] }
 nostr-relay-pool = { git = "https://github.com/rust-nostr/nostr.git", rev = "36cc4bbf921044527b03b7e63bf7113d60ac935b" }
 nwc = { git = "https://github.com/rust-nostr/nostr.git", rev = "36cc4bbf921044527b03b7e63bf7113d60ac935b" }
 serde = { version = "1.0", features = ["derive"] }
