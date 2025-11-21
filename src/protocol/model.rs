@@ -14,6 +14,9 @@ use nostr::PublicKey;
 // Identity: 29000-29999
 
 pub mod event_kinds {
+    // Remote signing request events (24133)
+    pub const SIGNING_REQUEST: u16 = 24133;
+
     // Authentication events (27000-27999)
     pub const AUTH_CHALLENGE: u16 = 27000;
     pub const AUTH_RESPONSE: u16 = 27001;
