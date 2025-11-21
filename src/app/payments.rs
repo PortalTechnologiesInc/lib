@@ -73,6 +73,11 @@ impl MultiKeyListener for PaymentRequestListenerConversation {
             return Ok(Response::default());
         }
 
+        if content.amount() == 0 {
+            log::warn!("Ignoring request with zero amount");
+            return Ok(Response::default());
+        }
+
         let service_key = if let Some(subkey_proof) = state.subkey_proof.clone() {
             if let Err(e) = subkey_proof.verify(&event.pubkey) {
                 log::warn!("Ignoring request with invalid subkey proof: {}", e);
@@ -123,6 +128,13 @@ impl PaymentRequestContent {
         match self {
             Self::Single(content) => content.expires_at,
             Self::Recurring(content) => content.expires_at,
+        }
+    }
+
+    pub fn amount(&self) -> u64 {
+        match self {
+            Self::Single(content) => content.amount,
+            Self::Recurring(content) => content.amount,
         }
     }
 }

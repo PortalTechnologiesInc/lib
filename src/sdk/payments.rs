@@ -31,12 +31,16 @@ impl RecurringPaymentRequestSenderConversation {
         local_key: PublicKey,
         subkey_proof: Option<SubkeyProof>,
         payment_request: RecurringPaymentRequestContent,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, String> {
+        if payment_request.amount == 0 {
+            return Err("Recurring payment amount must be greater than zero".to_string());
+        }
+
+        Ok(Self {
             local_key,
             subkey_proof,
             payment_request,
-        }
+        })
     }
 }
 
@@ -120,13 +124,17 @@ impl SinglePaymentRequestSenderConversation {
         local_key: PublicKey,
         subkey_proof: Option<SubkeyProof>,
         payment_request: SinglePaymentRequestContent,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, String> {
+        if payment_request.amount == 0 {
+            return Err("Payment amount must be greater than zero".to_string());
+        }
+
+        Ok(Self {
             local_key,
             subkey_proof,
             payment_request,
             last_status: None,
-        }
+        })
     }
 }
 
