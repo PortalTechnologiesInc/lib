@@ -20,7 +20,7 @@ pub mod ids;
 
 pub use adapters::multi_key_listener::{MultiKeyListener, MultiKeyListenerAdapter};
 pub use adapters::multi_key_sender::{MultiKeySender, MultiKeySenderAdapter};
-pub use ids::PortalId;
+pub use ids::{PortalConversationId, PortalSubscriptionId};
 
 // Re-export MessageRouterActor as MessageRouter for backward compatibility
 pub use actor::{MessageRouterActor as MessageRouter, MessageRouterActorError};
