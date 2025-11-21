@@ -1,38 +1,8 @@
 use std::sync::Arc;
 
-use app::{
-    CallbackError, InvoiceRequestListener, InvoiceResponseListener, nwc::MakeInvoiceResponse,
-};
+use app::nwc::MakeInvoiceResponse;
 use cli::{CliError, create_app_instance};
-use portal::protocol::model::{
-    Timestamp,
-    payment::{InvoiceRequestContent, InvoiceRequestContentWithKey, InvoiceResponse},
-};
-
-struct LogInvoiceRequestListener;
-
-#[async_trait::async_trait]
-impl InvoiceRequestListener for LogInvoiceRequestListener {
-    async fn on_invoice_requests(
-        &self,
-        event: InvoiceRequestContentWithKey,
-    ) -> Result<MakeInvoiceResponse, CallbackError> {
-        Ok(MakeInvoiceResponse {
-            invoice: String::from("bolt11"),
-            payment_hash: Some(String::from("bolt11 hash")),
-        })
-    }
-}
-
-struct LogInvoiceResponseListener;
-
-#[async_trait::async_trait]
-impl InvoiceResponseListener for LogInvoiceResponseListener {
-    async fn on_invoice_response(&self, event: InvoiceResponse) -> Result<(), CallbackError> {
-        log::info!("Received an invoice: {:?}", event);
-        Ok(())
-    }
-}
+use portal::protocol::model::{Timestamp, payment::InvoiceRequestContent};
 
 #[tokio::main]
 async fn main() -> Result<(), CliError> {
@@ -46,17 +16,35 @@ async fn main() -> Result<(), CliError> {
         relays.clone(),
     )
     .await?;
-    let _receiver = receiver.clone();
+    let receiver_loop = Arc::clone(&receiver);
 
     tokio::spawn(async move {
-        log::info!("Receiver: Setting up invoice request listener");
-        _receiver
-            .listen_invoice_requests(Arc::new(LogInvoiceRequestListener))
-            .await
-            .expect("Receiver: Error creating listener");
+        log::info!("Receiver: Setting up invoice request loop");
+        loop {
+            match receiver_loop.next_invoice_request().await {
+                Ok(request) => {
+                    if let Err(e) = receiver_loop
+                        .reply_invoice_request(
+                            request,
+                            MakeInvoiceResponse {
+                                invoice: String::from("bolt11"),
+                                payment_hash: Some(String::from("bolt11 hash")),
+                            },
+                        )
+                        .await
+                    {
+                        log::error!("Receiver: Failed to reply to invoice request: {:?}", e);
+                    }
+                }
+                Err(e) => {
+                    log::error!("Receiver: Invoice loop error: {:?}", e);
+                    break;
+                }
+            }
+        }
     });
 
-    let (sender_key, sender) = create_app_instance(
+    let (_sender_key, sender) = create_app_instance(
         "Sender",
         "draft sunny old taxi chimney ski tilt suffer subway bundle once story",
         relays.clone(),
@@ -81,10 +69,11 @@ async fn main() -> Result<(), CliError> {
                     description: Some(String::from("Dinner")),
                     refund_invoice: None,
                 },
-                Arc::new(LogInvoiceResponseListener),
             )
             .await
             .unwrap();
+
+        log::info!("Sender: Invoice response {:?}", result);
     });
 
     log::info!("Apps created");

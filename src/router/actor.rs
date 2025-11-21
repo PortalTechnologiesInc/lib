@@ -1089,7 +1089,7 @@ struct ConversationState {
 #[derive(Debug)]
 enum InnerConversationState {
     Standard(ConversationBox),
-    Alias
+    Alias,
 }
 
 impl InnerConversationState {
@@ -1230,7 +1230,10 @@ impl ConversationState {
                 Err(mpsc::error::SendError(_)) => {
                     // Channel is closed, remove dead subscriber
                     // Do not push to alive_subscribers
-                    log::warn!("Removing subscriber from conversation {} because channel is closed", self.id);
+                    log::warn!(
+                        "Removing subscriber from conversation {} because channel is closed",
+                        self.id
+                    );
                 }
             }
         }
