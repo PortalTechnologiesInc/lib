@@ -13,11 +13,11 @@ use crate::{
     router::{ConversationError, MultiKeyListener, Response, adapters::one_shot::OneShotSender},
 };
 
-pub struct SigningRequestListenerConversation {
+pub struct Nip46RequestListenerConversation {
     local_key: PublicKey,
 }
 
-impl SigningRequestListenerConversation {
+impl Nip46RequestListenerConversation {
     pub fn new(local_key: PublicKey) -> Self {
         Self { local_key }
     }
@@ -40,13 +40,13 @@ impl SigningResponseSenderConversation {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SigningRequest {
+pub struct Nip46Request {
     pub user_pubkey: PublicKey,
     pub event_id: String,
     pub message: NostrConnectMessage,
 }
 
-impl MultiKeyListener for SigningRequestListenerConversation {
+impl MultiKeyListener for Nip46RequestListenerConversation {
     const VALIDITY_SECONDS: Option<u64> = None;
 
     type Error = ConversationError;
@@ -70,12 +70,12 @@ impl MultiKeyListener for SigningRequestListenerConversation {
         message: &Self::Message,
     ) -> Result<crate::router::Response, Self::Error> {
         log::debug!(
-            "Received signing request from {}: {:?}",
+            "Received nip46 request from {}: {:?}",
             event.pubkey,
             message
         );
 
-        let listener_response = SigningRequest {
+        let listener_response = Nip46Request {
             user_pubkey: event.pubkey,
             event_id: event.id.to_string(),
             message: message.clone(),

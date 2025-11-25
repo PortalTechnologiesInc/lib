@@ -14,7 +14,11 @@ use std::{str::FromStr, time::UNIX_EPOCH};
 
 use cdk_common::SECP256K1;
 use chrono::Duration;
-use nostr::{event::EventBuilder, nips::nip46::NostrConnectMethod, util::JsonUtil};
+use nostr::{
+    event::EventBuilder,
+    nips::{nip04, nip44, nip46::NostrConnectMethod},
+    util::JsonUtil,
+};
 use nostr_relay_pool::monitor::{Monitor, MonitorNotification};
 use portal::{
     app::{
@@ -35,6 +39,7 @@ use portal::{
         CloseRecurringPaymentConversation, CloseRecurringPaymentReceiverConversation,
     },
     invoice::{InvoiceReceiverConversation, InvoiceRequestConversation, InvoiceSenderConversation},
+    nip46::{Nip46Request, Nip46RequestListenerConversation, SigningResponseSenderConversation},
     nostr::nips::nip19::ToBech32,
     nostr_relay_pool::{RelayOptions, RelayPool},
     profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
@@ -57,9 +62,6 @@ use portal::{
     router::{
         MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream,
         adapters::one_shot::OneShotSenderAdapter,
-    },
-    signing::{
-        SigningRequest, SigningRequestListenerConversation, SigningResponseSenderConversation,
     },
     utils::verify_nip05,
 };
@@ -824,12 +826,12 @@ impl PortalApp {
         Ok(())
     }
 
-    pub async fn listen_for_signing_request(
+    pub async fn listen_for_nip46_request(
         &self,
         // evt: Arc<dyn SigningRequestListener>,
     ) -> Result<(), AppError> {
-        let inner = SigningRequestListenerConversation::new(self.router.keypair().public_key());
-        let mut rx: NotificationStream<SigningRequest> = self
+        let inner = Nip46RequestListenerConversation::new(self.router.keypair().public_key());
+        let mut rx: NotificationStream<Nip46Request> = self
             .router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 inner,
@@ -837,55 +839,187 @@ impl PortalApp {
             )))
             .await?;
 
-        while let Ok(signing_request) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
+        while let Ok(nip46_request) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
+            dbg!(&nip46_request);
             let router = Arc::clone(&self.router);
 
-            let _ = self.runtime.add_task(async move {
-                log::debug!("Received signing request: {:?}", signing_request);
-                let Ok(request_message) = signing_request.message.to_request() else {
-                    return Err(AppError::InvalidSigningRequest(
-                        "Signing request is not a request".to_string(),
-                    ));
-                };
+            log::debug!("Received nip46 request: {:?}", nip46_request);
+            let Ok(request_message) = nip46_request.message.clone().to_request() else {
+                return Err(AppError::InvalidNip46Request(
+                    "Signing request is not a request".to_string(),
+                ));
+            };
+            let params = request_message.params();
 
-                if request_message.method() != NostrConnectMethod::SignEvent {
-                    return Err(AppError::InvalidSigningRequest(
-                        "Signing request method is not SignEvent".to_string(),
-                    ));
+            let conversation_result: String = match request_message.method() {
+                NostrConnectMethod::Connect => {
+                    let signer_pubkey =
+                            params.get(0).ok_or(AppError::InvalidNip46Request(
+                                "No params found in the request. Expected at least 1 param for Connect method".to_string(),
+                            ))?;
+                    if signer_pubkey != &router.keypair().public_key().to_string() {
+                        return Err(AppError::InvalidNip46Request(
+                            "The pubkey provided does not match this remote signer".to_string(),
+                        ));
+                    }
+                    let optional_secret = params
+                        .get(1)
+                        .and_then(|s| if s.is_empty() { None } else { Some(s.clone()) });
+
+                    // is a list of permission, for the values look at https://nips.nostr.com/46#methodscommands
+                    let _optional_requested_permission = params.get(2);
+                    // todo prompt the user to handle the permissions
+
+                    optional_secret.unwrap_or_else(|| "ack".to_string())
                 }
-
-                let params = request_message.params();
-                let serialized_unsigned_event =
-                    params.first().ok_or(AppError::InvalidSigningRequest(
-                        "No event to sign in the signing request".to_string(),
-                    ))?;
-                let unsigned_event: nostr::UnsignedEvent =
-                    nostr::UnsignedEvent::from_json(serialized_unsigned_event)
-                        .map_err(|e| AppError::InvalidSigningRequest(e.to_string()))?;
-                let signed_event = unsigned_event
-                    .sign_with_keys(router.keypair().get_keys())
-                    .map_err(|e| {
-                        AppError::EventSigningError(format!(
+                NostrConnectMethod::GetPublicKey => router.keypair().public_key().to_string(),
+                NostrConnectMethod::SignEvent => {
+                    let serialized_unsigned_event =
+                        params.first().ok_or(AppError::InvalidNip46Request(
+                            "No event to sign in the signing request".to_string(),
+                        ))?;
+                    let unsigned_event: nostr::UnsignedEvent =
+                        nostr::UnsignedEvent::from_json(serialized_unsigned_event)
+                            .map_err(|e| AppError::InvalidNip46Request(e.to_string()))?;
+                    let signed_event = unsigned_event
+                        .sign_with_keys(router.keypair().get_keys())
+                        .map_err(|e| {
+                        AppError::Nip46OperationError(format!(
                             "Impossible to sign event: {}",
                             e.to_string()
                         ))
                     })?;
-
-                let conv = SigningResponseSenderConversation::new(
-                    signing_request.user_pubkey,
-                    signing_request.event_id,
                     serde_json::to_string(&signed_event)
-                        .map_err(|e| AppError::EventSigningError(e.to_string()))?,
-                );
-                router
-                    .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                        signing_request.user_pubkey,
-                        vec![],
-                        conv,
-                    )))
-                    .await?;
-                Ok::<(), AppError>(())
-            });
+                        .map_err(|e| AppError::Nip46OperationError(e.to_string()))?
+                }
+                NostrConnectMethod::Nip04Encrypt => {
+                    let third_party_pubkey = params.get(0).ok_or(AppError::InvalidNip46Request(
+                        "No params found in the request. Expected 2 params for Nip04Encrypt method"
+                            .to_string(),
+                    ))?;
+                    let plaintext = params.get(1).ok_or(AppError::InvalidNip46Request(
+                                "No second param found in the request. Expected 2 params for Nip04Encrypt method".to_string(),
+                            ))?;
+                    let nostr_pubkey = nostr::key::PublicKey::from_hex(&third_party_pubkey)
+                        .map_err(|e| {
+                            AppError::Nip46OperationError(format!(
+                                "Impossible to convert hex to PublicKey: {}",
+                                e
+                            ))
+                        })?;
+
+                    let result =
+                        nip04::encrypt(router.keypair().secret_key(), &nostr_pubkey, plaintext)
+                            .map_err(|e| {
+                                AppError::Nip46OperationError(format!(
+                                    "Error while encrypting with nip04: {}",
+                                    e
+                                ))
+                            })?;
+
+                    result
+                }
+                NostrConnectMethod::Nip04Decrypt => {
+                    let third_party_pubkey = params.get(0).ok_or(AppError::InvalidNip46Request(
+                        "No params found in the request. Expected 2 params for Nip04Encrypt method"
+                            .to_string(),
+                    ))?;
+                    let cyphertext = params.get(1).ok_or(AppError::InvalidNip46Request(
+                                "No second param found in the request. Expected 2 params for Nip04Encrypt method".to_string(),
+                            ))?;
+                    let nostr_pubkey = nostr::key::PublicKey::from_hex(&third_party_pubkey)
+                        .map_err(|e| {
+                            AppError::Nip46OperationError(format!(
+                                "Impossible to convert hex to PublicKey: {}",
+                                e
+                            ))
+                        })?;
+
+                    let result =
+                        nip04::decrypt(router.keypair().secret_key(), &nostr_pubkey, cyphertext)
+                            .map_err(|e| {
+                                AppError::Nip46OperationError(format!(
+                                    "Error while decrypting with nip04: {}",
+                                    e
+                                ))
+                            })?;
+
+                    result
+                }
+                NostrConnectMethod::Nip44Encrypt => {
+                    let third_party_pubkey = params.get(0).ok_or(AppError::InvalidNip46Request(
+                        "No params found in the request. Expected 2 params for Nip04Encrypt method"
+                            .to_string(),
+                    ))?;
+                    let plaintext = params.get(1).ok_or(AppError::InvalidNip46Request(
+                                "No second param found in the request. Expected 2 params for Nip04Encrypt method".to_string(),
+                            ))?;
+                    let nostr_pubkey = nostr::key::PublicKey::from_hex(&third_party_pubkey)
+                        .map_err(|e| {
+                            AppError::Nip46OperationError(format!(
+                                "Impossible to convert hex to PublicKey: {}",
+                                e
+                            ))
+                        })?;
+
+                    let result =
+                        nip44::decrypt(router.keypair().secret_key(), &nostr_pubkey, plaintext)
+                            .map_err(|e| {
+                                AppError::Nip46OperationError(format!(
+                                    "Error while decrypting with nip04: {}",
+                                    e
+                                ))
+                            })?;
+
+                    result
+                }
+                NostrConnectMethod::Nip44Decrypt => {
+                    let third_party_pubkey = params.get(0).ok_or(AppError::InvalidNip46Request(
+                        "No params found in the request. Expected 2 params for Nip04Encrypt method"
+                            .to_string(),
+                    ))?;
+                    let cyphertext = params.get(1).ok_or(AppError::InvalidNip46Request(
+                                "No second param found in the request. Expected 2 params for Nip04Encrypt method".to_string(),
+                            ))?;
+                    let nostr_pubkey = nostr::key::PublicKey::from_hex(&third_party_pubkey)
+                        .map_err(|e| {
+                            AppError::Nip46OperationError(format!(
+                                "Impossible to convert hex to PublicKey: {}",
+                                e
+                            ))
+                        })?;
+
+                    let result =
+                        nip44::decrypt(router.keypair().secret_key(), &nostr_pubkey, cyphertext)
+                            .map_err(|e| {
+                                AppError::Nip46OperationError(format!(
+                                    "Error while decrypting with nip04: {}",
+                                    e
+                                ))
+                            })?;
+
+                    result
+                }
+                NostrConnectMethod::Ping => "pong".to_string(),
+                _ => {
+                    return Err(AppError::InvalidNip46Request(
+                        "Unknown nip46 request method".to_string(),
+                    ));
+                }
+            };
+
+            let conv = SigningResponseSenderConversation::new(
+                nip46_request.user_pubkey,
+                nip46_request.message.id().to_string(),
+                conversation_result,
+            );
+            router
+                .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                    nip46_request.user_pubkey,
+                    vec![],
+                    conv,
+                )))
+                .await?;
         }
         Ok(())
     }
@@ -1234,10 +1368,10 @@ pub enum AppError {
     ParseError(String),
 
     #[error("Invalid signing request: {0}")]
-    InvalidSigningRequest(String),
+    InvalidNip46Request(String),
 
     #[error("Error while signing the event: {0}")]
-    EventSigningError(String),
+    Nip46OperationError(String),
 }
 
 impl From<portal::router::ConversationError> for AppError {
