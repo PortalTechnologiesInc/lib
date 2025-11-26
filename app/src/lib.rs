@@ -49,6 +49,7 @@ use portal::{
             Timestamp,
             auth::{AuthResponseStatus, SubkeyProof},
             bindings::PublicKey,
+            nip46::{NostrConnectRequestMessage, NostrConnectResponseStatus},
             payment::{
                 CashuDirectContentWithKey, CashuRequestContentWithKey, CashuResponseContent,
                 CashuResponseStatus, CloseRecurringPaymentContent, CloseRecurringPaymentResponse,
@@ -445,6 +446,15 @@ pub trait CashuDirectListener: Send + Sync {
     async fn on_cashu_direct(&self, event: CashuDirectContentWithKey) -> Result<(), CallbackError>;
 }
 
+#[uniffi::export(with_foreign)]
+#[async_trait::async_trait]
+pub trait NostrConnectRequestListener: Send + Sync {
+    async fn on_request(
+        &self,
+        event: NostrConnectRequestMessage,
+    ) -> Result<NostrConnectResponseStatus, CallbackError>;
+}
+
 #[uniffi::export]
 impl PortalApp {
     #[uniffi::constructor]
@@ -827,7 +837,7 @@ impl PortalApp {
 
     pub async fn listen_for_nip46_request(
         &self,
-        // evt: Arc<dyn SigningRequestListener>,
+        evt: Arc<dyn NostrConnectRequestListener>,
     ) -> Result<(), AppError> {
         let inner = Nip46RequestListenerConversation::new(self.router.keypair().public_key());
         let mut rx: NotificationStream<Nip46Request> = self
@@ -839,15 +849,32 @@ impl PortalApp {
             .await?;
 
         while let Ok(nip46_request) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            log::debug!("Received invoice request payment: {:?}", &nip46_request);
+            log::info!("Received a NostrConnect request: {:?}", nip46_request);
+
+            let evt = Arc::clone(&evt);
             let router = Arc::clone(&self.router);
 
-            log::debug!("Received nip46 request: {:?}", nip46_request);
-            let nostr_connect_request = nip46_request
-                .message
-                .clone()
-                .to_request()
-                .map_err(|e| AppError::InvalidNip46Request(e.to_string()))?;
+            let nostr_connect_request = match nip46_request.message.clone().to_request() {
+                Ok(req) => req,
+                Err(_) => {
+                    // Message is not a request, ignore it and continue
+                    log::debug!("Received a NostrConnect response: {:?}\nIgnoring it (we don't send requests).", nip46_request);
+                    continue;
+                }
+            };
+
+            let app_event = NostrConnectRequestMessage::try_from(nip46_request.message.clone())
+                .map_err(|e| AppError::InvalidNip46Request(e))?;
+            let status = evt.on_request(app_event).await?;
+
+            if let NostrConnectResponseStatus::Declined { reason } = status {
+                let reason = match reason {
+                    Some(reason) => format!("NIP46 request declined with reason: {}", reason),
+                    None => "NIP46 request declined with no reason provided.".to_string(),
+                };
+                log::info!("{}", reason);
+                continue;
+            }
 
             let params = nostr_connect_request.params();
 
