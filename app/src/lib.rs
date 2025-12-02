@@ -876,26 +876,15 @@ impl PortalApp {
                 continue;
             }
 
-            let params = nostr_connect_request.params();
-
             let conversation_result: String = match nostr_connect_request {
-                nostr::nips::nip46::NostrConnectRequest::Connect { public_key, secret } => {
+                nostr::nips::nip46::NostrConnectRequest::Connect { public_key, secret: _ } => {
                     if public_key != router.keypair().public_key() {
                         return Err(AppError::InvalidNip46Request(
                             "The pubkey provided does not match this remote signer".to_string(),
                         ));
                     }
 
-                    // converting empty string to none.
-                    // sometimes clients sends empty string to preserve permissions third position
-                    let secret =
-                        secret.and_then(|s| if s.is_empty() { None } else { Some(s.clone()) });
-
-                    // is a list of permission, for the values look at https://nips.nostr.com/46#methodscommands
-                    let _optional_requested_permission = params.get(2);
-                    // todo prompt the user to handle the permissions
-
-                    secret.unwrap_or_else(|| "ack".to_string())
+                    "ack".to_string()
                 }
                 nostr::nips::nip46::NostrConnectRequest::GetPublicKey => {
                     router.keypair().public_key().to_string()
