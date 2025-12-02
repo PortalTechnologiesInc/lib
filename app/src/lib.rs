@@ -16,7 +16,7 @@ use cdk_common::SECP256K1;
 use chrono::Duration;
 use nostr::{
     event::EventBuilder,
-    nips::{nip04, nip44},
+    nips::{nip04, nip44, nip46::NostrConnectMessage},
 };
 use nostr_relay_pool::monitor::{Monitor, MonitorNotification};
 use portal::{
@@ -49,7 +49,7 @@ use portal::{
             Timestamp,
             auth::{AuthResponseStatus, SubkeyProof},
             bindings::PublicKey,
-            nip46::{NostrConnectRequestMessage, NostrConnectResponseStatus},
+            nip46::{NostrConnectRequestEvent, NostrConnectResponseStatus},
             payment::{
                 CashuDirectContentWithKey, CashuRequestContentWithKey, CashuResponseContent,
                 CashuResponseStatus, CloseRecurringPaymentContent, CloseRecurringPaymentResponse,
@@ -451,7 +451,7 @@ pub trait CashuDirectListener: Send + Sync {
 pub trait NostrConnectRequestListener: Send + Sync {
     async fn on_request(
         &self,
-        event: NostrConnectRequestMessage,
+        event: NostrConnectRequestEvent,
     ) -> Result<NostrConnectResponseStatus, CallbackError>;
 }
 
@@ -858,13 +858,30 @@ impl PortalApp {
                 Ok(req) => req,
                 Err(_) => {
                     // Message is not a request, ignore it and continue
-                    log::debug!("Received a NostrConnect response: {:?}\nIgnoring it (we don't send requests).", nip46_request);
+                    log::debug!(
+                        "Received a NostrConnect response: {:?}\nIgnoring it (we don't send requests).",
+                        nip46_request
+                    );
                     continue;
                 }
             };
 
-            let app_event = NostrConnectRequestMessage::try_from(nip46_request.message.clone())
-                .map_err(|e| AppError::InvalidNip46Request(e))?;
+            let nostr_client_pubkey = nip46_request.nostr_client_pubkey;
+            let app_event = match nip46_request.message.clone() {
+                NostrConnectMessage::Request { id, method, params } => {
+                    Ok(NostrConnectRequestEvent {
+                        id,
+                        nostr_client_pubkey: PublicKey(nostr_client_pubkey),
+                        method: method.into(),
+                        params,
+                    })
+                }
+                NostrConnectMessage::Response { .. } => {
+                    Err("message is a response, not a request".to_string())
+                }
+            }
+            .map_err(|e| AppError::InvalidNip46Request(e))?;
+
             let status = evt.on_request(app_event).await?;
 
             if let NostrConnectResponseStatus::Declined { reason } = status {
@@ -877,7 +894,10 @@ impl PortalApp {
             }
 
             let conversation_result: String = match nostr_connect_request {
-                nostr::nips::nip46::NostrConnectRequest::Connect { public_key, secret: _ } => {
+                nostr::nips::nip46::NostrConnectRequest::Connect {
+                    public_key,
+                    secret: _,
+                } => {
                     if public_key != router.keypair().public_key() {
                         return Err(AppError::InvalidNip46Request(
                             "The pubkey provided does not match this remote signer".to_string(),
@@ -945,13 +965,13 @@ impl PortalApp {
             };
 
             let conv = SigningResponseSenderConversation::new(
-                nip46_request.user_pubkey,
+                nip46_request.nostr_client_pubkey,
                 nip46_request.message.id().to_string(),
                 conversation_result,
             );
             router
                 .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                    nip46_request.user_pubkey,
+                    nip46_request.nostr_client_pubkey,
                     vec![],
                     conv,
                 )))

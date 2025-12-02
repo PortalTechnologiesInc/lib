@@ -449,12 +449,13 @@ pub mod payment {
 pub mod nip46 {
     use serde::{Deserialize, Serialize};
 
-    use crate::protocol::model::bindings::NostrConnectMethod;
+    use crate::protocol::model::bindings::{NostrConnectMethod, PublicKey};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
-    pub struct NostrConnectRequestMessage {
+    pub struct NostrConnectRequestEvent {
         pub id: String,
+        pub nostr_client_pubkey: PublicKey,
         pub method: NostrConnectMethod,
         pub params: Vec<String>,
     }
@@ -464,23 +465,15 @@ pub mod nip46 {
     #[serde(rename_all = "snake_case", tag = "status")]
     pub enum NostrConnectResponseStatus {
         Approved,
-        Declined {
-            reason: Option<String>,
-        },
+        Declined { reason: Option<String> },
     }
-
 }
 
 #[cfg(feature = "bindings")]
 pub mod bindings {
-    use nostr::nips::{
-        nip19::ToBech32,
-        nip46::{NostrConnectMessage as CoreNostrConnectMessage, NostrConnectMethod as CoreMethod},
-    };
+    use nostr::nips::{nip19::ToBech32, nip46::NostrConnectMethod as CoreMethod};
     use serde::{Deserialize, Serialize};
     use std::ops::Deref;
-
-    use crate::protocol::model::nip46::NostrConnectRequestMessage;
 
     use super::*;
 
@@ -559,25 +552,6 @@ pub mod bindings {
                 NostrConnectMethod::Nip44Encrypt => Self::Nip44Encrypt,
                 NostrConnectMethod::Nip44Decrypt => Self::Nip44Decrypt,
                 NostrConnectMethod::Ping => Self::Ping,
-            }
-        }
-    }
-
-    impl TryFrom<CoreNostrConnectMessage> for NostrConnectRequestMessage {
-        type Error = String;
-
-        fn try_from(value: CoreNostrConnectMessage) -> Result<Self, Self::Error> {
-            match value {
-                CoreNostrConnectMessage::Request { id, method, params } => Ok(
-                    NostrConnectRequestMessage {
-                        id,
-                        method: method.into(),
-                        params,
-                    },
-                ),
-                CoreNostrConnectMessage::Response { .. } => {
-                    Err("message is a response, not a request".to_string())
-                }
             }
         }
     }

@@ -24,15 +24,15 @@ impl Nip46RequestListenerConversation {
 }
 
 pub struct SigningResponseSenderConversation {
-    user_pubkey: PublicKey,
+    nostr_client_pubkey: PublicKey,
     id: String,
     result: String,
 }
 
 impl SigningResponseSenderConversation {
-    pub fn new(user_pubkey: PublicKey, id: String, result: String) -> Self {
+    pub fn new(nostr_client_pubkey: PublicKey, id: String, result: String) -> Self {
         Self {
-            user_pubkey,
+            nostr_client_pubkey,
             id,
             result,
         }
@@ -41,7 +41,7 @@ impl SigningResponseSenderConversation {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Nip46Request {
-    pub user_pubkey: PublicKey,
+    pub nostr_client_pubkey: PublicKey,
     pub event_id: String,
     pub message: NostrConnectMessage,
 }
@@ -76,7 +76,7 @@ impl MultiKeyListener for Nip46RequestListenerConversation {
         );
 
         let listener_response = Nip46Request {
-            user_pubkey: event.pubkey,
+            nostr_client_pubkey: event.pubkey,
             event_id: event.id.to_string(),
             message: message.clone(),
         };
@@ -103,7 +103,7 @@ impl OneShotSender for SigningResponseSenderConversation {
         };
         let response = Response::new()
             .reply_to(
-                state.user_pubkey,
+                state.nostr_client_pubkey,
                 Kind::from(SIGNING_REQUEST),
                 tags,
                 content,
