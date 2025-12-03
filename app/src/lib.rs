@@ -854,33 +854,21 @@ impl PortalApp {
             let evt = Arc::clone(&evt);
             let router = Arc::clone(&self.router);
 
-            let nostr_connect_request = match nip46_request.message.clone().to_request() {
-                Ok(req) => req,
-                Err(_) => {
-                    // Message is not a request, ignore it and continue
-                    log::debug!(
-                        "Received a NostrConnect response: {:?}\nIgnoring it (we don't send requests).",
-                        nip46_request
-                    );
-                    continue;
-                }
-            };
-
-            let nostr_client_pubkey = nip46_request.nostr_client_pubkey;
-            let app_event = match nip46_request.message.clone() {
-                NostrConnectMessage::Request { id, method, params } => {
-                    Ok(NostrConnectRequestEvent {
-                        id,
+            let nostr_client_pubkey = nip46_request.nostr_client_pubkey.clone();
+            let (app_event, nostr_connect_request) = match &nip46_request.message {
+                req @ NostrConnectMessage::Request { id, method, params } => (
+                    NostrConnectRequestEvent {
+                        id: id.clone(),
                         nostr_client_pubkey: PublicKey(nostr_client_pubkey),
-                        method: method.into(),
-                        params,
-                    })
-                }
-                NostrConnectMessage::Response { .. } => {
-                    Err("message is a response, not a request".to_string())
-                }
-            }
-            .map_err(|e| AppError::InvalidNip46Request(e))?;
+                        method: (*method).into(),
+                        params: params.to_vec(),
+                    },
+                    req.clone()
+                        .to_request()
+                        .expect("Only requests get to this point"),
+                ),
+                _ => continue,
+            };
 
             let status = evt.on_request(app_event).await?;
 
@@ -942,14 +930,18 @@ impl PortalApp {
                         ))
                     })?,
                 nostr::nips::nip46::NostrConnectRequest::Nip44Encrypt { public_key, text } => {
-                    nip44::decrypt(router.keypair().secret_key(), &public_key, text).map_err(
-                        |e| {
-                            AppError::Nip46OperationError(format!(
-                                "Error while decrypting with nip04: {}",
-                                e
-                            ))
-                        },
-                    )?
+                    nip44::encrypt(
+                        router.keypair().secret_key(),
+                        &public_key,
+                        text,
+                        nip44::Version::V2,
+                    )
+                    .map_err(|e| {
+                        AppError::Nip46OperationError(format!(
+                            "Error while encrypting with nip44: {}",
+                            e
+                        ))
+                    })?
                 }
                 nostr::nips::nip46::NostrConnectRequest::Nip44Decrypt {
                     public_key,
@@ -957,7 +949,7 @@ impl PortalApp {
                 } => nip44::decrypt(router.keypair().secret_key(), &public_key, ciphertext)
                     .map_err(|e| {
                         AppError::Nip46OperationError(format!(
-                            "Error while decrypting with nip04: {}",
+                            "Error while decrypting with nip44: {}",
                             e
                         ))
                     })?,

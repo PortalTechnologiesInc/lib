@@ -13,7 +13,7 @@ use portal::{
         key_handshake::KeyHandshakeUrl,
         model::{
             auth::AuthResponseStatus,
-            nip46::{NostrConnectRequestMessage, NostrConnectResponseStatus},
+            nip46::{NostrConnectRequestEvent, NostrConnectResponseStatus},
             payment::{
                 CashuDirectContentWithKey, CashuRequestContentWithKey, CashuResponseStatus,
                 CloseRecurringPaymentResponse, PaymentResponseContent, PaymentStatus,
@@ -177,7 +177,7 @@ struct ApproveNostrConnectRequestListener;
 impl NostrConnectRequestListener for ApproveNostrConnectRequestListener {
     async fn on_request(
         &self,
-        event: NostrConnectRequestMessage,
+        event: NostrConnectRequestEvent,
     ) -> Result<NostrConnectResponseStatus, CallbackError> {
         dbg!(event);
         Ok(NostrConnectResponseStatus::Approved)
@@ -190,12 +190,10 @@ struct DeclineNostrConnectRequestListener;
 impl NostrConnectRequestListener for DeclineNostrConnectRequestListener {
     async fn on_request(
         &self,
-        event: NostrConnectRequestMessage,
+        event: NostrConnectRequestEvent,
     ) -> Result<NostrConnectResponseStatus, CallbackError> {
         dbg!(event);
-        Ok(NostrConnectResponseStatus::Declined {
-            reason: Some("don't".to_string()),
-        })
+        Ok(NostrConnectResponseStatus::Approved)
     }
 }
 
