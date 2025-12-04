@@ -29,12 +29,20 @@ use portal::{
             PaymentRequestContent, PaymentRequestEvent, PaymentRequestListenerConversation,
             PaymentStatusSenderConversation, RecurringPaymentStatusSenderConversation,
         },
-    }, cashu::{
+    },
+    cashu::{
         CashuDirectReceiverConversation, CashuRequestReceiverConversation,
         CashuResponseSenderConversation,
-    }, close_subscription::{
+    },
+    close_subscription::{
         CloseRecurringPaymentConversation, CloseRecurringPaymentReceiverConversation,
-    }, invoice::{InvoiceReceiverConversation, InvoiceRequestConversation, InvoiceSenderConversation}, nip46::{Nip46Request, Nip46RequestListenerConversation, SigningResponseSenderConversation}, nostr::nips::nip19::ToBech32, nostr_relay_pool::{RelayOptions, RelayPool}, profile::{FetchProfileInfoConversation, Profile, SetProfileConversation}, protocol::{
+    },
+    invoice::{InvoiceReceiverConversation, InvoiceRequestConversation, InvoiceSenderConversation},
+    nip46::{Nip46Request, Nip46RequestListenerConversation, SigningResponseSenderConversation},
+    nostr::nips::nip19::ToBech32,
+    nostr_relay_pool::{RelayOptions, RelayPool},
+    profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
+    protocol::{
         jwt::CustomClaims,
         key_handshake::KeyHandshakeUrl,
         model::{
@@ -50,10 +58,13 @@ use portal::{
                 RecurringPaymentResponseContent, SinglePaymentRequestContent,
             },
         },
-    }, router::{
+    },
+    router::{
         MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream,
         adapters::one_shot::OneShotSenderAdapter,
-    }, sdk::payments::SinglePaymentRequestSenderConversation, utils::verify_nip05
+    },
+    sdk::payments::SinglePaymentRequestSenderConversation,
+    utils::verify_nip05,
 };
 
 pub use portal::app::*;
@@ -1139,20 +1150,22 @@ impl PortalApp {
     pub async fn single_payment_request(
         &self,
         receiver_pubkey: &str,
-        payment_request: SinglePaymentRequestContent
+        payment_request: SinglePaymentRequestContent,
     ) -> Result<(), AppError> {
         let receiver_pubkey = receiver_pubkey.parse::<nostr::key::PublicKey>().unwrap();
-        
+
         let conv = SinglePaymentRequestSenderConversation::new(
             self.router.keypair().public_key(),
             self.router.keypair().subkey_proof().cloned(),
             payment_request,
-        ).map_err(AppError::RequestSinglePaymentError)?;
+        )
+        .map_err(AppError::RequestSinglePaymentError)?;
 
-        self
-            .router
+        self.router
             .add_conversation(Box::new(MultiKeySenderAdapter::new_with_user(
-                receiver_pubkey, vec![], conv
+                receiver_pubkey,
+                vec![],
+                conv,
             )))
             .await?;
 
