@@ -7,6 +7,7 @@ pub mod protocol;
 pub mod router;
 pub mod sdk;
 pub mod utils;
+pub mod nip46;
 
 pub use nostr;
 pub use nostr_relay_pool;

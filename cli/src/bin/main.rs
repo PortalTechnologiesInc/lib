@@ -2,24 +2,26 @@ use std::{io::Write, str::FromStr, sync::Arc};
 
 use app::{
     AuthChallengeListener, CallbackError, CashuDirectListener, CashuRequestListener,
-    ClosedRecurringPaymentListener, Mnemonic, PaymentRequestListener, PaymentStatusNotifier,
-    PortalApp, RecurringPaymentRequest, RelayStatus, RelayStatusListener, RelayUrl,
-    SinglePaymentRequest, auth::AuthChallengeEvent, get_git_hash, nwc::NWC, parse_bolt11,
+    ClosedRecurringPaymentListener, Mnemonic, NostrConnectRequestListener, PaymentRequestListener,
+    PaymentStatusNotifier, PortalApp, RecurringPaymentRequest, RelayStatus, RelayStatusListener,
+    RelayUrl, SinglePaymentRequest, auth::AuthChallengeEvent, get_git_hash, nwc::NWC, parse_bolt11,
 };
 use log::info;
 use portal::{
-    nostr::nips::{nip19::ToBech32, nip47::PayInvoiceRequest},
+    nostr::nips::{nip47::PayInvoiceRequest},
     protocol::{
         key_handshake::KeyHandshakeUrl,
         model::{
             auth::AuthResponseStatus,
+            nip46::{NostrConnectRequestEvent, NostrConnectResponseStatus},
             payment::{
                 CashuDirectContentWithKey, CashuRequestContentWithKey, CashuResponseStatus,
                 CloseRecurringPaymentResponse, PaymentResponseContent, PaymentStatus,
                 RecurringPaymentResponseContent, RecurringPaymentStatus,
             },
         },
-    }, utils::fetch_nip05_profile,
+    },
+    utils::fetch_nip05_profile,
 };
 
 use lightning_invoice::Bolt11Invoice;
@@ -169,6 +171,32 @@ impl CashuDirectListener for LogCashuRequestListener {
     }
 }
 
+struct ApproveNostrConnectRequestListener;
+
+#[async_trait::async_trait]
+impl NostrConnectRequestListener for ApproveNostrConnectRequestListener {
+    async fn on_request(
+        &self,
+        event: NostrConnectRequestEvent,
+    ) -> Result<NostrConnectResponseStatus, CallbackError> {
+        dbg!(event);
+        Ok(NostrConnectResponseStatus::Approved)
+    }
+}
+
+struct DeclineNostrConnectRequestListener;
+
+#[async_trait::async_trait]
+impl NostrConnectRequestListener for DeclineNostrConnectRequestListener {
+    async fn on_request(
+        &self,
+        event: NostrConnectRequestEvent,
+    ) -> Result<NostrConnectResponseStatus, CallbackError> {
+        dbg!(event);
+        Ok(NostrConnectResponseStatus::Approved)
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
@@ -189,10 +217,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!();
     });
 
-    log::info!(
-        "Public key: {:?}",
-        keypair.public_key().to_bech32().unwrap()
-    );
+    log::info!("Public key: {:?}", keypair.public_key());
 
     // let db = PortalDB::new(
     //     keypair.clone(),
@@ -247,6 +272,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _app = Arc::clone(&app);
     tokio::spawn(async move {
         _app.listen_for_auth_challenge(Arc::new(ApproveLogin(Arc::clone(&_app))))
+            .await
+            .unwrap();
+    });
+
+    let _app = Arc::clone(&app);
+    tokio::spawn(async move {
+        _app.listen_for_nip46_request(Arc::new(DeclineNostrConnectRequestListener))
             .await
             .unwrap();
     });

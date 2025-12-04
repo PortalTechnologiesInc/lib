@@ -14,6 +14,9 @@ use nostr::PublicKey;
 // Identity: 29000-29999
 
 pub mod event_kinds {
+    // Remote signing request events (24133)
+    pub const SIGNING_REQUEST: u16 = 24133;
+
     // Authentication events (27000-27999)
     pub const AUTH_CHALLENGE: u16 = 27000;
     pub const AUTH_RESPONSE: u16 = 27001;
@@ -443,9 +446,32 @@ pub mod payment {
     }
 }
 
+pub mod nip46 {
+    use serde::{Deserialize, Serialize};
+
+    use crate::protocol::model::bindings::{NostrConnectMethod, PublicKey};
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
+    pub struct NostrConnectRequestEvent {
+        pub id: String,
+        pub nostr_client_pubkey: PublicKey,
+        pub method: NostrConnectMethod,
+        pub params: Vec<String>,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
+    #[serde(rename_all = "snake_case", tag = "status")]
+    pub enum NostrConnectResponseStatus {
+        Approved,
+        Declined { reason: Option<String> },
+    }
+}
+
 #[cfg(feature = "bindings")]
 pub mod bindings {
-    use nostr::nips::nip19::ToBech32;
+    use nostr::nips::{nip19::ToBech32, nip46::NostrConnectMethod as CoreMethod};
     use serde::{Deserialize, Serialize};
     use std::ops::Deref;
 
@@ -486,6 +512,49 @@ pub mod bindings {
         try_lift: |val| Ok(Timestamp(val)),
         lower: |obj| obj.0,
     });
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
+    pub enum NostrConnectMethod {
+        Connect,
+        GetPublicKey,
+        SignEvent,
+        Nip04Encrypt,
+        Nip04Decrypt,
+        Nip44Encrypt,
+        Nip44Decrypt,
+        Ping,
+    }
+
+    impl From<CoreMethod> for NostrConnectMethod {
+        fn from(value: CoreMethod) -> Self {
+            match value {
+                CoreMethod::Connect => Self::Connect,
+                CoreMethod::GetPublicKey => Self::GetPublicKey,
+                CoreMethod::SignEvent => Self::SignEvent,
+                CoreMethod::Nip04Encrypt => Self::Nip04Encrypt,
+                CoreMethod::Nip04Decrypt => Self::Nip04Decrypt,
+                CoreMethod::Nip44Encrypt => Self::Nip44Encrypt,
+                CoreMethod::Nip44Decrypt => Self::Nip44Decrypt,
+                CoreMethod::Ping => Self::Ping,
+            }
+        }
+    }
+
+    impl From<NostrConnectMethod> for CoreMethod {
+        fn from(value: NostrConnectMethod) -> Self {
+            match value {
+                NostrConnectMethod::Connect => Self::Connect,
+                NostrConnectMethod::GetPublicKey => Self::GetPublicKey,
+                NostrConnectMethod::SignEvent => Self::SignEvent,
+                NostrConnectMethod::Nip04Encrypt => Self::Nip04Encrypt,
+                NostrConnectMethod::Nip04Decrypt => Self::Nip04Decrypt,
+                NostrConnectMethod::Nip44Encrypt => Self::Nip44Encrypt,
+                NostrConnectMethod::Nip44Decrypt => Self::Nip44Decrypt,
+                NostrConnectMethod::Ping => Self::Ping,
+            }
+        }
+    }
 }
 
 #[cfg(test)]
