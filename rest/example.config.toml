@@ -1,0 +1,40 @@
+## All settings can be overridden via environment variables.
+## Format: PORTAL__<SECTION>__<KEY>=value (use double underscores)
+## Example: PORTAL__WALLET__LN_BACKEND=nwc
+
+[info]
+## The port on which the REST API will listen.
+listen_port = 3000
+
+
+[nostr]
+## Nostr private key in hex format. This key is used to sign messages and authenticate your service on the Nostr network.
+private_key = "your-nostr-private-key"
+
+## Relays are used to publish and receive messages on the Nostr network.
+relays = ["wss://relay.nostr.net", "wss://relay.damus.io"]
+
+## Proof for Nostr subkey delegation. This is used when your Portal instance operates as a subkey delegated from a main key.
+# subkey_proof = "your-nostr-subkey-proof"
+
+
+[auth]
+## Authentication token for API access. This token must be provided by clients when connecting to the WebSocket API.
+auth_token = "your-auth-token"
+
+
+[wallet]
+## Wallet type. Currently supported: "none", "nwc", "breez"
+ln_backend = "none"
+
+
+## Configuration for the NWC wallet.
+# [wallet.nwc]
+# url = "your-nwc-url"
+
+
+## Configuration for the Breez wallet.
+# [wallet.breez]
+# api_key = "your-breez-api-key"
+# storage_dir = "your-breez-storage-dir"
+# mnemonic = "your-breez-mnemonic"
