@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
-use std::{env, str::FromStr};
 
 use axum::{
     extract::{State, WebSocketUpgrade},
@@ -18,6 +18,7 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 mod command;
+mod config;
 mod response;
 mod ws;
 
@@ -60,7 +61,7 @@ impl From<ApiError> for (StatusCode, Json<ErrorResponse>) {
 #[derive(Clone)]
 struct AppState {
     sdk: Arc<PortalSDK>,
-    auth_token: String,
+    settings: config::Settings,
     wallet: Option<Arc<dyn PortalWallet>>,
     market_api: Arc<rates::MarketAPI>,
 }
@@ -95,7 +96,7 @@ async fn auth_middleware<B>(
         },
     )?;
 
-    if token != state.auth_token {
+    if token != state.settings.auth.auth_token {
         return Err(ApiError::AuthenticationError("Invalid token".to_string()).into());
     }
 
@@ -118,9 +119,6 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(feature = "task-tracing")]
     console_subscriber::init();
 
-    // Load .env file if it exists
-    dotenv::dotenv().ok();
-
     // Set up logging
     #[cfg(not(feature = "task-tracing"))]
     tracing_subscriber::registry()
@@ -128,59 +126,41 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::Layer::default().compact())
         .init();
 
-    // Get environment variables
-    let auth_token = env::var("AUTH_TOKEN").expect("AUTH_TOKEN environment variable is required");
-    let nwc_url = env::var("NWC_URL").ok();
-    let nostr_key = env::var("NOSTR_KEY").expect("NOSTR_KEY environment variable is required");
-    let nostr_subkey_proof = env::var("NOSTR_SUBKEY_PROOF").ok();
-    let breez_mnemonic = env::var("BREEZ_MNEMONIC").ok();
+    let config = config::Settings::load()?;
+    info!("Config loaded: {:?}", config);
 
-    // Only use default relays if NOSTR_RELAYS is not set or empty
-    let relays: Vec<String> = match env::var("NOSTR_RELAYS") {
-        Ok(relays_str) if !relays_str.trim().is_empty() => relays_str
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .collect(),
-        _ => {
-            // Default relays as fallback
-            info!("NOSTR_RELAYS not set or empty, using default relays");
-            vec![
-                "wss://relay.nostr.net".to_string(),
-                "wss://relay.damus.io".to_string(),
-            ]
-        }
-    };
+    // Settings validation
+    config.validate()?;
 
-    let keys = portal::nostr::key::Keys::from_str(&nostr_key)?;
+    let keys = portal::nostr::key::Keys::from_str(&config.nostr.private_key)?;
 
     // Initialize keypair from environment
     // LocalKeypair doesn't have from_hex, need to use the correct initialization method
     let keypair = LocalKeypair::new(
         keys,
-        nostr_subkey_proof.map(|s| serde_json::from_str(&s).expect("Failed to parse subkey proof")),
+        config
+            .nostr
+            .subkey_proof
+            .clone()
+            .map(|s| serde_json::from_str(&s).expect("Failed to parse subkey proof")),
     );
 
     info!("Running with keypair: {}", keypair.public_key());
 
     // Initialize SDK
-    let sdk = PortalSDK::new(keypair, relays).await?;
+    let sdk = PortalSDK::new(keypair, config.nostr.relays.clone()).await?;
 
     // Initialize the wallet, based on the env variables set
-    let wallet: Option<Arc<dyn PortalWallet>> = if let Some(mnemonic) = breez_mnemonic {
-        info!("Using Breez Spark wallet");
-        Some(Arc::new(BreezSparkWallet::new(mnemonic).await?))
-    } else if let Some(url) = nwc_url {
-        info!("Using NWC wallet");
-        Some(Arc::new(NwcWallet::new(url)?))
-    } else {
-        warn!("No wallet configured");
-        None
-    };
+
+    let wallet = config.build_wallet().await?;
+
+
+    let listen_port = config.info.listen_port;
 
     // Create app state
     let state = AppState {
         sdk: Arc::new(sdk),
-        auth_token,
+        settings: config,
         wallet,
         market_api: rates::MarketAPI::new().expect("Failed to create market API"),
     };
@@ -203,7 +183,7 @@ async fn main() -> anyhow::Result<()> {
         .with_state(state);
 
     // Start server
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], listen_port));
     info!("Starting server on {}", addr);
 
     axum::Server::bind(&addr)
