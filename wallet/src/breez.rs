@@ -2,8 +2,8 @@ use std::env;
 
 use axum::async_trait;
 use breez_sdk_spark::{
-    connect, default_config, BreezSdk, ConnectRequest, ListPaymentsRequest, Network,
-    PaymentDetails, PaymentStatus, ReceivePaymentMethod, ReceivePaymentRequest, Seed,
+    BreezSdk, ConnectRequest, ListPaymentsRequest, Network, PaymentDetails, PaymentStatus,
+    ReceivePaymentMethod, ReceivePaymentRequest, Seed, connect, default_config,
 };
 
 use crate::{PortalWallet, Result};
@@ -81,7 +81,10 @@ impl PortalWallet for BreezSparkWallet {
                         ..
                     }) => {
                         if invoice == *payment_invoice {
-                            return Ok((payment.status == PaymentStatus::Completed, preimage.clone()));
+                            return Ok((
+                                payment.status == PaymentStatus::Completed,
+                                preimage.clone(),
+                            ));
                         }
                     }
                     _ => {}

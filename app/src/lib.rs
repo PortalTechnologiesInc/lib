@@ -1152,7 +1152,9 @@ impl PortalApp {
         receiver_pubkey: &str,
         payment_request: SinglePaymentRequestContent,
     ) -> Result<(), AppError> {
-        let receiver_pubkey = receiver_pubkey.parse::<nostr::key::PublicKey>().unwrap();
+        let receiver_pubkey = receiver_pubkey
+            .parse::<nostr::key::PublicKey>()
+            .map_err(|_| AppError::RequestSinglePaymentError("Invalid receiver pubkey".into()))?;
 
         let conv = SinglePaymentRequestSenderConversation::new(
             self.router.keypair().public_key(),
