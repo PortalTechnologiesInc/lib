@@ -146,7 +146,8 @@ impl PortalSDK {
             self.router.keypair().public_key(),
             self.router.keypair().subkey_proof().cloned(),
             payment_request,
-        ).map_err(PortalSDKError::ProtocolError)?;
+        )
+        .map_err(PortalSDKError::ProtocolError)?;
 
         let mut event = self
             .router
@@ -167,7 +168,8 @@ impl PortalSDK {
             self.router.keypair().public_key(),
             self.router.keypair().subkey_proof().cloned(),
             payment_request,
-        ).map_err(PortalSDKError::ProtocolError)?;
+        )
+        .map_err(PortalSDKError::ProtocolError)?;
 
         let event = self
             .router

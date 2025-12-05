@@ -518,7 +518,10 @@ impl Calendar {
             && matches!(self.day, TimeComponent::Any)
             && matches!(self.hour, TimeComponent::Any)
         {
-            if let TimeComponent::Range { step: Some(step), .. } = &self.minute {
+            if let TimeComponent::Range {
+                step: Some(step), ..
+            } = &self.minute
+            {
                 return Some(format!("Every {} minutes", step));
             }
         }
@@ -527,13 +530,19 @@ impl Calendar {
             && matches!(self.month, TimeComponent::Any)
             && matches!(self.day, TimeComponent::Any)
         {
-            if let TimeComponent::Range { step: Some(step), .. } = &self.hour {
+            if let TimeComponent::Range {
+                step: Some(step), ..
+            } = &self.hour
+            {
                 return Some(format!("Every {} hours", step));
             }
         }
 
         if matches!(self.year, TimeComponent::Any) && matches!(self.month, TimeComponent::Any) {
-            if let TimeComponent::Range { step: Some(step), .. } = &self.day {
+            if let TimeComponent::Range {
+                step: Some(step), ..
+            } = &self.day
+            {
                 return Some(format!("Every {} days", step));
             }
         }
@@ -1093,8 +1102,6 @@ mod tests {
                 .unwrap()
                 .with_timezone(&chrono_tz::Europe::Rome)
         );
-
-
     }
 
     #[test]
@@ -1286,10 +1293,7 @@ mod tests {
             second: TimeComponent::Values(vec![0]),
             timezone: None,
         };
-        assert_eq!(
-            cal_every_10.to_human_readable(true),
-            "Every 10 minutes"
-        );
+        assert_eq!(cal_every_10.to_human_readable(true), "Every 10 minutes");
 
         let cal_every_6h = Calendar {
             weekdays: None,
@@ -1305,10 +1309,7 @@ mod tests {
             second: TimeComponent::Values(vec![0]),
             timezone: None,
         };
-        assert_eq!(
-            cal_every_6h.to_human_readable(true),
-            "Every 6 hours"
-        );
+        assert_eq!(cal_every_6h.to_human_readable(true), "Every 6 hours");
 
         let cal_every_3d = Calendar {
             weekdays: None,

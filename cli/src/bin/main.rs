@@ -8,7 +8,7 @@ use app::{
 };
 use log::info;
 use portal::{
-    nostr::nips::{nip47::PayInvoiceRequest},
+    nostr::nips::nip47::PayInvoiceRequest,
     protocol::{
         key_handshake::KeyHandshakeUrl,
         model::{
@@ -285,9 +285,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let _app = Arc::clone(&app);
     tokio::spawn(async move {
-        _app.listen_for_payment_request(Arc::new(ApprovePayment(Arc::new(nwc::NWC::new(nwc_str.parse().unwrap())))))
-            .await
-            .unwrap();
+        _app.listen_for_payment_request(Arc::new(ApprovePayment(Arc::new(nwc::NWC::new(
+            nwc_str.parse().unwrap(),
+        )))))
+        .await
+        .unwrap();
     });
 
     let _app = Arc::clone(&app);
@@ -348,10 +350,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bolt11_invoice = Bolt11Invoice::from_str(invoice_str)?;
     let payment_hash_string = bolt11_invoice.payment_hash().to_string();
-    let result = nwc.lookup_invoice_from_payment_hash(payment_hash_string).await;
+    let result = nwc
+        .lookup_invoice_from_payment_hash(payment_hash_string)
+        .await;
     match result {
         Ok(lur) => {
-            info!("invoice from lookup_invoice_with_payment_hash -> {}", lur.invoice.unwrap());
+            info!(
+                "invoice from lookup_invoice_with_payment_hash -> {}",
+                lur.invoice.unwrap()
+            );
         }
         Err(e) => {
             info!("{}", e);

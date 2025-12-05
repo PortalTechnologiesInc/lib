@@ -63,6 +63,7 @@ use portal::{
         MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream,
         adapters::one_shot::OneShotSenderAdapter,
     },
+    sdk::payments::SinglePaymentRequestSenderConversation,
     utils::verify_nip05,
 };
 
@@ -1145,6 +1146,33 @@ impl PortalApp {
         }
         Ok(())
     }
+
+    pub async fn single_payment_request(
+        &self,
+        receiver_pubkey: &str,
+        payment_request: SinglePaymentRequestContent,
+    ) -> Result<(), AppError> {
+        let receiver_pubkey = receiver_pubkey
+            .parse::<nostr::key::PublicKey>()
+            .map_err(|_| AppError::RequestSinglePaymentError("Invalid receiver pubkey".into()))?;
+
+        let conv = SinglePaymentRequestSenderConversation::new(
+            self.router.keypair().public_key(),
+            self.router.keypair().subkey_proof().cloned(),
+            payment_request,
+        )
+        .map_err(AppError::RequestSinglePaymentError)?;
+
+        self.router
+            .add_conversation(Box::new(MultiKeySenderAdapter::new_with_user(
+                receiver_pubkey,
+                vec![],
+                conv,
+            )))
+            .await?;
+
+        Ok(())
+    }
 }
 
 impl PortalApp {
@@ -1320,6 +1348,9 @@ pub enum AppError {
 
     #[error("Error while signing the event: {0}")]
     Nip46OperationError(String),
+
+    #[error("Error sending single payment request: {0}")]
+    RequestSinglePaymentError(String),
 }
 
 impl From<portal::router::ConversationError> for AppError {
