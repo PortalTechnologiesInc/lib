@@ -24,32 +24,17 @@ pub enum RatesError {
     #[error("Missing price in Yadio response")]
     MissingYadioPrice,
 
-    #[error("Missing rate in YadioConvert response")]
-    MissingYadioConvertRate,
-
     #[error("Missing CoinGecko price")]
     MissingCoinGeckoPrice,
 
     #[error("Missing 'last' price")]
     MissingLastPrice,
 
-    #[error("Missing Coinpaprika INR price")]
-    MissingCoinpaprikaInrPrice,
-
-    #[error("Missing Coinbase amount")]
-    MissingCoinbaseAmount,
-
     #[error("Missing Kraken close price")]
     MissingKrakenClosePrice,
 
-    #[error("Missing CoinDesk field")]
-    MissingCoinDeskField,
-
     #[error("Unsupported currency")]
     UnsupportedCurrency,
-
-    #[error("Unsupported source or malformed JSON")]
-    UnsupportedSource,
 
     #[error("Failed to fetch market data")]
     MarketDataFetchFailed,
@@ -73,31 +58,30 @@ struct FiatUnit {
 #[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
 enum Source {
     Yadio,
-    YadioConvert,
     Exir,
-    #[serde(rename = "coinpaprika")]
-    Coinpaprika,
-    Bitstamp,
-    Coinbase,
     CoinGecko,
-    BNR,
     Kraken,
-    CoinDesk,
+}
+
+impl Source {
+    /// Returns the next fallback source in the hierarchy, if any.
+    fn fallback(&self) -> Option<Source> {
+        match self {
+            Source::Kraken => Some(Source::CoinGecko),
+            Source::Yadio => Some(Source::CoinGecko),
+            Source::Exir => None,      // Specialized for Iranian market
+            Source::CoinGecko => None, // Catch-all, no fallback
+        }
+    }
 }
 
 impl fmt::Display for Source {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Source::Yadio => write!(f, "yadio"),
-            Source::YadioConvert => write!(f, "yadio_convert"),
             Source::Exir => write!(f, "exir"),
-            Source::Coinpaprika => write!(f, "coinpaprika"),
-            Source::Bitstamp => write!(f, "bitstamp"),
-            Source::Coinbase => write!(f, "coinbase"),
             Source::CoinGecko => write!(f, "coingecko"),
-            Source::BNR => write!(f, "bnr"),
             Source::Kraken => write!(f, "kraken"),
-            Source::CoinDesk => write!(f, "coindesk"),
         }
     }
 }
@@ -135,37 +119,14 @@ impl MarketAPI {
     fn build_url(source: &Source, key: &str) -> String {
         match source {
             Source::Yadio => format!("https://api.yadio.io/json/{}", key),
-            Source::YadioConvert => format!("https://api.yadio.io/convert/1/BTC/{}", key),
             Source::Exir => "https://api.exir.io/v1/ticker?symbol=btc-irt".to_string(),
-            Source::Coinpaprika => {
-                "https://api.coinpaprika.com/v1/tickers/btc-bitcoin?quotes=INR".to_string()
-            }
-            Source::Bitstamp => {
-                format!(
-                    "https://www.bitstamp.net/api/v2/ticker/btc{}",
-                    key.to_lowercase()
-                )
-            }
-            Source::Coinbase => {
-                format!(
-                    "https://api.coinbase.com/v2/prices/BTC-{}/buy",
-                    key.to_uppercase()
-                )
-            }
             Source::CoinGecko => format!(
                 "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies={}",
                 key.to_lowercase()
             ),
-            Source::BNR => "https://www.bnr.ro/nbrfxrates.xml".to_string(),
             Source::Kraken => {
                 format!(
                     "https://api.kraken.com/0/public/Ticker?pair=XXBTZ{}",
-                    key.to_uppercase()
-                )
-            }
-            Source::CoinDesk => {
-                format!(
-                    "https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms={}",
                     key.to_uppercase()
                 )
             }
@@ -185,13 +146,6 @@ impl MarketAPI {
                     .ok_or(RatesError::MissingYadioPrice)?;
                 Ok(price.to_string())
             }
-            Source::YadioConvert => {
-                let rate = v
-                    .get("rate")
-                    .and_then(Value::as_str)
-                    .ok_or(RatesError::MissingYadioConvertRate)?;
-                Ok(rate.to_string())
-            }
             Source::CoinGecko => {
                 let val = v
                     .get("bitcoin")
@@ -199,27 +153,11 @@ impl MarketAPI {
                     .ok_or(RatesError::MissingCoinGeckoPrice)?;
                 Ok(val.to_string())
             }
-            Source::Exir | Source::Bitstamp => {
+            Source::Exir => {
                 let val = v
                     .get("last")
                     .and_then(Value::as_str)
                     .ok_or(RatesError::MissingLastPrice)?;
-                Ok(val.to_string())
-            }
-            Source::Coinpaprika => {
-                let val = v
-                    .get("quotes")
-                    .and_then(|q| q.get("INR"))
-                    .and_then(|inr| inr.get("price"))
-                    .ok_or(RatesError::MissingCoinpaprikaInrPrice)?;
-                Ok(val.to_string())
-            }
-            Source::Coinbase => {
-                let val = v
-                    .get("data")
-                    .and_then(|d| d.get("amount"))
-                    .and_then(Value::as_str)
-                    .ok_or(RatesError::MissingCoinbaseAmount)?;
                 Ok(val.to_string())
             }
             Source::Kraken => {
@@ -232,18 +170,15 @@ impl MarketAPI {
                     .ok_or(RatesError::MissingKrakenClosePrice)?;
                 Ok(val.to_string())
             }
-            Source::CoinDesk => {
-                let val = v
-                    .get(&key.to_uppercase())
-                    .ok_or(RatesError::MissingCoinDeskField)?;
-                Ok(val.to_string())
-            }
-            _ => Err(RatesError::UnsupportedSource),
         }
     }
 
-    async fn fetch_price(self: Arc<Self>, unit: &FiatUnit) -> Result<Option<String>, RatesError> {
-        let url = Self::build_url(&unit.source, &unit.end_point_key);
+    async fn fetch_price_with_source(
+        &self,
+        source: &Source,
+        key: &str,
+    ) -> Result<Option<String>, RatesError> {
+        let url = Self::build_url(source, key);
         let res = self
             .client
             .get(&url)
@@ -259,8 +194,11 @@ impl MarketAPI {
             .text()
             .await
             .map_err(|e| RatesError::HttpRequest(e.to_string()))?;
-        let parsed = Self::parse_price_json(&text, &unit.source, &unit.end_point_key)?;
-        Ok(Some(parsed))
+
+        match Self::parse_price_json(&text, source, key) {
+            Ok(parsed) => Ok(Some(parsed)),
+            Err(_) => Ok(None), // Parsing failed, treat as source failure for fallback
+        }
     }
 
     async fn fetch_market_data_internal(
@@ -274,17 +212,36 @@ impl MarketAPI {
             None => return Err(RatesError::UnsupportedCurrency),
         };
 
-        if let Some(price_str) = self.fetch_price(&unit).await? {
-            if let Ok(rate) = price_str.parse::<f64>() {
-                let data = MarketData {
-                    price: format!("{} {:.0}", unit.symbol, rate),
-                    rate: rate,
-                    source: unit.source.to_string(),
-                };
-                log::debug!("Market data fetched in {:?}", start.elapsed());
-                return Ok(data);
-            } else {
-                return Err(RatesError::PriceParseFailed(price_str));
+        let mut current_source = unit.source.clone();
+
+        loop {
+            if let Some(price_str) = self
+                .fetch_price_with_source(&current_source, &unit.end_point_key)
+                .await?
+            {
+                if let Ok(rate) = price_str.parse::<f64>() {
+                    let data = MarketData {
+                        price: format!("{} {:.0}", unit.symbol, rate),
+                        rate,
+                        source: current_source.to_string(),
+                    };
+                    log::debug!("Market data fetched in {:?}", start.elapsed());
+                    return Ok(data);
+                }
+            }
+
+            // Try next source in fallback chain
+            match current_source.fallback() {
+                Some(next) => {
+                    log::debug!(
+                        "Falling back from {} to {} for {}",
+                        current_source,
+                        next,
+                        currency
+                    );
+                    current_source = next;
+                }
+                None => break,
             }
         }
 
