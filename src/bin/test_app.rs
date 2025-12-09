@@ -3,7 +3,7 @@ use std::{io::Write, str::FromStr, sync::Arc};
 use nostr::{Keys, nips::nip19::ToBech32};
 use nostr_relay_pool::{RelayOptions, RelayPool};
 use portal::{
-    app::auth::{
+    conversation::app::auth::{
         AuthChallengeListenerConversation, AuthResponseConversation, KeyHandshakeConversation,
     },
     protocol::{LocalKeypair, key_handshake::KeyHandshakeUrl, model::auth::AuthResponseStatus},
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // auth init sent
 
     let inner = AuthChallengeListenerConversation::new(router.keypair().public_key());
-    let mut rx: portal::router::NotificationStream<portal::app::auth::AuthChallengeEvent> = router
+    let mut rx: portal::router::NotificationStream<portal::conversation::app::auth::AuthChallengeEvent> = router
         .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
             inner,
             router.keypair().subkey_proof().cloned(),

@@ -5,7 +5,7 @@ use nostr_relay_pool::{RelayOptions, RelayPool};
 use portal::{
     protocol::{LocalKeypair, key_handshake::KeyHandshakeUrl},
     router::{MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream},
-    sdk::auth::{
+    conversation::sdk::auth::{
         AuthChallengeSenderConversation, AuthResponseEvent, KeyHandshakeEvent,
         KeyHandshakeReceiverConversation,
     },

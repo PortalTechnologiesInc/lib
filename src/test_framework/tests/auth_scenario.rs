@@ -1,6 +1,6 @@
-use crate::sdk::auth::{AuthResponseEvent, KeyHandshakeEvent};
+use crate::conversation::sdk::auth::{AuthResponseEvent, KeyHandshakeEvent};
 use crate::{
-    app::auth::{
+    conversation::app::auth::{
         AuthChallengeListenerConversation, AuthResponseConversation, KeyHandshakeConversation,
     },
     protocol::{
@@ -12,7 +12,7 @@ use crate::{
     router::{
         MultiKeyListenerAdapter, MultiKeySenderAdapter, adapters::one_shot::OneShotSenderAdapter,
     },
-    sdk::auth::{AuthChallengeSenderConversation, KeyHandshakeReceiverConversation},
+    conversation::sdk::auth::{AuthChallengeSenderConversation, KeyHandshakeReceiverConversation},
     test_framework::{ScenarioBuilder, logger::init_logger},
     utils::random_string,
 };
@@ -104,7 +104,7 @@ async fn test_auth_flow() {
         .unwrap();
 
     // 6. Client receives auth challenge
-    let auth_challenge_event: crate::app::auth::AuthChallengeEvent =
+    let auth_challenge_event: crate::conversation::app::auth::AuthChallengeEvent =
         challenge_notifications.next().await.unwrap().unwrap();
     assert_eq!(
         auth_challenge_event.service_key,
@@ -206,7 +206,7 @@ async fn test_auth_with_subkey_client() {
         .unwrap();
 
     // 3. Client receives auth challenge
-    let auth_challenge_event: crate::app::auth::AuthChallengeEvent =
+    let auth_challenge_event: crate::conversation::app::auth::AuthChallengeEvent =
         challenge_notifications.next().await.unwrap().unwrap();
     assert_eq!(
         auth_challenge_event.service_key,
@@ -314,7 +314,7 @@ async fn test_auth_with_subkey_service() {
         .unwrap();
 
     // 3. Client receives auth challenge
-    let auth_challenge_event: crate::app::auth::AuthChallengeEvent =
+    let auth_challenge_event: crate::conversation::app::auth::AuthChallengeEvent =
         challenge_notifications.next().await.unwrap().unwrap();
     assert_eq!(
         auth_challenge_event.service_key,
