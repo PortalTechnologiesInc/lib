@@ -76,6 +76,7 @@ in
         PORTAL__NOSTR__RELAYS = lib.concatStringsSep "," cfg.nostrRelays;
         RUST_LOG = cfg.rustLog;
         PORTAL__WALLET__LN_BACKEND = "none";
+        PORTAL__INFO__LISTEN_PORT = "3000";
       } // lib.optionalAttrs (cfg.nwcUrl != null) {
         PORTAL__WALLET__LN_BACKEND = "nwc";
         PORTAL__WALLET__NWC__URL = cfg.nwcUrl;
@@ -96,7 +97,7 @@ in
           ExecStart = "${lib.getExe cfg.package}";
           Restart = "always";
           ProtectSystem = "strict";
-          ProtectHome = true;
+          ProtectHome = false;
           PrivateTmp = true;
           NoNewPrivileges = true;
           StateDirectory = "portal-rest";
@@ -108,6 +109,8 @@ in
       users.users.${cfg.user} = {
         isSystemUser = true;
         group = cfg.group;
+        home = "/var/lib/portal-rest";
+        createHome = true;             
       };
       users.groups.${cfg.group} = {};
     };
