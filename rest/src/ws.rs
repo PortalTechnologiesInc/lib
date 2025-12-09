@@ -191,7 +191,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
                     id,
                     cmd: Command::Auth { token },
                 }) => {
-                    if token == state.auth_token {
+                    if token == state.settings.auth.auth_token {
                         authenticated = true;
                         let response = Response::Success {
                             id: id.clone(),

@@ -71,14 +71,17 @@ in
     let
       # Combine all environment variables
       envConfig = {
-        AUTH_TOKEN = cfg.authToken;
-        NOSTR_KEY = cfg.nostrKey;
-        NOSTR_RELAYS = lib.concatStringsSep "," cfg.nostrRelays;
+        PORTAL__AUTH__AUTH_TOKEN = cfg.authToken;
+        PORTAL__NOSTR__PRIVATE_KEY = cfg.nostrKey;
+        PORTAL__NOSTR__RELAYS = lib.concatStringsSep "," cfg.nostrRelays;
         RUST_LOG = cfg.rustLog;
+        PORTAL__WALLET__LN_BACKEND = "none";
+        PORTAL__INFO__LISTEN_PORT = "3000";
       } // lib.optionalAttrs (cfg.nwcUrl != null) {
-        NWC_URL = cfg.nwcUrl;
+        PORTAL__WALLET__LN_BACKEND = "nwc";
+        PORTAL__WALLET__NWC__URL = cfg.nwcUrl;
       } // lib.optionalAttrs (cfg.nostrSubkeyProof != null) {
-        NOSTR_SUBKEY_PROOF = cfg.nostrSubkeyProof;
+        PORTAL__NOSTR__SUBKEY_PROOF = cfg.nostrSubkeyProof;
       };
     in
     mkIf cfg.enable {
@@ -94,7 +97,7 @@ in
           ExecStart = "${lib.getExe cfg.package}";
           Restart = "always";
           ProtectSystem = "strict";
-          ProtectHome = true;
+          ProtectHome = false;
           PrivateTmp = true;
           NoNewPrivileges = true;
           StateDirectory = "portal-rest";
@@ -106,6 +109,8 @@ in
       users.users.${cfg.user} = {
         isSystemUser = true;
         group = cfg.group;
+        home = "/var/lib/portal-rest";
+        createHome = true;             
       };
       users.groups.${cfg.group} = {};
     };

@@ -14,11 +14,7 @@ pub struct BreezSparkWallet {
 }
 
 impl BreezSparkWallet {
-    pub async fn new(mnemonic: String) -> Result<Self> {
-        let api_key =
-            env::var("BREEZ_API_KEY").expect("BREEZ_API_KEY environment variable is required");
-        let breez_storage_dir = env::var("BREEZ_STORAGE_DIR")
-            .expect("BREEZ_STORAGE_DIR environment variable is required");
+    pub async fn new(api_key: String, storage_dir: String, mnemonic: String) -> Result<Self> {
         let seed = Seed::Mnemonic {
             mnemonic,
             passphrase: None,
@@ -30,7 +26,7 @@ impl BreezSparkWallet {
         let sdk = connect(ConnectRequest {
             config,
             seed,
-            storage_dir: breez_storage_dir,
+            storage_dir,
         })
         .await?;
 

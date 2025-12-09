@@ -4,21 +4,68 @@ This crate provides a RESTful API for the Portal SDK, allowing it to be used fro
 
 ## Getting Started
 
-- [Setup](#setup)
+- [Configuration](#configuration)
 - [Start programming](#start-programming)
 - [API Endpoints](#api-endpoints)
 
-## Setup
+
+## Configuration
+
+> **Important**: The rest daemon will create the working directory and configuration file automatically if they do not exist. You may create or customize them manually before starting the daemon if you wish.
+
+### Setup Steps
+
+1. **Create working directory**:
+   ```bash
+   mkdir -p ~/.portal-rest
+   ```
+
+2. **Create configuration file**:
+   ```bash
+   # Copy and customize the example config
+   cp example.config.toml ~/.portal-rest/config.toml
+   # Edit ~/.portal-rest/config.toml with your settings
+   ```
+
+3. **Start the rest daemon**:
+   ```bash
+   portal-rest  # Uses ~/.portal-rest/config.toml automatically
+   ```
+
+### Configuration File Locations (in order of precedence)
+
+1. **Default location**: `~/.portal-rest/config.toml`
+2. **Environment variables**: All config options can be set via environment variables
+
 
 ### Environment Variables
 
-The following environment variables need to be set:
+All configuration options can be overridden via environment variables. The format is:
 
-- `AUTH_TOKEN`: Required. The authentication token used to authenticate with the API.
-- `NOSTR_KEY`: Required. Your Nostr private key in hex format.
-- `NWC_URL`: Optional. The Nostr Wallet Connect URL.
-- `NOSTR_SUBKEY_PROOF`: Optional. The Nostr subkey proof if using subkeys.
-- `NOSTR_RELAYS`: Optional. Comma-separated list of relay URLs. Defaults to common relays if not provided.
+```
+PORTAL__<SECTION>__<KEY>=value
+```
+
+Use double underscores (`__`) to separate nested keys.
+
+| Config Key | Environment Variable | Description |
+|------------|---------------------|-------------|
+| `info.listen_port` | `PORTAL__INFO__LISTEN_PORT` | The port on which the REST API will listen |
+| `nostr.private_key` | `PORTAL__NOSTR__PRIVATE_KEY` | Nostr private key in hex format |
+| `nostr.relays` | `PORTAL__NOSTR__RELAYS` | Comma-separated list of relay URLs |
+| `nostr.subkey_proof` | `PORTAL__NOSTR__SUBKEY_PROOF` | Nostr subkey proof (optional) |
+| `auth.auth_token` | `PORTAL__AUTH__AUTH_TOKEN` | API authentication token |
+| `wallet.ln_backend` | `PORTAL__WALLET__LN_BACKEND` | Wallet type: `none`, `nwc`, or `breez` |
+| `wallet.nwc.url` | `PORTAL__WALLET__NWC__URL` | Nostr Wallet Connect URL |
+| `wallet.breez.api_key` | `PORTAL__WALLET__BREEZ__API_KEY` | Breez API key |
+| `wallet.breez.storage_dir` | `PORTAL__WALLET__BREEZ__STORAGE_DIR` | Breez storage directory |
+| `wallet.breez.mnemonic` | `PORTAL__WALLET__BREEZ__MNEMONIC` | Breez mnemonic |
+
+**Example:**
+
+```bash
+PORTAL__WALLET__LN_BACKEND=nwc PORTAL__WALLET__NWC__URL="nostr+walletconnect://..." ./portal-rest
+```
 
 ### Building and Running
 
