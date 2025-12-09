@@ -72,7 +72,7 @@ impl Channel for SimulatedChannel {
 
     async fn subscribe(&self, id: PortalSubscriptionId, filter: Filter) -> Result<usize, Self::Error> {
         let mut subscribers = self.subscribers.write().await;
-        subscribers.insert(id.clone(), (filter, self.my_sender.clone()));
+        subscribers.insert(PortalConversationId::new_conversation(), (filter, self.my_sender.clone()));
         Ok(subscribers.len())
 
         // Send any existing messages that match the filter
@@ -106,12 +106,12 @@ impl Channel for SimulatedChannel {
         self.subscribers
             .write()
             .await
-            .insert(id.clone(), (filter, self.my_sender.clone()));
+            .insert(PortalConversationId::new_conversation(), (filter, self.my_sender.clone()));
         Ok(())
     }
 
     async fn unsubscribe(&self, id: PortalSubscriptionId) -> Result<(), Self::Error> {
-        self.subscribers.write().await.remove(&id);
+        self.subscribers.write().await.remove(&PortalConversationId::new_conversation());
         Ok(())
     }
 

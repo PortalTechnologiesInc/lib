@@ -1,4 +1,3 @@
-pub mod nip46;
 pub mod conversation;
 pub mod protocol;
 pub mod router;

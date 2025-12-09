@@ -37,7 +37,7 @@ use portal::{
     conversation::close_subscription::{
         CloseRecurringPaymentConversation, CloseRecurringPaymentReceiverConversation,
     },
-    nip46::{Nip46Request, Nip46RequestListenerConversation, SigningResponseSenderConversation},
+    conversation::nip46::{Nip46Request, Nip46RequestListenerConversation, SigningResponseSenderConversation},
     conversation::invoice::{InvoiceReceiverConversation, InvoiceRequestConversation, InvoiceSenderConversation},
     nostr::nips::nip19::ToBech32,
     nostr_relay_pool::{RelayOptions, RelayPool},
