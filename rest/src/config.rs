@@ -100,6 +100,7 @@ impl Settings {
                     .prefix_separator("__") // double underscore after PORTAL
                     .separator("__") // double underscore for nested keys
                     .list_separator(",") // comma separator for list values
+                    .with_list_parse_key("nostr.relays")
                     .try_parsing(true),
             )
             .build()?
