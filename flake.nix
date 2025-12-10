@@ -49,6 +49,7 @@
             # Needed to build cashu
             protobuf
             pkg-config
+            perl
           ];
 
           buildInputs = with pkgs; [
@@ -149,7 +150,7 @@
         };
 
         checks = {
-          vm-test = pkgs.nixosTest {
+          vm-test = pkgs.testers.nixosTest {
             name = "portal-backend-vm-test";
 
             nodes.machine = { config, pkgs, lib, ... }: {
