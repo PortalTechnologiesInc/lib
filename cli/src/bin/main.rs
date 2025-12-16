@@ -11,7 +11,7 @@ use portal::{
         key_handshake::KeyHandshakeUrl,
         model::{
             auth::AuthResponseStatus,
-            nip46::{NostrConnectRequestEvent, NostrConnectResponseStatus},
+            nip46::{NostrConnectEvent, NostrConnectResponseStatus},
             payment::{
                 CashuResponseStatus, PaymentResponseContent, PaymentStatus,
                 RecurringPaymentResponseContent, RecurringPaymentStatus,
@@ -33,32 +33,6 @@ impl RelayStatusListener for LogRelayStatusChange {
     ) -> Result<(), CallbackError> {
         log::info!("Relay {:?} status changed: {:?}", relay_url.0, status);
         Ok(())
-    }
-}
-
-struct ApproveNostrConnectRequestListener;
-
-#[async_trait::async_trait]
-impl NostrConnectRequestListener for ApproveNostrConnectRequestListener {
-    async fn on_request(
-        &self,
-        event: NostrConnectRequestEvent,
-    ) -> Result<NostrConnectResponseStatus, CallbackError> {
-        dbg!(event);
-        Ok(NostrConnectResponseStatus::Approved)
-    }
-}
-
-struct DeclineNostrConnectRequestListener;
-
-#[async_trait::async_trait]
-impl NostrConnectRequestListener for DeclineNostrConnectRequestListener {
-    async fn on_request(
-        &self,
-        event: NostrConnectRequestEvent,
-    ) -> Result<NostrConnectResponseStatus, CallbackError> {
-        dbg!(event);
-        Ok(NostrConnectResponseStatus::Approved)
     }
 }
 
@@ -160,6 +134,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cashu_direct_app = Arc::clone(&app);
     tokio::spawn(async move {
         cashu_direct_loop(cashu_direct_app).await;
+    });
+
+    let nip46_app = Arc::clone(&app);
+    tokio::spawn(async move {
+        nip46_loop(nip46_app).await;
     });
 
     // let _app = Arc::clone(&app);
@@ -385,6 +364,25 @@ async fn cashu_direct_loop(app: Arc<PortalApp>) {
             Ok(event) => info!("Received Cashu direct: {:?}", event),
             Err(e) => {
                 error!("Cashu direct loop error: {:?}", e);
+                break;
+            }
+        }
+    }
+}
+
+async fn nip46_loop(app: Arc<PortalApp>) {
+    loop {
+        match app.next_nip46_request().await {
+            Ok(event) => {
+                info!("Received auth challenge: {:?}", event);
+
+                let status = NostrConnectResponseStatus::Declined { reason: Some("Don't".to_string()) };
+                if let Err(e) = app.reply_nip46_request(event, status).await {
+                    error!("Failed to reply to auth challenge: {:?}", e);
+                }
+            }
+            Err(e) => {
+                error!("Auth challenge loop error: {:?}", e);
                 break;
             }
         }

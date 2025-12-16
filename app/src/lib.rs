@@ -50,7 +50,7 @@ use portal::{
             Timestamp,
             auth::{AuthResponseStatus, SubkeyProof},
             bindings::PublicKey,
-            nip46::{NostrConnectRequestEvent, NostrConnectResponseStatus},
+            nip46::{NostrConnectEvent, NostrConnectResponseStatus},
             payment::{
                 CashuDirectContentWithKey, CashuRequestContentWithKey, CashuResponseContent,
                 CashuResponseStatus, CloseRecurringPaymentContent, CloseRecurringPaymentResponse,
@@ -282,6 +282,7 @@ pub struct PortalApp {
         Mutex<NotificationStream<portal::protocol::model::payment::InvoiceRequestContentWithKey>>,
     cashu_request_rx: Mutex<NotificationStream<CashuRequestContentWithKey>>,
     cashu_direct_rx: Mutex<NotificationStream<CashuDirectContentWithKey>>,
+    nip46_rx: Mutex<NotificationStream<Nip46Request>>,
 }
 #[derive(uniffi::Record, Debug)]
 pub struct Bolt11InvoiceData {
@@ -368,7 +369,7 @@ pub trait RelayStatusListener: Send + Sync {
 pub trait NostrConnectRequestListener: Send + Sync {
     async fn on_request(
         &self,
-        event: NostrConnectRequestEvent,
+        event: NostrConnectEvent,
     ) -> Result<NostrConnectResponseStatus, CallbackError>;
 }
 
@@ -465,6 +466,12 @@ impl PortalApp {
                 router.keypair().subkey_proof().cloned(),
             )))
             .await?;
+        let nip46_rx: NotificationStream<Nip46Request> = router
+            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
+                Nip46RequestListenerConversation::new(router.keypair().public_key()),
+                router.keypair().subkey_proof().cloned(),
+            )))
+            .await?;
 
         Ok(Arc::new(Self {
             router,
@@ -477,6 +484,7 @@ impl PortalApp {
             invoice_request_rx: Mutex::new(invoice_request_rx),
             cashu_request_rx: Mutex::new(cashu_request_rx),
             cashu_direct_rx: Mutex::new(cashu_direct_rx),
+            nip46_rx: Mutex::new(nip46_rx),
         }))
     }
 
@@ -793,140 +801,139 @@ impl PortalApp {
         Ok(response)
     }
 
-    pub async fn listen_for_nip46_request(
+    pub async fn next_nip46_request(&self) -> Result<NostrConnectEvent, AppError> {
+        let nip46_request = self
+            .nip46_rx
+            .lock()
+            .await
+            .next()
+            .await
+            .ok_or(AppError::ListenerDisconnected)?;
+        let nip46_request = nip46_request.map_err(|e| AppError::ParseError(e.to_string()))?;
+        log::debug!("Received nip46 request: {:?}", nip46_request);
+
+        let nostr_client_pubkey = nip46_request.nostr_client_pubkey.clone();
+        let app_event = NostrConnectEvent {
+            nostr_client_pubkey: PublicKey(nostr_client_pubkey),
+            message: nip46_request.message.into(),
+        };
+        Ok(app_event)
+    }
+
+    pub async fn reply_nip46_request(
         &self,
-        evt: Arc<dyn NostrConnectRequestListener>,
+        event: NostrConnectEvent,
+        status: NostrConnectResponseStatus,
     ) -> Result<(), AppError> {
-        let inner = Nip46RequestListenerConversation::new(self.router.keypair().public_key());
-        let mut rx: NotificationStream<Nip46Request> = self
-            .router
-            .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
-                inner,
-                self.router.keypair().subkey_proof().cloned(),
-            )))
-            .await?;
-
-        while let Ok(nip46_request) = rx.next().await.ok_or(AppError::ListenerDisconnected)? {
-            log::info!("Received a NostrConnect request: {:?}", nip46_request);
-
-            let evt = Arc::clone(&evt);
-            let router = Arc::clone(&self.router);
-
-            let nostr_client_pubkey = nip46_request.nostr_client_pubkey.clone();
-            let (app_event, nostr_connect_request) = match &nip46_request.message {
-                req @ NostrConnectMessage::Request { id, method, params } => (
-                    NostrConnectRequestEvent {
-                        id: id.clone(),
-                        nostr_client_pubkey: PublicKey(nostr_client_pubkey),
-                        method: (*method).into(),
-                        params: params.to_vec(),
-                    },
-                    req.clone()
-                        .to_request()
-                        .expect("Only requests get to this point"),
-                ),
-                _ => continue,
+        if let NostrConnectResponseStatus::Declined { reason } = status {
+            let reason = match reason {
+                Some(reason) => format!("NIP46 request declined with reason: {}", reason),
+                None => "NIP46 request declined with no reason provided.".to_string(),
             };
+            log::info!("{}", reason);
+            return Ok(());
+        }
 
-            let status = evt.on_request(app_event).await?;
-
-            if let NostrConnectResponseStatus::Declined { reason } = status {
-                let reason = match reason {
-                    Some(reason) => format!("NIP46 request declined with reason: {}", reason),
-                    None => "NIP46 request declined with no reason provided.".to_string(),
-                };
-                log::info!("{}", reason);
-                continue;
+        let nostr_connect_message: NostrConnectMessage = event.message.into();
+        let nostr_connect_request = match nostr_connect_message.clone().to_request() {
+            Ok(req) => req,
+            Err(e) => {
+                log::debug!(
+                    "Received a NostrConnect response: {:?}\nIgnoring it (we don't send requests).",
+                    e.to_string()
+                );
+                return Err(AppError::ParseError(e.to_string()));
             }
+        };
 
-            let conversation_result: String = match nostr_connect_request {
-                nostr::nips::nip46::NostrConnectRequest::Connect {
-                    public_key,
-                    secret: _,
-                } => {
-                    if public_key != router.keypair().public_key() {
-                        return Err(AppError::InvalidNip46Request(
-                            "The pubkey provided does not match this remote signer".to_string(),
-                        ));
-                    }
+        let router = Arc::clone(&self.router);
+        let conversation_result: String = match nostr_connect_request {
+            nostr::nips::nip46::NostrConnectRequest::Connect {
+                public_key,
+                secret: _,
+            } => {
+                if public_key != router.keypair().public_key() {
+                    return Err(AppError::InvalidNip46Request(
+                        "The pubkey provided does not match this remote signer".to_string(),
+                    ));
+                }
 
-                    "ack".to_string()
-                }
-                nostr::nips::nip46::NostrConnectRequest::GetPublicKey => {
-                    router.keypair().public_key().to_string()
-                }
-                nostr::nips::nip46::NostrConnectRequest::SignEvent(unsigned_event) => {
-                    let signed_event = unsigned_event
-                        .sign_with_keys(router.keypair().get_keys())
-                        .map_err(|e| {
+                "ack".to_string()
+            }
+            nostr::nips::nip46::NostrConnectRequest::GetPublicKey => {
+                router.keypair().public_key().to_string()
+            }
+            nostr::nips::nip46::NostrConnectRequest::SignEvent(unsigned_event) => {
+                let signed_event = unsigned_event
+                    .sign_with_keys(router.keypair().get_keys())
+                    .map_err(|e| {
                         AppError::Nip46OperationError(format!(
                             "Impossible to sign event: {}",
                             e.to_string()
                         ))
                     })?;
-                    serde_json::to_string(&signed_event)
-                        .map_err(|e| AppError::Nip46OperationError(e.to_string()))?
-                }
-                nostr::nips::nip46::NostrConnectRequest::Nip04Encrypt { public_key, text } => {
-                    nip04::encrypt(router.keypair().secret_key(), &public_key, text).map_err(
-                        |e| {
-                            AppError::Nip46OperationError(format!(
-                                "Error while encrypting with nip04: {}",
-                                e
-                            ))
-                        },
-                    )?
-                }
-                nostr::nips::nip46::NostrConnectRequest::Nip04Decrypt {
-                    public_key,
-                    ciphertext,
-                } => nip04::decrypt(router.keypair().secret_key(), &public_key, ciphertext)
-                    .map_err(|e| {
-                        AppError::Nip46OperationError(format!(
-                            "Error while decrypting with nip04: {}",
-                            e
-                        ))
-                    })?,
-                nostr::nips::nip46::NostrConnectRequest::Nip44Encrypt { public_key, text } => {
-                    nip44::encrypt(
-                        router.keypair().secret_key(),
-                        &public_key,
-                        text,
-                        nip44::Version::V2,
-                    )
-                    .map_err(|e| {
-                        AppError::Nip46OperationError(format!(
-                            "Error while encrypting with nip44: {}",
-                            e
-                        ))
-                    })?
-                }
-                nostr::nips::nip46::NostrConnectRequest::Nip44Decrypt {
-                    public_key,
-                    ciphertext,
-                } => nip44::decrypt(router.keypair().secret_key(), &public_key, ciphertext)
-                    .map_err(|e| {
-                        AppError::Nip46OperationError(format!(
-                            "Error while decrypting with nip44: {}",
-                            e
-                        ))
-                    })?,
-                nostr::nips::nip46::NostrConnectRequest::Ping => "pong".to_string(),
-            };
+                serde_json::to_string(&signed_event)
+                    .map_err(|e| AppError::Nip46OperationError(e.to_string()))?
+            }
+            nostr::nips::nip46::NostrConnectRequest::Nip04Encrypt { public_key, text } => {
+                nip04::encrypt(router.keypair().secret_key(), &public_key, text).map_err(|e| {
+                    AppError::Nip46OperationError(format!(
+                        "Error while encrypting with nip04: {}",
+                        e
+                    ))
+                })?
+            }
+            nostr::nips::nip46::NostrConnectRequest::Nip04Decrypt {
+                public_key,
+                ciphertext,
+            } => nip04::decrypt(router.keypair().secret_key(), &public_key, ciphertext).map_err(
+                |e| {
+                    AppError::Nip46OperationError(format!(
+                        "Error while decrypting with nip04: {}",
+                        e
+                    ))
+                },
+            )?,
+            nostr::nips::nip46::NostrConnectRequest::Nip44Encrypt { public_key, text } => {
+                nip44::encrypt(
+                    router.keypair().secret_key(),
+                    &public_key,
+                    text,
+                    nip44::Version::V2,
+                )
+                .map_err(|e| {
+                    AppError::Nip46OperationError(format!(
+                        "Error while encrypting with nip44: {}",
+                        e
+                    ))
+                })?
+            }
+            nostr::nips::nip46::NostrConnectRequest::Nip44Decrypt {
+                public_key,
+                ciphertext,
+            } => nip44::decrypt(router.keypair().secret_key(), &public_key, ciphertext).map_err(
+                |e| {
+                    AppError::Nip46OperationError(format!(
+                        "Error while decrypting with nip44: {}",
+                        e
+                    ))
+                },
+            )?,
+            nostr::nips::nip46::NostrConnectRequest::Ping => "pong".to_string(),
+        };
 
-            let conv = SigningResponseSenderConversation::new(
-                nip46_request.nostr_client_pubkey,
-                nip46_request.message.id().to_string(),
-                conversation_result,
-            );
-            router
-                .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                    nip46_request.nostr_client_pubkey,
-                    vec![],
-                    conv,
-                )))
-                .await?;
-        }
+        let conv = SigningResponseSenderConversation::new(
+            event.nostr_client_pubkey.into(),
+            nostr_connect_message.id().to_string(),
+            conversation_result,
+        );
+        router
+            .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
+                event.nostr_client_pubkey.into(),
+                vec![],
+                conv,
+            )))
+            .await?;
         Ok(())
     }
 
