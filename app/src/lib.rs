@@ -21,28 +21,22 @@ use nostr::{
 };
 use nostr_relay_pool::monitor::{Monitor, MonitorNotification};
 use portal::{
-    conversation::app::{
+    conversation::{app::{
         auth::{
             AuthChallengeEvent, AuthChallengeListenerConversation, AuthResponseConversation,
             KeyHandshakeConversation,
         },
         payments::{
-            PaymentRequestContent, PaymentRequestListenerConversation,
-            PaymentStatusSenderConversation, RecurringPaymentStatusSenderConversation,
+            PaymentRequestContent, PaymentRequestEvent, PaymentRequestListenerConversation, PaymentStatusSenderConversation, RecurringPaymentStatusSenderConversation
         },
-    },
-    conversation::cashu::{
+    }, cashu::{
         CashuDirectReceiverConversation, CashuRequestReceiverConversation,
         CashuResponseSenderConversation,
-    },
-    conversation::close_subscription::{
+    }, close_subscription::{
         CloseRecurringPaymentConversation, CloseRecurringPaymentReceiverConversation,
-    },
-    conversation::nip46::{Nip46Request, Nip46RequestListenerConversation, SigningResponseSenderConversation},
-    conversation::invoice::{InvoiceReceiverConversation, InvoiceRequestConversation, InvoiceSenderConversation},
+    }, invoice::{InvoiceReceiverConversation, InvoiceRequestConversation, InvoiceSenderConversation}, nip46::{Nip46Request, Nip46RequestListenerConversation, SigningResponseSenderConversation}, profile::{FetchProfileInfoConversation, Profile, SetProfileConversation}, sdk::payments::SinglePaymentRequestSenderConversation},
     nostr::nips::nip19::ToBech32,
     nostr_relay_pool::{RelayOptions, RelayPool},
-    conversation::profile::{FetchProfileInfoConversation, Profile, SetProfileConversation},
     protocol::{
         jwt::CustomClaims,
         key_handshake::KeyHandshakeUrl,
@@ -52,11 +46,7 @@ use portal::{
             bindings::PublicKey,
             nip46::{NostrConnectEvent, NostrConnectResponseStatus},
             payment::{
-                CashuDirectContentWithKey, CashuRequestContentWithKey, CashuResponseContent,
-                CashuResponseStatus, CloseRecurringPaymentContent, CloseRecurringPaymentResponse,
-                InvoiceRequestContent, InvoiceResponse, PaymentResponseContent,
-                RecurringPaymentRequestContent, RecurringPaymentResponseContent,
-                SinglePaymentRequestContent,
+                CashuDirectContentWithKey, CashuRequestContentWithKey, CashuResponseContent, CashuResponseStatus, CloseRecurringPaymentContent, CloseRecurringPaymentResponse, InvoiceRequestContent, InvoiceRequestContentWithKey, InvoiceResponse, PaymentResponseContent, RecurringPaymentRequestContent, RecurringPaymentResponseContent, SinglePaymentRequestContent
             },
         },
     },
@@ -64,7 +54,6 @@ use portal::{
         MessageRouter, MultiKeyListenerAdapter, MultiKeySenderAdapter, NotificationStream,
         adapters::one_shot::OneShotSenderAdapter,
     },
-    conversation::sdk::payments::SinglePaymentRequestSenderConversation,
     utils::verify_nip05,
 };
 
@@ -274,12 +263,12 @@ pub struct PortalApp {
     relay_pool: Arc<RelayPool>,
     runtime: Arc<BindingsRuntime>,
 
-    auth_challenge_rx: Mutex<NotificationStream<portal::app::auth::AuthChallengeEvent>>,
-    payment_request_rx: Mutex<NotificationStream<portal::app::payments::PaymentRequestEvent>>,
+    auth_challenge_rx: Mutex<NotificationStream<AuthChallengeEvent>>,
+    payment_request_rx: Mutex<NotificationStream<PaymentRequestEvent>>,
     closed_recurring_payment_rx:
-        Mutex<NotificationStream<portal::protocol::model::payment::CloseRecurringPaymentResponse>>,
+        Mutex<NotificationStream<CloseRecurringPaymentResponse>>,
     invoice_request_rx:
-        Mutex<NotificationStream<portal::protocol::model::payment::InvoiceRequestContentWithKey>>,
+        Mutex<NotificationStream<InvoiceRequestContentWithKey>>,
     cashu_request_rx: Mutex<NotificationStream<CashuRequestContentWithKey>>,
     cashu_direct_rx: Mutex<NotificationStream<CashuDirectContentWithKey>>,
     nip46_rx: Mutex<NotificationStream<Nip46Request>>,
@@ -425,13 +414,13 @@ impl PortalApp {
             router.add_relay(relay.clone(), false).await?;
         }
 
-        let auth_challenge_rx: NotificationStream<portal::app::auth::AuthChallengeEvent> = router
+        let auth_challenge_rx: NotificationStream<AuthChallengeEvent> = router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 AuthChallengeListenerConversation::new(router.keypair().public_key()),
                 router.keypair().subkey_proof().cloned(),
             )))
             .await?;
-        let payment_request_rx: NotificationStream<portal::app::payments::PaymentRequestEvent> =
+        let payment_request_rx: NotificationStream<PaymentRequestEvent> =
             router
                 .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                     PaymentRequestListenerConversation::new(router.keypair().public_key()),
