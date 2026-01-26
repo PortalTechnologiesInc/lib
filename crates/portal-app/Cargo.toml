@@ -1,0 +1,42 @@
+[package]
+name = "portal-app"
+version = "0.4.12"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib", "lib"]
+
+[dependencies]
+portal = { path = "../portal", features = ["bindings"] }
+portal-fetch-git-hash = { path = "../portal-fetch-git-hash" }
+portal-rates = { path = "../portal-rates", features = ["bindings"]}
+
+
+uniffi = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+android_logger = { workspace = true }
+log = { workspace = true }
+async = { workspace = true }
+async-trait = { workspace = true }
+bip39 = { workspace = true }
+bitcoin = { workspace = true }
+nwc = { workspace = true }
+nostr = { workspace = true }
+futures = { workspace = true }
+
+nostrstore = { workspace = true }
+nostr-relay-pool = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-utility = { workspace = true }
+# nostrstore-derive = "0.1.0"
+lightning-invoice = "0.33.2"
+
+chrono = { workspace = true }
+
+cdk = { workspace = true, features = ["wallet"] }
+cdk-common = { workspace = true }
+
+rand = { workspace = true }

@@ -168,38 +168,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
-name = "app"
-version = "0.4.12"
-dependencies = [
- "android_logger",
- "async",
- "async-trait",
- "async-utility",
- "bip39",
- "bitcoin",
- "cdk",
- "cdk-common",
- "chrono",
- "fetch-git-hash",
- "futures",
- "lightning-invoice",
- "log",
- "nostr",
- "nostr-relay-pool",
- "nostrstore",
- "nwc",
- "portal",
- "rand 0.8.5",
- "rates",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "uniffi",
-]
-
-[[package]]
 name = "arc-swap"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1169,22 +1137,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 
 [[package]]
-name = "cli"
-version = "0.1.0"
-dependencies = [
- "app",
- "async-trait",
- "base64 0.21.7",
- "env_logger",
- "lightning-invoice",
- "log",
- "nwc",
- "portal",
- "sdk",
- "tokio",
-]
-
-[[package]]
 name = "cobs"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1814,13 +1766,6 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
-
-[[package]]
-name = "fetch-git-hash"
-version = "0.1.0"
-dependencies = [
- "uniffi",
-]
 
 [[package]]
 name = "ff"
@@ -3869,6 +3814,133 @@ dependencies = [
 ]
 
 [[package]]
+name = "portal-app"
+version = "0.4.12"
+dependencies = [
+ "android_logger",
+ "async",
+ "async-trait",
+ "async-utility",
+ "bip39",
+ "bitcoin",
+ "cdk",
+ "cdk-common",
+ "chrono",
+ "futures",
+ "lightning-invoice",
+ "log",
+ "nostr",
+ "nostr-relay-pool",
+ "nostrstore",
+ "nwc",
+ "portal",
+ "portal-fetch-git-hash",
+ "portal-rates",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "uniffi",
+]
+
+[[package]]
+name = "portal-cli"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.21.7",
+ "env_logger",
+ "lightning-invoice",
+ "log",
+ "nwc",
+ "portal",
+ "portal-app",
+ "portal-sdk",
+ "tokio",
+]
+
+[[package]]
+name = "portal-fetch-git-hash"
+version = "0.1.0"
+dependencies = [
+ "uniffi",
+]
+
+[[package]]
+name = "portal-rates"
+version = "0.1.0"
+dependencies = [
+ "async-utility",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "uniffi",
+]
+
+[[package]]
+name = "portal-rest"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum 0.6.20",
+ "base64 0.21.7",
+ "breez-sdk-spark",
+ "cdk",
+ "cdk-sqlite",
+ "chrono",
+ "config",
+ "console-subscriber",
+ "dashmap",
+ "dirs",
+ "futures",
+ "nostr",
+ "nwc",
+ "portal",
+ "portal-rates",
+ "portal-sdk",
+ "portal-wallet",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tower-http 0.4.4",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "portal-sdk"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "portal",
+ "reqwest",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "portal-wallet"
+version = "0.1.0"
+dependencies = [
+ "axum 0.6.20",
+ "breez-sdk-spark",
+ "nwc",
+ "portal",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "possiblyrandom"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4159,20 +4231,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rates"
-version = "0.1.0"
-dependencies = [
- "async-utility",
- "log",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "uniffi",
-]
-
-[[package]]
 name = "rdrand"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4327,39 +4385,6 @@ name = "resolv-conf"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b3789b30bd25ba102de4beabd95d21ac45b69b1be7d14522bab988c526d6799"
-
-[[package]]
-name = "rest"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum 0.6.20",
- "base64 0.21.7",
- "breez-sdk-spark",
- "cdk",
- "cdk-sqlite",
- "chrono",
- "config",
- "console-subscriber",
- "dashmap",
- "dirs",
- "futures",
- "nostr",
- "nwc",
- "portal",
- "rand 0.8.5",
- "rates",
- "sdk",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "tower-http 0.4.4",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "wallet",
-]
 
 [[package]]
 name = "rfc6979"
@@ -4656,19 +4681,6 @@ dependencies = [
  "pbkdf2",
  "salsa20",
  "sha2",
-]
-
-[[package]]
-name = "sdk"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "portal",
- "reqwest",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
 ]
 
 [[package]]
@@ -6140,18 +6152,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.107",
-]
-
-[[package]]
-name = "wallet"
-version = "0.1.0"
-dependencies = [
- "axum 0.6.20",
- "breez-sdk-spark",
- "nwc",
- "portal",
- "thiserror 1.0.69",
- "tokio",
 ]
 
 [[package]]
