@@ -223,11 +223,20 @@
           ];
 
           buildPhase = ''
-            # The ubrn config points to ../crates/portal-app, so ensure the path exists
+            # The ubrn config points to ../crates/portal-app relative to react-native/
+            # So we need to create that directory structure from the build directory
+            # The build directory is the react-native source, so ../ goes to parent
             mkdir -p ../crates
-            ln -sfn ${../crates/portal-app} ../crates/portal-app
+            ln -s ${../crates/portal-app} ../crates/portal-app
+            ln -sf ${../Cargo.toml} ../Cargo.toml
+            ln -sf ${../Cargo.lock} ../Cargo.lock 2>/dev/null || true
 
-            # Generate the bindings for both platforms
+            # Verify the structure ubrn will see
+            echo "Current directory: $(pwd)"
+            echo "Checking ../crates/portal-app/Cargo.toml:"
+            test -f ../crates/portal-app/Cargo.toml && echo "✅ Found" || (echo "❌ Not found"; ls -la ../crates/ || true; exit 1)
+            
+            # Generate the bindings - ubrn will resolve ../crates/portal-app relative to config file location
             uniffi-bindgen-react-native generate all --config ./ubrn.config.yaml ${libAndroidAarch64}/lib/libapp.a
 
             # Copy the artifacts to the android directory

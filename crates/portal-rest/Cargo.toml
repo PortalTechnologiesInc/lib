@@ -3,6 +3,10 @@ name = "portal-rest"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "rest"
+path = "src/main.rs"
+
 [dependencies]
 portal-wallet = { path = "../portal-wallet" }
 portal-sdk = { path = "../portal-sdk" }
