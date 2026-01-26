@@ -64,7 +64,7 @@ cargo build --package portal-rest --release
 cargo build --release
 
 # Build specific components
-cargo build --package portal-app --release
+cargo build --package app --release
 cargo build --package portal-cli --release
 cargo build --package portal-rates --release
 ```
@@ -167,7 +167,7 @@ cargo test
 
 # Run tests for specific package
 cargo test --package portal-rest
-cargo test --package portal-app
+cargo test --package app
 
 # Run with output
 cargo test -- --nocapture

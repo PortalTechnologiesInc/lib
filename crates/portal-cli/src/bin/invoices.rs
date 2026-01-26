@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use portal_app::{
+use app::{
     CallbackError, InvoiceRequestListener, InvoiceResponseListener, nwc::MakeInvoiceResponse,
 };
 use portal_cli::{CliError, create_app_instance};

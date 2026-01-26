@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-portal-app = { path = "../portal-app", features = [] }
+app = { path = "../portal-app", features = [] }
 portal-sdk = { path = "../portal-sdk", features = [] }
 portal = { path = "../portal", features = ["bindings"] }
 

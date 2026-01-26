@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration as StdDuration};
 
-use portal_app::{CallbackError, CashuRequestListener};
+use app::{CallbackError, CashuRequestListener};
 use portal_cli::{CliError, create_app_instance, create_sdk_instance};
 use portal::protocol::model::{
     Timestamp,

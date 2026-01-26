@@ -1,6 +1,6 @@
 use std::{io::Write, str::FromStr, sync::Arc};
 
-use portal_app::{
+use app::{
     AuthChallengeListener, CallbackError, CashuDirectListener, CashuRequestListener,
     ClosedRecurringPaymentListener, Mnemonic, NostrConnectRequestListener, PaymentRequestListener,
     PaymentStatusNotifier, PortalApp, RecurringPaymentRequest, RelayStatus, RelayStatusListener,

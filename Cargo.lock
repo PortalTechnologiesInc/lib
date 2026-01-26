@@ -168,6 +168,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
+name = "app"
+version = "0.4.12"
+dependencies = [
+ "android_logger",
+ "async",
+ "async-trait",
+ "async-utility",
+ "bip39",
+ "bitcoin",
+ "cdk",
+ "cdk-common",
+ "chrono",
+ "futures",
+ "lightning-invoice",
+ "log",
+ "nostr",
+ "nostr-relay-pool",
+ "nostrstore",
+ "nwc",
+ "portal",
+ "portal-fetch-git-hash",
+ "portal-rates",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "uniffi",
+]
+
+[[package]]
 name = "arc-swap"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3814,41 +3846,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "portal-app"
-version = "0.4.12"
-dependencies = [
- "android_logger",
- "async",
- "async-trait",
- "async-utility",
- "bip39",
- "bitcoin",
- "cdk",
- "cdk-common",
- "chrono",
- "futures",
- "lightning-invoice",
- "log",
- "nostr",
- "nostr-relay-pool",
- "nostrstore",
- "nwc",
- "portal",
- "portal-fetch-git-hash",
- "portal-rates",
- "rand 0.8.5",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "uniffi",
-]
-
-[[package]]
 name = "portal-cli"
 version = "0.1.0"
 dependencies = [
+ "app",
  "async-trait",
  "base64 0.21.7",
  "env_logger",
@@ -3856,7 +3857,6 @@ dependencies = [
  "log",
  "nwc",
  "portal",
- "portal-app",
  "portal-sdk",
  "tokio",
 ]

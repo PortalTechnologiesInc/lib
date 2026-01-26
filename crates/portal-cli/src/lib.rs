@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use portal_app::{
+use app::{
     CallbackError, Keypair, Mnemonic, PortalApp, RelayStatus, RelayStatusListener, RelayUrl,
 };
 use portal_sdk::PortalSDK;

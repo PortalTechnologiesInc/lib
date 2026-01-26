@@ -84,7 +84,7 @@
           };
           strictDeps = true;
           doCheck = false;
-          cargoExtraArgs = "-p portal-app";
+          cargoExtraArgs = "-p app";
 
           cargoCheckCommand = "true";
 
