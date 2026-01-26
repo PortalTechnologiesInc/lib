@@ -29,7 +29,7 @@
 
         rest' = platform: platform.buildRustPackage {
           pname = "portal-rest";
-          version = (pkgs.lib.importTOML ./rest/Cargo.toml).package.version;
+          version = (pkgs.lib.importTOML ./crates/portal-rest/Cargo.toml).package.version;
           src = pkgs.lib.sources.sourceFilesBySuffices ./. [ ".rs" "Cargo.toml" "Cargo.lock" "fiatUnits.json" "example.config.toml" ];
 
           cargoHash = "";
@@ -41,7 +41,7 @@
               "breez-sdk-common-0.1.0" = "sha256-b8R4V8L7lM0AOy9NxhiIt+RsIBHJdQPpfw9SN1/P//E=";
             };
           };
-          buildAndTestSubdir = "rest";
+          buildAndTestSubdir = "crates/portal-rest";
 
           doCheck = false;
 
@@ -60,8 +60,8 @@
 
         tsClient = pkgs.buildNpmPackage {
           name = "portal-ts-client";
-          version = (builtins.fromJSON (builtins.readFile ./rest/clients/ts/package.json)).version;
-          src = ./rest/clients/ts;
+          version = (builtins.fromJSON (builtins.readFile ./crates/portal-rest/clients/ts/package.json)).version;
+          src = ./crates/portal-rest/clients/ts;
           npmDepsHash = "sha256-nM/XE4CRUAP7W4FQ9t68kBHrUIvNbBxZC+gwpZcCCfA=";
         };
         backend = pkgs.buildNpmPackage {
@@ -71,7 +71,7 @@
           npmDepsHash = "sha256-37YrynQdzAHc0gP+wWEQLjzDkrknqcS/Hxa49H3NsjU=";
           buildInputs = [ pkgs.sqlite ];
           preBuild = ''
-            # Remove symlink to non-existent "../rest/clients/ts"
+            # Remove symlink to non-existent "../crates/portal-rest/clients/ts"
             rm -rf ./node_modules/portal-sdk
             # Copy the dependency
             cp -R ${tsClient}/lib/node_modules/portal-sdk ./node_modules/
@@ -192,7 +192,7 @@
             imports = [ self.nixosModules.portal-rest self.nixosModules.portal-backend ];
             nixpkgs.overlays = [ self.overlays.default ];
           };
-          portal-rest = ./rest/module.nix;
+          portal-rest = ./crates/portal-rest/module.nix;
           portal-backend = ./backend/module.nix;
         };
     };
