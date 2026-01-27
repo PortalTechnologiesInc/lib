@@ -1,0 +1,17 @@
+[package]
+name = "portal-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+app = { path = "../portal-app", features = [] }
+portal-sdk = { path = "../portal-sdk", features = [] }
+portal = { path = "../portal", features = ["bindings"] }
+
+async-trait = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true, features = [] }
+nwc = { workspace = true }
+base64 = { workspace = true }
+lightning-invoice = "0.33.2"

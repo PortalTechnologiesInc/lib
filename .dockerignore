@@ -1,0 +1,92 @@
+# Git
+.git
+.gitignore
+.github
+
+# Rust build artifacts (these are generated during build)
+target/
+**/target/
+
+# Documentation (not needed for build)
+docs/
+README.md
+*.md
+!crates/**/*.md
+
+# Node.js (not needed for Rust build)
+node_modules/
+**/node_modules/
+package-lock.json
+yarn.lock
+**/package-lock.json
+**/yarn.lock
+
+# React Native (not needed for REST build)
+react-native/
+
+# Backend (not needed for REST build)
+backend/
+
+# Test files (not needed for production build)
+**/test_*.rs
+**/tests/
+**/*_test.rs
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Nix files (not needed in Docker)
+flake.nix
+flake.lock
+**/flake.nix
+**/flake.lock
+**/module.nix
+
+# Environment files
+.env
+.envrc
+.env.local
+
+# Logs
+*.log
+**/*.log
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Build scripts and configs not needed
+**/run
+**/.gitignore
+**/tsconfig.json
+**/tsconfig.build.json
+**/babel.config.js
+**/eslint.config.mjs
+**/turbo.json
+**/lefthook.yml
+**/.nvmrc
+**/.watchmanconfig
+**/.editorconfig
+**/.gitattributes
+**/.yarnrc.yml
+**/yarn.lock
+**/missing-hashes.json
+**/patch-*.js
+**/ubrn-*.patch
+**/ubrn.config.yaml
+**/PortalAppLib.podspec
+**/react-native.config.js
+**/static/
+**/example/
+
+# TypeScript client build artifacts (not needed, we only need source for dependencies)
+crates/portal-rest/clients/ts/lib/
+crates/portal-rest/clients/ts/dist/
+crates/portal-rest/clients/ts/node_modules/

@@ -27,7 +27,7 @@
     "cookie-parser": "^1.4.7",
     "express": "^4.18.2",
     "htmx.org": "^1.9.10",
-    "portal-sdk": "file:../rest/clients/ts",
+    "portal-sdk": "file:../crates/portal-rest/clients/ts",
     "uuid": "^11.1.0",
     "ws": "^8.16.0"
   },

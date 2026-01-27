@@ -10,26 +10,27 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
-COPY rest/Cargo.toml ./rest/
-COPY app/Cargo.toml ./app/
-COPY cli/Cargo.toml ./cli/
-COPY sdk/Cargo.toml ./sdk/
-COPY rates/Cargo.toml ./rates/
-COPY wallet/Cargo.toml ./wallet/
-COPY fetch-git-hash/Cargo.toml ./fetch-git-hash/
+COPY crates/portal-rest/Cargo.toml ./crates/portal-rest/
+COPY crates/portal-app/Cargo.toml ./crates/portal-app/
+COPY crates/portal-cli/Cargo.toml ./crates/portal-cli/
+COPY crates/portal-sdk/Cargo.toml ./crates/portal-sdk/
+COPY crates/portal-rates/Cargo.toml ./crates/portal-rates/
+COPY crates/portal-wallet/Cargo.toml ./crates/portal-wallet/
+COPY crates/portal-fetch-git-hash/Cargo.toml ./crates/portal-fetch-git-hash/
+COPY crates/portal/Cargo.toml ./crates/portal/
 
-COPY rest/src ./rest/src
-COPY rest/example.config.toml ./rest/
-COPY app/src ./app/src
-COPY cli/src ./cli/src
-COPY sdk/src ./sdk/src
-COPY rates/src ./rates/src
-COPY wallet/src ./wallet/src
-COPY fetch-git-hash/src ./fetch-git-hash/src
-COPY src ./src
-COPY assets ./assets
+COPY crates/portal-rest/src ./crates/portal-rest/src
+COPY crates/portal-rest/example.config.toml ./crates/portal-rest/
+COPY crates/portal-app/src ./crates/portal-app/src
+COPY crates/portal-cli/src ./crates/portal-cli/src
+COPY crates/portal-sdk/src ./crates/portal-sdk/src
+COPY crates/portal-rates/src ./crates/portal-rates/src
+COPY crates/portal-rates/assets ./crates/portal-rates/assets
+COPY crates/portal-wallet/src ./crates/portal-wallet/src
+COPY crates/portal-fetch-git-hash/src ./crates/portal-fetch-git-hash/src
+COPY crates/portal/src ./crates/portal/src
 
-RUN cargo build --release -p rest
+RUN cargo build --release -p portal-rest
 
 FROM debian:bookworm-slim
 

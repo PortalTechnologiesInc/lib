@@ -79,9 +79,12 @@
             fileset = pkgs.lib.fileset.unions [
               # Default files from crane (Rust and cargo files)
               (craneLib.fileset.commonCargoSources unfilteredRoot)
-              ../assets
+              ../crates/portal-rates/assets
             ];
           };
+
+          inherit (craneLib.crateNameFromCargoToml { cargoToml = ../crates/portal-app/Cargo.toml; }) version;
+
           strictDeps = true;
           doCheck = false;
           cargoExtraArgs = "-p app";
@@ -153,7 +156,7 @@
         });
         mkCargoMetadata = target: (cargoMetadata ((mkAndroidCommonArgs target) // commonArgs // {
           cargoArtifacts = mkAndroidArtifacts target;
-          manifestPath = "./app/Cargo.toml";
+          manifestPath = "./crates/portal-app/Cargo.toml";
         }));
 
         yarn-berry = pkgs.yarn-berry_3;
@@ -206,8 +209,27 @@
         libIosAarch64Sim = mkIosPackage "aarch64-apple-ios-sim";
 
         fakeCargoMetadata = pkgs.writeShellScriptBin "cargo" ''
+          manifest_path=
+
+          while [ "''$#" -gt 0 ]; do
+            case "''$1" in
+              --manifest-path=*)
+                manifest_path="''${1#--manifest-path=}"
+                shift
+                ;;
+              --manifest-path)
+                shift
+                manifest_path="''$1"
+                shift
+                ;;
+              *)
+                shift
+                ;;
+            esac
+          done
+
           # We need to patch the manifest path otherwise uniffi-bindgen-react-native will fail to find the package
-          cat ${mkCargoMetadata "arm64-v8a"}/metadata.json | sed 's|/build/source|${../app}|g'
+          cat ${mkCargoMetadata "arm64-v8a"}/metadata.json | sed "s|/build/source/crates/portal-app/Cargo.toml|$manifest_path|g"
         '';
 
         reactNativeLib = { withIos ? false }: pkgs.stdenv.mkDerivation (finalAttrs: {
@@ -223,8 +245,9 @@
           ];
 
           buildPhase = ''
-            # The ubrn config poits to ../app, so symlink the source there
-            ln -s ${../app} ../app
+            # The ubrn config points to ../crates/portal-app, so ensure the path exists
+            mkdir -p ../crates
+            ln -sfn ${../crates/portal-app} ../crates/portal-app
 
             # Generate the bindings for both platforms
             uniffi-bindgen-react-native generate all --config ./ubrn.config.yaml ${libAndroidAarch64}/lib/libapp.a

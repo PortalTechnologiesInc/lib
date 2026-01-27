@@ -13,15 +13,16 @@ Portal provides a comprehensive solution for:
 
 ## Repository Structure
 
-- `/app` - API exposed to the app
+- `/crates/portal-app` - API exposed to the app
 - `/backend` - Example backend
-- `/cli` - Command-line interface tool
-- `/rates` - Bitcoin exchange rates from multiple sources
-- `/react-native` - React Native bindings for the `app` crate
-- `/rest` - SDK wrapper exposing a REST/websocket interface
-- `/sdk` - Core SDK implementation
-- `/rest/clients/ts` - TypeScript client for the REST API
-- `/wallet` - Supported wallets(NWC, Breez)
+- `/crates/portal-cli` - Command-line interface tool
+- `/crates/portal-rates` - Bitcoin exchange rates from multiple sources
+- `/react-native` - React Native bindings for the `portal-app` crate
+- `/crates/portal-rest` - SDK wrapper exposing a REST/websocket interface
+- `/crates/portal-sdk` - Core SDK implementation
+- `/crates/portal-rest/clients/ts` - TypeScript client for the REST API
+- `/crates/portal-wallet` - Supported wallets(NWC, Breez)
+- `/crates/portal` - Core Portal library
 
 ## Getting Started
 
@@ -68,7 +69,7 @@ Since this is a REST API, you can use it from any programming language that supp
 But best is to use the official SDK for your programming language.
 
 Currently supported SDKs:
-- [TypeScript](rest/clients/ts/README.md)
+- [TypeScript](crates/portal-rest/clients/ts/README.md)
 - [Java](https://github.com/PortalTechnologiesInc/jvm-client)
 
 ### Using the TypeScript Client
@@ -128,7 +129,7 @@ Fetch and verify user profiles through Nostr's social graph.
 
 ## API Documentation
 
-See the `/rest/README.md` file for detailed API documentation.
+See the `/crates/portal-rest/README.md` file for detailed API documentation.
 
 ## License
 
