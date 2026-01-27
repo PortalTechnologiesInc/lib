@@ -48,10 +48,10 @@ cd portal
 
 ```bash
 # Build in debug mode (faster compilation, slower runtime)
-cargo build --package rest
+cargo build --package portal-rest
 
 # Build in release mode (optimized)
-cargo build --package rest --release
+cargo build --package portal-rest --release
 
 # Run the binary
 ./target/release/rest
@@ -65,14 +65,14 @@ cargo build --release
 
 # Build specific components
 cargo build --package app --release
-cargo build --package cli --release
-cargo build --package rates --release
+cargo build --package portal-cli --release
+cargo build --package portal-rates --release
 ```
 
 ### Build the TypeScript SDK
 
 ```bash
-cd rest/clients/ts
+cd crates/portal-rest/clients/ts
 
 # Install dependencies
 npm install
@@ -145,18 +145,18 @@ cargo install cargo-edit
 
 ```bash
 # Run REST API with auto-reload
-cargo watch -x 'run --package rest'
+cargo watch -x 'run --package portal-rest'
 
 # Run with environment variables
 AUTH_TOKEN=dev-token \
 NOSTR_KEY=your-key-hex \
-cargo run --package rest
+cargo run --package portal-rest
 
-# Or use the env.example
-cp rest/env.example rest/.env
+# Or use the env.example (if it exists)
+# cp crates/portal-rest/env.example crates/portal-rest/.env
 # Edit .env with your values
-source rest/.env
-cargo run --package rest
+# source crates/portal-rest/.env
+cargo run --package portal-rest
 ```
 
 ### Run Tests
@@ -166,7 +166,7 @@ cargo run --package rest
 cargo test
 
 # Run tests for specific package
-cargo test --package rest
+cargo test --package portal-rest
 cargo test --package app
 
 # Run with output
@@ -181,7 +181,7 @@ cargo test test_name
 ### Development Build
 
 ```bash
-cd rest/clients/ts
+cd crates/portal-rest/clients/ts
 
 # Install dependencies
 npm install
@@ -210,13 +210,13 @@ npm publish
 
 ```bash
 # Build the CLI tool
-cargo build --package cli --release
+cargo build --package portal-cli --release
 
 # Run it
-./target/release/cli --help
+./target/release/portal-cli --help
 
 # Install globally
-cargo install --path cli
+cargo install --path crates/portal-cli
 ```
 
 ## Cross-Compilation
@@ -232,7 +232,7 @@ rustup target add x86_64-pc-windows-gnu
 sudo apt-get install mingw-w64
 
 # Build
-cargo build --package rest --target x86_64-pc-windows-gnu --release
+cargo build --package portal-rest --target x86_64-pc-windows-gnu --release
 ```
 
 ### Linux → macOS
@@ -260,7 +260,7 @@ strip = true         # Strip symbols
 
 Build:
 ```bash
-cargo build --package rest --release
+cargo build --package portal-rest --release
 ```
 
 ### Performance Optimization
@@ -285,21 +285,21 @@ opt-level = 1        # Some optimization for faster dev builds
 
 ```bash
 # Build with system libraries
-cargo build --package rest --release
+cargo build --package portal-rest --release
 
 # Build static binary (Linux only)
-cargo build --package rest --release --target x86_64-unknown-linux-musl
+cargo build --package portal-rest --release --target x86_64-unknown-linux-musl
 ```
 
 ### macOS
 
 ```bash
 # Build for current architecture
-cargo build --package rest --release
+cargo build --package portal-rest --release
 
 # Build universal binary (both Intel and Apple Silicon)
-cargo build --package rest --release --target x86_64-apple-darwin
-cargo build --package rest --release --target aarch64-apple-darwin
+cargo build --package portal-rest --release --target x86_64-apple-darwin
+cargo build --package portal-rest --release --target aarch64-apple-darwin
 
 # Create universal binary
 lipo -create \
@@ -312,7 +312,7 @@ lipo -create \
 
 ```bash
 # Build for Windows
-cargo build --package rest --release --target x86_64-pc-windows-msvc
+cargo build --package portal-rest --release --target x86_64-pc-windows-msvc
 ```
 
 ## Creating Releases
@@ -328,7 +328,7 @@ mkdir -p releases/portal-v1.0.0
 
 # Copy binaries
 cp target/release/rest releases/portal-v1.0.0/
-cp target/release/cli releases/portal-v1.0.0/
+cp target/release/portal-cli releases/portal-v1.0.0/
 
 # Create tarball
 tar -czf portal-v1.0.0-linux-x86_64.tar.gz -C releases portal-v1.0.0/

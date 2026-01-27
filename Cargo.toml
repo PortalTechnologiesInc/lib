@@ -1,5 +1,5 @@
 [workspace]
-members = [ "app" , "cli", "rest", "sdk", "rates", "fetch-git-hash", "wallet"]
+members = [ "crates/portal-app" , "crates/portal-cli", "crates/portal-rest", "crates/portal-sdk", "crates/portal-rates", "crates/portal-fetch-git-hash", "crates/portal-wallet"]
 
 [workspace.dependencies]
 # Core dependencies
@@ -48,40 +48,7 @@ dashmap = "6.1.0"
 android_logger = "0.15.0"
 async = "0.0.0"
 
-[package]
-name = "portal"
-version = "0.1.0"
-edition = "2024"
 
-[dependencies]
-nostr = { workspace = true }
-nostr-relay-pool = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-hex = { workspace = true }
-rand = { workspace = true }
-sha2 = { workspace = true }
-thiserror = { workspace = true }
-base64 = { workspace = true }
-tokio = { workspace = true }
-urlencoding = { workspace = true }
-log = { workspace = true }
-env_logger = { workspace = true }
-tokio-stream = { workspace = true }
-futures = { workspace = true }
-uniffi = { workspace = true, optional = true }
-anyhow = { workspace = true, optional = true }
-chrono = { workspace = true }
-chrono-tz = { workspace = true }
-derive-new = { workspace = true }
-jwt-compact = { workspace = true }
-secp256k1 = { workspace = true }
-cdk = { workspace = true }
-reqwest = { workspace = true }
-
-[features]
-default = ["bindings"]
-bindings = ["uniffi", "anyhow"]
 
 [patch.crates-io]
 nostr-sdk = { git = "https://github.com/rust-nostr/nostr.git", rev = "36cc4bbf921044527b03b7e63bf7113d60ac935b" }
