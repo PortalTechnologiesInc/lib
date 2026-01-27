@@ -23,13 +23,13 @@ use portal::protocol::model::payment::{
 };
 use portal::protocol::model::Timestamp;
 use portal::utils::fetch_nip05_profile;
-use rand::RngCore;
 use portal_sdk::PortalSDK;
+use portal_wallet::PortalWallet;
+use rand::RngCore;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-use portal_wallet::PortalWallet;
 
 struct SocketContext {
     sdk: Arc<PortalSDK>,

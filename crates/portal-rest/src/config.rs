@@ -1,8 +1,8 @@
 use config::{Config, Environment, File};
+use portal_wallet::{BreezSparkWallet, NwcWallet, PortalWallet};
 use serde::{Deserialize, Deserializer};
 use std::sync::Arc;
 use tracing::info;
-use portal_wallet::{BreezSparkWallet, NwcWallet, PortalWallet};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Settings {

@@ -154,7 +154,6 @@ async fn main() -> anyhow::Result<()> {
 
     let wallet = config.build_wallet().await?;
 
-
     let listen_port = config.info.listen_port;
 
     // Create app state
