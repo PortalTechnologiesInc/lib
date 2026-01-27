@@ -1,7 +1,7 @@
 ---
 rust:
-  directory: ../crates/portal-app
-  manifestPath: Cargo.toml
+  directory: ../
+  manifestPath: crates/portal-app/Cargo.toml
 
 android:
   targets:

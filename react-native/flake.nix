@@ -82,6 +82,9 @@
               ../crates/portal-rates/assets
             ];
           };
+
+          inherit (craneLib.crateNameFromCargoToml { cargoToml = ../crates/portal-app/Cargo.toml; }) version;
+
           strictDeps = true;
           doCheck = false;
           cargoExtraArgs = "-p app";
@@ -206,8 +209,27 @@
         libIosAarch64Sim = mkIosPackage "aarch64-apple-ios-sim";
 
         fakeCargoMetadata = pkgs.writeShellScriptBin "cargo" ''
+          manifest_path=
+
+          while [ "''$#" -gt 0 ]; do
+            case "''$1" in
+              --manifest-path=*)
+                manifest_path="''${1#--manifest-path=}"
+                shift
+                ;;
+              --manifest-path)
+                shift
+                manifest_path="''$1"
+                shift
+                ;;
+              *)
+                shift
+                ;;
+            esac
+          done
+
           # We need to patch the manifest path otherwise uniffi-bindgen-react-native will fail to find the package
-          cat ${mkCargoMetadata "arm64-v8a"}/metadata.json | sed 's|/build/source|${../crates/portal-app}|g'
+          cat ${mkCargoMetadata "arm64-v8a"}/metadata.json | sed "s|/build/source/crates/portal-app/Cargo.toml|$manifest_path|g"
         '';
 
         reactNativeLib = { withIos ? false }: pkgs.stdenv.mkDerivation (finalAttrs: {
