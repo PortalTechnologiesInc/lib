@@ -1,27 +1,10 @@
 use std::{sync::Arc, time::Duration as StdDuration};
 
-use app::{CallbackError, CashuRequestListener};
 use portal_cli::{CliError, create_app_instance, create_sdk_instance};
 use portal::protocol::model::{
     Timestamp,
-    payment::{CashuRequestContent, CashuRequestContentWithKey, CashuResponseStatus},
+    payment::{CashuRequestContent, CashuResponseStatus},
 };
-
-struct LogCashuRequestListener;
-
-#[async_trait::async_trait]
-impl CashuRequestListener for LogCashuRequestListener {
-    async fn on_cashu_request(
-        &self,
-        event: CashuRequestContentWithKey,
-    ) -> Result<CashuResponseStatus, CallbackError> {
-        log::info!("Received Cashu request: {:?}", event);
-        // Always approve for test
-        Ok(CashuResponseStatus::Success {
-            token: "testtoken123".to_string(),
-        })
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<(), CliError> {
@@ -35,14 +18,32 @@ async fn main() -> Result<(), CliError> {
         relays.clone(),
     )
     .await?;
-    let _receiver = receiver.clone();
+    let receiver_loop = Arc::clone(&receiver);
 
     tokio::spawn(async move {
-        log::info!("Receiver: Setting up Cashu request listener");
-        _receiver
-            .listen_cashu_requests(Arc::new(LogCashuRequestListener))
-            .await
-            .expect("Receiver: Error creating listener");
+        log::info!("Receiver: Setting up Cashu request loop");
+        loop {
+            match receiver_loop.next_cashu_request().await {
+                Ok(event) => {
+                    log::info!("Receiver: Cashu request {:?}", event);
+                    if let Err(e) = receiver_loop
+                        .reply_cashu_request(
+                            event,
+                            CashuResponseStatus::Success {
+                                token: "testtoken123".to_string(),
+                            },
+                        )
+                        .await
+                    {
+                        log::error!("Receiver: Failed to reply to Cashu request: {:?}", e);
+                    }
+                }
+                Err(e) => {
+                    log::error!("Receiver: Cashu loop error: {:?}", e);
+                    break;
+                }
+            }
+        }
     });
 
     let sender_sdk = create_sdk_instance(

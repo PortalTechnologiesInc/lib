@@ -449,15 +449,13 @@ pub mod payment {
 pub mod nip46 {
     use serde::{Deserialize, Serialize};
 
-    use crate::protocol::model::bindings::{NostrConnectMethod, PublicKey};
+    use crate::protocol::model::bindings::{NostrConnectMessage, PublicKey};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
-    pub struct NostrConnectRequestEvent {
-        pub id: String,
+    pub struct NostrConnectEvent {
         pub nostr_client_pubkey: PublicKey,
-        pub method: NostrConnectMethod,
-        pub params: Vec<String>,
+        pub message: NostrConnectMessage,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -471,7 +469,10 @@ pub mod nip46 {
 
 #[cfg(feature = "bindings")]
 pub mod bindings {
-    use nostr::nips::{nip19::ToBech32, nip46::NostrConnectMethod as CoreMethod};
+    use nostr::nips::{
+        nip19::ToBech32,
+        nip46::{NostrConnectMessage as CoreMessage, NostrConnectMethod as CoreMethod},
+    };
     use serde::{Deserialize, Serialize};
     use std::ops::Deref;
 
@@ -552,6 +553,65 @@ pub mod bindings {
                 NostrConnectMethod::Nip44Encrypt => Self::Nip44Encrypt,
                 NostrConnectMethod::Nip44Decrypt => Self::Nip44Decrypt,
                 NostrConnectMethod::Ping => Self::Ping,
+            }
+        }
+    }
+
+    #[derive(uniffi::Record, Clone, Debug, Serialize, Deserialize)]
+    pub struct NostrConnectRequest {
+        pub id: String,
+        pub method: NostrConnectMethod,
+        pub params: Vec<String>,
+    }
+
+    #[derive(uniffi::Record, Clone, Debug, Serialize, Deserialize)]
+    pub struct NostrConnectResponse {
+        pub id: String,
+        pub result: Option<String>,
+        pub error: Option<String>,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
+    pub enum NostrConnectMessage {
+        Request(NostrConnectRequest),
+        Response(NostrConnectResponse),
+    }
+
+    impl From<CoreMessage> for NostrConnectMessage {
+        fn from(message: nostr::nips::nip46::NostrConnectMessage) -> Self {
+            match message {
+                CoreMessage::Request { id, method, params } => {
+                    Self::Request(NostrConnectRequest {
+                        id,
+                        method: method.into(),
+                        params,
+                    })
+                }
+                CoreMessage::Response { id, result, error } => {
+                    Self::Response(NostrConnectResponse { id, result, error })
+                }
+            }
+        }
+    }
+
+    impl From<NostrConnectMessage> for nostr::nips::nip46::NostrConnectMessage {
+        fn from(repr: NostrConnectMessage) -> Self {
+            match repr {
+                NostrConnectMessage::Request(request) => {
+                    nostr::nips::nip46::NostrConnectMessage::Request {
+                        id: request.id,
+                        method: request.method.into(),
+                        params: request.params,
+                    }
+                }
+                NostrConnectMessage::Response(response) => {
+                    nostr::nips::nip46::NostrConnectMessage::Response {
+                        id: response.id,
+                        result: response.result,
+                        error: response.error,
+                    }
+                }
             }
         }
     }
