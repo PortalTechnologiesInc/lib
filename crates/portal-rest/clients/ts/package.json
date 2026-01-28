@@ -1,14 +1,24 @@
 {
   "name": "portal-sdk",
   "version": "0.1.4",
-  "description": "TypeScript client for Portal WebSocket Server - Nostr-based authentication, Lightning Network payment processing and more",
+  "description": "Official TypeScript/JavaScript client for the Portal WebSocket API — Nostr auth, Lightning payments, JWT, Cashu, profiles",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
+  "sideEffects": false,
   "files": [
-    "dist/**/*",
+    "dist/src/**/*.js",
+    "dist/src/**/*.d.ts",
     "README.md",
     "LICENSE"
   ],
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "require": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "test": "jest",
@@ -30,18 +40,21 @@
     "typescript",
     "sdk",
     "payment",
-    "jwt"
+    "jwt",
+    "cashu",
+    "nwc"
   ],
   "author": "Portal Technologies Inc.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/PortalTechnologies/lib.git"
+    "url": "https://github.com/PortalTechnologies/lib.git",
+    "directory": "crates/portal-rest/clients/ts"
   },
   "bugs": {
     "url": "https://github.com/PortalTechnologies/lib/issues"
   },
-  "homepage": "https://github.com/PortalTechnologiesInc/lib/tree/master/rest/clients/ts",
+  "homepage": "https://github.com/PortalTechnologies/lib/tree/master/crates/portal-rest/clients/ts",
   "engines": {
     "node": ">=16.0.0"
   },

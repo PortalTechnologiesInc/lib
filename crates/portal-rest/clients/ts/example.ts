@@ -34,7 +34,7 @@ async function testFullFlow(client: PortalSDK, mainKey: string, subkeys: string[
       amount: 11 * 1000,
       currency: Currency.Millisats,
       description: "Test payment",
-      subscription_id: recurringStatus.status.subscription_id // Optional: link to subscription
+      subscription_id: recurringStatus.status.status === 'confirmed' ? recurringStatus.status.subscription_id : undefined
     };
 
     await client.requestSinglePayment(
@@ -55,8 +55,9 @@ async function testFullFlow(client: PortalSDK, mainKey: string, subkeys: string[
 async function main() {
   // Create a new client instance
   const client = new PortalSDK({
-    serverUrl: 'ws://localhost:3000/ws',
-    connectTimeout: 5000
+    serverUrl: 'ws://localhost:7000/ws',
+    connectTimeout: 5000,
+    debug: false
   });
 
   // Create readline interface for user input
@@ -87,10 +88,10 @@ async function main() {
     // Example: JWT Operations
     console.log('\n=== JWT Operations ===');
     const target_key = '02eec5685e141a8fc6ee91e3aad0556bdb4f7b8f3c8c8c8c8c8c8c8c8c8c8c8c8';
-    const expiresAt = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+    const durationHours = 1; // 1 hour
     
     try {
-      const token = await client.issueJwt(target_key, expiresAt);
+      const token = await client.issueJwt(target_key, durationHours);
       console.log('Issued JWT token:', token);
       
       // Example: Verify the JWT token
@@ -121,6 +122,37 @@ async function main() {
       testFullFlow(client, mainKey, []);
     });
     console.log('Auth Init URL:', url);
+
+    // Example 2: Calculate Next Occurrence
+    console.log('\n=== Calculate Next Occurrence ===');
+    const calendar = 'daily';
+    const from = Timestamp.fromNow(0); // now
+    const nextOccurrence = await client.calculateNextOccurrence(calendar, from);
+    if (nextOccurrence) {
+      // Print the next occurrence in a human readable format
+      const nextOccurrenceDate = nextOccurrence.toDate();
+      console.log('Next occurrence:', nextOccurrenceDate.toISOString());
+    } else {
+      console.log('No next occurrence found');
+    }
+
+    // Example 3: Fetch Nip05 Profile
+    console.log('\n=== Fetch Nip05 Profile ===');
+    const nip05 = 'unldenis@getportal.cc';
+    const nip05Profile = await client.fetchNip05Profile(nip05);
+    const pubkey = nip05Profile.public_key;
+    console.log('Nip05 profile pubkey:', pubkey);
+
+    // Example 4: Request Single Payment
+    console.log('\n=== Request Single Payment ===');
+    await client.requestSinglePayment(pubkey, [], {
+      amount: 1000,
+      currency: Currency.Millisats,
+      description: "Test payment",
+    }, (status) => {
+      console.log('Payment status:', status);
+    });
+    console.log('Payment request sent');
 
     // Keep the connection alive and wait for user input
     console.log('\nConnection is active. Press Enter to disconnect...');
