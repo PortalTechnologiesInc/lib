@@ -1,6 +1,6 @@
-# Portal SDK - TypeScript Client
+# Portal SDK
 
-A TypeScript client for the Portal WebSocket Server, providing Nostr-based authentication and Lightning Network payment processing capabilities.
+Official TypeScript/JavaScript client for the [Portal](https://github.com/PortalTechnologies/lib) WebSocket API. Nostr-based auth, Lightning payments, JWT, Cashu, profiles, and relays.
 
 ## Installation
 
@@ -13,24 +13,42 @@ npm install portal-sdk
 ```typescript
 import { PortalSDK, Currency, Timestamp } from 'portal-sdk';
 
-// Initialize the client
 const client = new PortalSDK({
   serverUrl: 'ws://localhost:3000/ws',
-  connectTimeout: 10000
+  connectTimeout: 10000,
+  debug: false  // set true for request/response logging
 });
 
-// Connect to the server
 await client.connect();
+await client.authenticate(process.env.AUTH_TOKEN!);
 
-// Authenticate with your token
-await client.authenticate('your-auth-token');
-
-// Generate authentication URL for users
-const url = await client.newKeyHandshakeUrl((mainKey) => {
-  console.log('Received key handshake from:', mainKey);
+const url = await client.newKeyHandshakeUrl((mainKey, preferredRelays) => {
+  console.log('Key handshake:', mainKey, preferredRelays);
 });
+```
 
-console.log('Authentication URL:', url);
+## Error handling
+
+The SDK throws `PortalSDKError` with a `code` for programmatic handling:
+
+```typescript
+import { PortalSDK, PortalSDKError } from 'portal-sdk';
+
+try {
+  await client.authenticate(token);
+} catch (err) {
+  if (err instanceof PortalSDKError) {
+    switch (err.code) {
+      case 'AUTH_FAILED': break;
+      case 'CONNECTION_CLOSED': break;
+      case 'CONNECTION_TIMEOUT': break;
+      case 'NOT_CONNECTED': break;
+      case 'SERVER_ERROR': break;
+      case 'UNEXPECTED_RESPONSE': break;
+    }
+  }
+  throw err;
+}
 ```
 
 ## Features
@@ -56,8 +74,9 @@ new PortalSDK(config: ClientConfig)
 ```
 
 **Parameters:**
-- `config.serverUrl` (string): WebSocket server URL
-- `config.connectTimeout` (number, optional): Connection timeout in milliseconds (default: 10000)
+- `config.serverUrl` (string): WebSocket server URL (e.g. `ws://localhost:3000/ws`)
+- `config.connectTimeout` (number, optional): Connection timeout in ms (default: 10000)
+- `config.debug` (boolean, optional): Log requests/responses to console (default: false)
 
 #### Methods
 

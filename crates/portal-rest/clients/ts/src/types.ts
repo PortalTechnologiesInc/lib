@@ -245,8 +245,12 @@ export interface EventCallbacks {
 
 // Client configuration
 export interface ClientConfig {
+  /** WebSocket server URL (e.g. ws://localhost:3000/ws) */
   serverUrl: string;
+  /** Connection timeout in ms. Default 10000 */
   connectTimeout?: number;
+  /** Enable debug logging to console. Default false in production */
+  debug?: boolean;
 }
 
 export interface Event {

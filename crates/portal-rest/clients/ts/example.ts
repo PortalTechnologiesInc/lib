@@ -56,7 +56,8 @@ async function main() {
   // Create a new client instance
   const client = new PortalSDK({
     serverUrl: 'ws://localhost:7000/ws',
-    connectTimeout: 5000
+    connectTimeout: 5000,
+    debug: false
   });
 
   // Create readline interface for user input

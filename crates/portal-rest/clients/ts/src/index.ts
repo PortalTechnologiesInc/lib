@@ -1,5 +1,6 @@
-// Export client
+// Export client and errors
 export { PortalSDK } from './client';
+export { PortalSDKError, PortalSDKErrorCode } from './errors';
 
 // Export types
 export {
