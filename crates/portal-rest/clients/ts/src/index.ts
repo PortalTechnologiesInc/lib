@@ -1,8 +1,5 @@
-// Export client and errors
 export { PortalSDK } from './client';
 export { PortalSDKError, PortalSDKErrorCode } from './errors';
-
-// Export types
 export {
   Currency,
   Timestamp,
@@ -18,15 +15,18 @@ export {
   Profile,
   Nip05Profile,
   InvoiceRequestContent,
-  Command,
-  ResponseData,
-  Response,
-  NotificationData,
+  InvoicePaymentRequestContent,
+  InvoiceResponseContent,
+  InvoiceStatus,
+  CloseRecurringPaymentNotification,
+  CashuResponseStatus,
   EventCallbacks,
   ClientConfig,
   Event,
   PaymentRequest,
   KeyHandshakeUrlResponse,
-  InvoicePaymentRequestContent,
-  InvoiceResponseContent
+  Command,
+  ResponseData,
+  Response,
+  NotificationData,
 } from './types'; 

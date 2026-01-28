@@ -1,8 +1,6 @@
-/**
- * NostrAuth REST Client Types
- */
+/** Types for the Portal WebSocket API (commands, responses, domain models). */
 
-// Payment related types
+// Payment
 export enum Currency {
   Millisats = "Millisats",
 }
@@ -205,7 +203,7 @@ export type ResponseData =
   | { type: 'cashu_burn'; amount: number }
   | { type: 'add_relay'; relay: string }
   | { type: 'remove_relay'; relay: string }
-  | { type: 'calculate_next_occurrence'; next_occurrence: Timestamp | null }
+  | { type: 'calculate_next_occurrence'; next_occurrence: string | number | null }
   | { type: 'fetch_nip05_profile'; profile: Nip05Profile }
   ;
 
@@ -215,10 +213,18 @@ export interface Nip05Profile {
   relays?: string[];
 }
 
-export type Response = 
-  | { type: 'error', id: string, message: string }
-  | { type: 'success', id: string, data: ResponseData }
-  | { type: 'notification', id: string, data: NotificationData };
+export type Response =
+  | { type: 'error'; id: string; message: string }
+  | { type: 'success'; id: string; data: ResponseData }
+  | { type: 'notification'; id: string; data: NotificationData };
+
+/** Type guard: response is success with given data type */
+export function isResponseType<T extends ResponseData>(
+  data: ResponseData,
+  type: T['type']
+): data is T {
+  return data.type === type;
+}
 
 // Notification data types
 export type NotificationData = 
