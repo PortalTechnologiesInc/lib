@@ -2,7 +2,6 @@
 title = "Portal SDK Documentation"
 authors = ["Portal Technologies Inc"]
 language = "en"
-multilingual = false
 src = "."
 
 [output.html]
@@ -19,7 +18,3 @@ boost-title = 2
 boost-hierarchy = 1
 boost-paragraph = 1
 expand = true
-
-[output.html.code.highlight]
-theme = "base16-ocean-dark"
-

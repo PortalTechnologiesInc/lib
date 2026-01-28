@@ -1,136 +1,97 @@
 # Portal
 
-Portal is a Nostr-based authentication and payment SDK allowing applications to authenticate users and process payments through Nostr and Lightning Network.
+Portal is a **Nostr-based authentication and payment SDK** allowing applications to authenticate users and process payments through Nostr and Lightning Network.
 
-## Project Overview
+This repo contains the Rust implementation, the REST/WebSocket API (`portal-rest`), and official SDKs (TypeScript, Java). 
 
-Portal provides a comprehensive solution for:
+## Use the SDK
 
-- Nostr-based user authentication
-- Single and recurring payment processing
-- Profile management and verification
-- Cross-platform integration (Rust, TypeScript, and more)
+Install the SDK for your language and connect to a Portal endpoint (and auth token).
 
-## Repository Structure
-
-- `/crates/portal-app` - API exposed to the app
-- `/backend` - Example backend
-- `/crates/portal-cli` - Command-line interface tool
-- `/crates/portal-rates` - Bitcoin exchange rates from multiple sources
-- `/react-native` - React Native bindings for the `portal-app` crate
-- `/crates/portal-rest` - SDK wrapper exposing a REST/websocket interface
-- `/crates/portal-sdk` - Core SDK implementation
-- `/crates/portal-rest/clients/ts` - TypeScript client for the REST API
-- `/crates/portal-wallet` - Supported wallets(NWC, Breez)
-- `/crates/portal` - Core Portal library
-
-## Getting Started
-
-### Prerequisites
-
-- Rust toolchain (latest stable)
-- Node.js and npm (for TypeScript client)
-
-### Building the Core SDK
-
-```bash
-cargo build --release
-```
-
-### Running the SDK Daemon with Docker
-
-You can run the SDK Daemon using Docker. The image is published on Docker Hub as `getportal/sdk-daemon:latest`.
-
-### Run with Docker (pre-built image)
-
-```bash
-docker run --rm --name portal-sdk-daemon -d \
-  -p 3000:3000 \
-  -e NOSTR_KEY=<your-nsec-here> \
-  getportal/sdk-daemon:latest
-```
-
-- The daemon will be available on port 3000.
-- The default auth token is 'remember-to-change-this'
-- You can override environment variables as needed (see below).
-
-### Environment Variables
-
-- `AUTH_TOKEN`: Authentication token for API access
-- `NOSTR_KEY`: Your Nostr private key in hex format
-- `NWC_URL`: (Optional) Nostr Wallet Connect URL
-- `NOSTR_SUBKEY_PROOF`: (Optional) Nostr subkey proof
-- `NOSTR_RELAYS`: (Optional) Comma-separated list of relay URLs
-
-## Start programming
-
-Since this is a REST API, you can use it from any programming language that supports websocket connections.
-
-But best is to use the official SDK for your programming language.
-
-Currently supported SDKs:
-- [TypeScript](crates/portal-rest/clients/ts/README.md)
-- [Java](https://github.com/PortalTechnologiesInc/jvm-client)
-
-### Using the TypeScript Client
-
-### Installation
+### TypeScript / JavaScript
 
 ```bash
 npm install portal-sdk
 ```
 
-### Basic Usage
-
 ```typescript
-import { PortalClient } from 'portal-sdk';
+import { PortalSDK } from 'portal-sdk';
 
-// Initialize client
-const client = new PortalClient({
-  serverUrl: 'ws://localhost:3000/ws'
+const client = new PortalSDK({
+  serverUrl: process.env.PORTAL_URL ?? 'ws://localhost:3000/ws',
 });
 
-// Authenticate
-await client.connect('your-auth-token');
+await client.connect();
+await client.authenticate(process.env.PORTAL_AUTH_TOKEN!);
 
-// Generate authentication URL
-const { url, stream_id } = await client.getKeyHandshakeUrl();
-
-// Request payment
-const paymentResult = await client.requestSinglePayment({
-  main_key: 'user-pubkey',
-  subkeys: [],
-  payment_request: {
-    description: 'Product purchase',
-    amount: 1000,
-    currency: 'Millisats'
-  }
+// e.g. generate auth URL for a user (Nostr key handshake)
+const url = await client.newKeyHandshakeUrl((mainKey) => {
+  console.log('User authenticated:', mainKey);
 });
-
-// Close connection when done
-client.disconnect();
+console.log('Share this URL with your user:', url);
 ```
+
+**Full SDK docs:** [TypeScript SDK](crates/portal-rest/clients/ts/README.md) — quick start, workflows, API reference, error handling.
+
+### Java
+
+[Java client](https://github.com/PortalTechnologiesInc/jvm-client) — connect to a Portal endpoint and authenticate with a token; same pattern as above.
+
+### Documentation
+
+- **[Quick Start](docs/getting-started/quick-start.md)** — Get going with the SDK or run Portal with Docker.
+- **[TypeScript SDK](docs/sdk/installation.md)** — Install, [basic usage](docs/sdk/basic-usage.md), [configuration](docs/sdk/configuration.md), [error handling](docs/sdk/error-handling.md).
+- **[Guides](docs/guides/authentication.md)** — Auth, payments, profiles, Cashu, JWT, relays.
+
+---
 
 ## Features
 
-### Authentication
+- **Authentication** — Nostr key handshake; main keys and subkeys; no passwords.
+- **Payments** — Single and recurring Lightning; real-time status; Cashu mint/burn/request/send.
+- **Profiles** — Fetch and set Nostr profiles; NIP-05.
+- **Sessions** — Issue and verify JWTs for API access.
+- **SDKs** — TypeScript/JavaScript, Java.
 
-Secure user authentication using Nostr protocol, supporting both main keys and delegated subkeys.
+---
 
-### Payment Processing
+## Repository structure
 
-- **Single Payments**: One-time payments via Lightning Network
-- **Recurring Payments**: Subscription-based payments with customizable recurrence patterns
-- **Payment Status Tracking**: Real-time updates on payment status
+| Path | Description |
+|------|-------------|
+| `crates/portal-rest` | Portal API (REST + WebSocket); [SDK docs and Run Portal](crates/portal-rest/README.md). |
+| `crates/portal-rest/clients/ts` | [TypeScript SDK](crates/portal-rest/clients/ts/README.md). |
+| `crates/portal` | Core Portal library (Rust). |
+| `crates/portal-app` | API exposed to the app. |
+| `crates/portal-sdk` | Core SDK implementation. |
+| `crates/portal-wallet` | Wallets (NWC, Breez). |
+| `crates/portal-cli` | CLI tools. |
+| `crates/portal-rates` | Exchange rates. |
+| `react-native` | React Native bindings. |
+| `backend` | Example backend. |
+| `docs` | [Documentation](docs/README.md) (Quick Start, SDK, guides). |
 
-### Profile Management
+---
 
-Fetch and verify user profiles through Nostr's social graph.
+## Building from source
 
-## API Documentation
+**Prerequisites:** Rust (latest stable), Node.js/npm (for TypeScript SDK).
 
-See the `/crates/portal-rest/README.md` file for detailed API documentation.
+```bash
+cargo build --release
+```
+
+To run the Portal API server locally (e.g. for development): see [portal-rest](crates/portal-rest/README.md#run-portal-when-you-need-your-own-instance) and [Building from source](docs/getting-started/building-from-source.md).
+
+---
+
+## API documentation
+
+- **Using the SDK:** [TypeScript SDK README](crates/portal-rest/clients/ts/README.md) and [docs](docs/README.md).
+- **Raw API (advanced):** [portal-rest README](crates/portal-rest/README.md#api-reference-advanced) — WebSocket commands when not using an SDK.
+
+---
 
 ## License
 
-This project is licensed under the MIT License, except for the app library.
+MIT License, except for the app library. See [LICENSE](LICENSE).

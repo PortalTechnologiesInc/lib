@@ -14,8 +14,8 @@ We welcome contributions to Portal! This guide will help you get started.
 
 1. **Fork the repository**
 ```bash
-git clone https://github.com/YOUR_USERNAME/portal.git
-cd portal
+git clone https://github.com/PortalTechnologiesInc/lib.git
+cd lib
 ```
 
 2. **Set up development environment**

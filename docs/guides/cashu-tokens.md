@@ -464,5 +464,5 @@ If burning fails, the token may have already been redeemed:
 **Next Steps**:
 - [JWT Tokens](jwt-tokens.md) - Session management with JWTs
 - [Single Payments](single-payments.md) - Accept Lightning payments
-- [Production Deployment](../advanced/production.md) - Deploy securely
+- [Docker Deployment](../getting-started/docker-deployment.md) - Deploy securely
 

@@ -15,13 +15,13 @@ const client = new PortalSDK({
 
 ### serverUrl (required)
 
-The WebSocket URL of your Portal daemon.
+The Portal endpoint URL (where Portal is running—e.g. your hosted URL or local Docker).
 
 ```typescript
-// Local development
+// Local development (e.g. Docker)
 serverUrl: 'ws://localhost:3000/ws'
 
-// Production
+// Production (hosted Portal)
 serverUrl: 'wss://portal.yourdomain.com/ws'
 ```
 

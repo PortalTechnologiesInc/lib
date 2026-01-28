@@ -419,7 +419,7 @@ To build from Portal's CDK fork:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/PortalTechnologiesInc/cdk-mintd.git
+git clone https://github.com/PortalTechnologiesInc/cdk.git
 cd cdk-mintd
 ```
 
@@ -739,7 +739,7 @@ location = "Conference Center"
 
 ## Resources
 
-- **Portal's CDK Fork**: [github.com/PortalTechnologiesInc/cdk-mintd](https://github.com/PortalTechnologiesInc/cdk-mintd)
+- **Portal's CDK Fork**: [github.com/PortalTechnologiesInc/cdk](https://github.com/PortalTechnologiesInc/cdk)
 - **Cashu Protocol**: [cashu.space](https://cashu.space)
 - **Docker Image**: [hub.docker.com/r/getportal/cdk-mintd](https://hub.docker.com/r/getportal/cdk-mintd)
 
@@ -747,6 +747,6 @@ location = "Conference Center"
 
 **Next Steps**:
 - [Cashu Tokens Guide](cashu-tokens.md) - Using tokens with Portal SDK
-- [Production Deployment](../advanced/production.md) - Deploy securely
+- [Docker Deployment](../getting-started/docker-deployment.md) - Deploy securely
 - [Troubleshooting](../advanced/troubleshooting.md) - Common issues
 

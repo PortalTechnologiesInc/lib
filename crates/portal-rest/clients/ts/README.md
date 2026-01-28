@@ -1,509 +1,279 @@
-# Portal SDK
+# Portal TypeScript SDK
 
-Official TypeScript/JavaScript client for the [Portal](https://github.com/PortalTechnologies/lib) WebSocket API. Nostr-based auth, Lightning payments, JWT, Cashu, profiles, and relays.
+This package is the **official TypeScript/JavaScript client**: connect to a Portal endpoint to authenticate users, process payments, manage profiles, issue JWTs, and more.
 
-## Installation
+## Install
 
 ```bash
 npm install portal-sdk
 ```
 
-## Quick Start
+## Quick start
+
+You need two things: a **Portal endpoint** (URL) and an **auth token**. If you don’t have them yet, see [Where do I get an endpoint and token?](#where-do-i-get-an-endpoint-and-token).
 
 ```typescript
-import { PortalSDK, Currency, Timestamp } from 'portal-sdk';
+import { PortalSDK } from 'portal-sdk';
 
 const client = new PortalSDK({
-  serverUrl: 'ws://localhost:3000/ws',
+  serverUrl: process.env.PORTAL_URL ?? 'ws://localhost:3000/ws',
   connectTimeout: 10000,
-  debug: false  // set true for request/response logging
 });
 
 await client.connect();
-await client.authenticate(process.env.AUTH_TOKEN!);
+await client.authenticate(process.env.PORTAL_AUTH_TOKEN!);
 
+// Generate an auth URL for a user (Nostr key handshake)
 const url = await client.newKeyHandshakeUrl((mainKey, preferredRelays) => {
-  console.log('Key handshake:', mainKey, preferredRelays);
+  console.log('User authenticated:', mainKey);
 });
+console.log('Share this URL with your user:', url);
 ```
+
+That’s it. The SDK handles connection, protocol, and lifecycle; you call methods and react to callbacks.
+
+---
+
+## Where do I get an endpoint and token?
+
+- **Hosted Portal** — Your team or provider gives you a Portal URL and token. Use them in `serverUrl` and `authenticate(token)`.
+- **Run Portal yourself (Docker)** — One command, then use `ws://localhost:3000/ws` and your token:
+
+  ```bash
+  docker run -d -p 3000:3000 \
+    -e AUTH_TOKEN=your-secret-token \
+    -e NOSTR_KEY=your-nostr-private-key-hex \
+    getportal/sdk-daemon:latest
+  ```
+
+  See [Running Portal](https://github.com/PortalTechnologies/lib#running-portal) for details.
+
+- **Self-host / build from source** — See the main repo’s [Building from source](https://github.com/PortalTechnologies/lib/blob/main/docs/getting-started/building-from-source.md) and configuration docs.
+
+---
+
+## Core workflows
+
+### Authentication (key handshake)
+
+```typescript
+const url = await client.newKeyHandshakeUrl((mainKey, preferredRelays) => {
+  const auth = await client.authenticateKey(mainKey, []);
+  if (auth.status.status === 'approved') {
+    console.log('User approved:', mainKey);
+  }
+});
+// Share url with user (e.g. open in browser with NWC wallet)
+```
+
+### Single payment
+
+```typescript
+import { Currency } from 'portal-sdk';
+
+await client.requestSinglePayment(
+  userPubkey,
+  [],
+  {
+    amount: 5000,  // millisats
+    currency: Currency.Millisats,
+    description: 'Premium subscription',
+  },
+  (status) => {
+    if (status.status === 'paid') console.log('Paid:', status.preimage);
+    if (status.status === 'user_rejected') console.log('User declined');
+  }
+);
+```
+
+### Recurring payment
+
+```typescript
+import { Currency, Timestamp } from 'portal-sdk';
+
+const result = await client.requestRecurringPayment(
+  userPubkey,
+  [],
+  {
+    amount: 10_000,
+    currency: Currency.Millisats,
+    recurrence: {
+      calendar: 'monthly',
+      first_payment_due: Timestamp.fromNow(86400),
+      max_payments: 12,
+    },
+    expires_at: Timestamp.fromNow(3600),
+  }
+);
+if (result.status.status === 'confirmed') {
+  console.log('Subscription ID:', result.status.subscription_id);
+}
+```
+
+### Fetch profile
+
+```typescript
+const profile = await client.fetchProfile(userPubkey);
+if (profile) {
+  console.log(profile.display_name, profile.picture);
+}
+```
+
+### JWT (session tokens)
+
+```typescript
+const token = await client.issueJwt(targetPubkey, 24);  // 24 hours
+const claims = await client.verifyJwt(publicKey, token);
+console.log('Target key:', claims.target_key);
+```
+
+---
 
 ## Error handling
 
-The SDK throws `PortalSDKError` with a `code` for programmatic handling:
+The SDK throws `PortalSDKError` with a `code` so you can handle cases in code:
 
 ```typescript
-import { PortalSDK, PortalSDKError } from 'portal-sdk';
+import { PortalSDKError } from 'portal-sdk';
 
 try {
   await client.authenticate(token);
 } catch (err) {
   if (err instanceof PortalSDKError) {
     switch (err.code) {
-      case 'AUTH_FAILED': break;
-      case 'CONNECTION_CLOSED': break;
-      case 'CONNECTION_TIMEOUT': break;
-      case 'NOT_CONNECTED': break;
-      case 'SERVER_ERROR': break;
-      case 'UNEXPECTED_RESPONSE': break;
+      case 'AUTH_FAILED':
+        // Invalid or expired token
+        break;
+      case 'CONNECTION_TIMEOUT':
+      case 'CONNECTION_CLOSED':
+        // Connection issues
+        break;
+      case 'NOT_CONNECTED':
+        // Call connect() first
+        break;
+      default:
+        break;
     }
   }
   throw err;
 }
 ```
 
-## Features
-
-- **Nostr Authentication**: Secure user authentication using Nostr protocol
-- **Lightning Payments**: Single and recurring payment processing
-- **Profile Management**: Fetch and update user profiles
-- **JWT Support**: Issue and verify JWT tokens
-- **Relay Management**: Add and remove Nostr relays dynamically
-- **Real-time Updates**: WebSocket-based real-time notifications
-- **TypeScript Support**: Full TypeScript definitions included
-
-## API Reference
-
-### PortalSDK Class
-
-The main client class for interacting with the Portal server.
-
-#### Constructor
+Listen for connection/background errors:
 
 ```typescript
-new PortalSDK(config: ClientConfig)
-```
-
-**Parameters:**
-- `config.serverUrl` (string): WebSocket server URL (e.g. `ws://localhost:3000/ws`)
-- `config.connectTimeout` (number, optional): Connection timeout in ms (default: 10000)
-- `config.debug` (boolean, optional): Log requests/responses to console (default: false)
-
-#### Methods
-
-##### `connect(): Promise<void>`
-
-Establishes a WebSocket connection to the server.
-
-```typescript
-await client.connect();
-```
-
-##### `disconnect(): void`
-
-Closes the WebSocket connection and cleans up resources.
-
-```typescript
-client.disconnect();
-```
-
-##### `authenticate(token: string): Promise<void>`
-
-Authenticates with the server using a token.
-
-```typescript
-await client.authenticate('your-auth-token');
-```
-
-##### `newKeyHandshakeUrl(onKeyHandshake: (mainKey: string, preferredRelays: string[]) => void, staticToken?: string): Promise<string>`
-
-Generates a new authentication URL for user key handshake.
-
-```typescript
-const url = await client.newKeyHandshakeUrl((mainKey, preferredRelays) => {
-  console.log('Recevied key handshake from:', mainKey);
-  console.log('User wants to talk at:', preferredRelays);
-});
-```
-
-##### `authenticateKey(mainKey: string, subkeys?: string[]): Promise<AuthResponseData>`
-
-Authenticates a user's key with optional subkeys.
-
-```typescript
-const authResponse = await client.authenticateKey('user-pubkey', ['subkey1', 'subkey2']);
-```
-
-##### `requestRecurringPayment(mainKey: string, subkeys: string[], paymentRequest: RecurringPaymentRequestContent): Promise<RecurringPaymentResponseContent>`
-
-Requests a recurring payment subscription.
-
-```typescript
-const paymentRequest: RecurringPaymentRequestContent = {
-  amount: 10000, // 10 sats
-  currency: Currency.Millisats,
-  recurrence: {
-    calendar: "monthly",
-    first_payment_due: Timestamp.fromNow(86400), // 24 hours from now
-    max_payments: 12
-  },
-  expires_at: Timestamp.fromNow(3600) // 1 hour from now
-};
-
-const result = await client.requestRecurringPayment('user-pubkey', [], paymentRequest);
-```
-
-##### `requestSinglePayment(mainKey: string, subkeys: string[], paymentRequest: SinglePaymentRequestContent, onStatusChange: (status: InvoiceStatus) => void): Promise<void>`
-
-Requests a single payment with the NWC embedded wallet.
-
-```typescript
-const paymentRequest: SinglePaymentRequestContent = {
-  amount: 5000, // 5 sats
-  currency: Currency.Millisats,
-  description: "Product purchase"
-};
-
-await client.requestSinglePayment('user-pubkey', [], paymentRequest, (status) => {
-  console.log('Payment status:', status);
-});
-```
-
-##### `requestInvoicePayment(mainKey: string, subkeys: string[], paymentRequest: InvoicePaymentRequestContent, onStatusChange: (status: InvoiceStatus) => void): Promise<void>`
-
-Requests payment for a specific invoice (generated outside of the NWC wallet).
-
-```typescript
-const paymentRequest: InvoicePaymentRequestContent = {
-  amount: 1000,
-  currency: Currency.Millisats,
-  description: "Invoice payment",
-  invoice: "lnbc..." // Lightning invoice
-};
-
-await client.requestInvoicePayment('user-pubkey', [], paymentRequest, (status) => {
-  console.log('Invoice payment status:', status);
-});
-```
-
-##### `fetchProfile(mainKey: string): Promise<Profile | null>`
-
-Fetches a user's profile.
-
-```typescript
-const profile = await client.fetchProfile('user-pubkey');
-console.log('User profile:', profile);
-```
-
-##### `setProfile(profile: Profile): Promise<void>`
-
-Updates the service profile.
-
-```typescript
-const profile: Profile = {
-  id: 'user-id',
-  pubkey: 'user-pubkey',
-  name: 'John Doe',
-  display_name: 'John',
-  picture: 'https://example.com/avatar.jpg',
-  about: 'Software developer',
-  nip05: 'john@example.com' // Read NIP-05 for the spec of /.well-known/nostr.json
-};
-
-await client.setProfile(profile);
-```
-
-##### `closeRecurringPayment(mainKey: string, subkeys: string[], subscriptionId: string): Promise<string>`
-
-Closes a recurring payment subscription.
-
-```typescript
-const message = await client.closeRecurringPayment('user-pubkey', [], 'subscription-id');
-console.log('Subscription closed:', message);
-```
-
-##### `listenClosedRecurringPayment(onClosed: (data: CloseRecurringPaymentNotification) => void): Promise<void>`
-
-Listens for closed recurring payment notifications.
-
-```typescript
-await client.listenClosedRecurringPayment((data) => {
-  console.log('Payment closed:', data);
-});
-```
-
-##### `requestInvoice(recipientKey: string, subkeys: string[], content: InvoiceRequestContent): Promise<InvoiceResponseContent>`
-
-Requests an invoice for payment.
-
-```typescript
-const content: InvoicePaymentRequestContent = {
-  amount: 1000,
-  currency: Currency.Millisats,
-  description: "Invoice request"
-};
-
-const invoice = await client.requestInvoice('recipient-pubkey', [], content);
-console.log('Invoice:', invoice.invoice);
-```
-
-##### `issueJwt(targetKey: string, durationHours: number): Promise<string>`
-
-Issues a JWT token for a target key.
-
-```typescript
-const token = await client.issueJwt('target-pubkey', 24); // 24 hours
-console.log('JWT token:', token);
-```
-
-##### `verifyJwt(publicKey: string, token: string): Promise<{ targetKey: string }>`
-
-Verifies a JWT token.
-
-```typescript
-const claims = await client.verifyJwt('public-key', 'jwt-token');
-console.log('Token target key:', claims.targetKey);
-```
-
-##### `addRelay(relay: string): Promise<string>`
-
-Adds a relay to the relay pool.
-
-```typescript
-const relayUrl = await client.addRelay('wss://relay.damus.io');
-console.log('Added relay:', relayUrl);
-```
-
-##### `removeRelay(relay: string): Promise<string>`
-
-Removes a relay from the relay pool.
-
-```typescript
-const relayUrl = await client.removeRelay('wss://relay.damus.io');
-console.log('Removed relay:', relayUrl);
-```
-
-##### `on(eventType: string | EventCallbacks, callback?: (data: any) => void): void`
-
-Registers event listeners.
-
-```typescript
-// Single event
-client.on('connected', () => {
-  console.log('Connected to server');
-});
-
-// Multiple events
 client.on({
   onConnected: () => console.log('Connected'),
   onDisconnected: () => console.log('Disconnected'),
-  onError: (error) => console.error('Error:', error)
+  onError: (e) => console.error('Portal error:', e),
 });
 ```
 
-##### `off(eventType: string, callback: (data: any) => void): void`
+---
 
-Removes an event listener.
+## Configuration
 
-```typescript
-const callback = (data) => console.log(data);
-client.on('event', callback);
-client.off('event', callback);
-```
+| Option | Description |
+|--------|-------------|
+| `serverUrl` | Portal endpoint URL (e.g. `ws://localhost:3000/ws` or your hosted URL). |
+| `connectTimeout` | Connection timeout in ms. Default `10000`. |
+| `debug` | Log requests/responses to console. Default `false`. |
 
-## Types
+---
 
-### Currency
+## API reference
 
-```typescript
-enum Currency {
-  Millisats = "Millisats"
-}
-```
+### Lifecycle
 
-### Timestamp
+- **`connect(): Promise<void>`** — Connect to Portal. Call once before other methods.
+- **`disconnect(): void`** — Close connection and clear state.
+- **`authenticate(token: string): Promise<void>`** — Authenticate with your auth token (required after connect).
 
-```typescript
-class Timestamp {
-  static fromDate(date: Date): Timestamp
-  static fromNow(seconds: number): Timestamp
-  toJSON(): string
-  toString(): string
-  valueOf(): bigint
-}
-```
+### Auth & users
 
-### Profile
+- **`newKeyHandshakeUrl(onKeyHandshake, staticToken?, noRequest?): Promise<string>`** — Get URL for user key handshake; callback runs when user completes handshake.
+- **`authenticateKey(mainKey, subkeys?): Promise<AuthResponseData>`** — Authenticate a user key (NIP-46 style).
 
-```typescript
-interface Profile {
-  id: string;
-  pubkey: string;
-  name?: string;
-  display_name?: string;
-  picture?: string;
-  about?: string;
-  nip05?: string;
-}
-```
+### Payments
 
-### Payment Types
+- **`requestSinglePayment(mainKey, subkeys, paymentRequest, onStatusChange): Promise<void>`**
+- **`requestRecurringPayment(mainKey, subkeys, paymentRequest): Promise<RecurringPaymentResponseContent>`**
+- **`requestInvoicePayment(mainKey, subkeys, paymentRequest, onStatusChange): Promise<void>`**
+- **`requestInvoice(recipientKey, subkeys, content): Promise<InvoiceResponseContent>`**
+- **`closeRecurringPayment(mainKey, subkeys, subscriptionId): Promise<string>`**
+- **`listenClosedRecurringPayment(onClosed): Promise<() => void>`** — Returns unsubscribe function.
 
-```typescript
-interface RecurringPaymentRequestContent {
-  amount: number;
-  currency: Currency;
-  recurrence: RecurrenceInfo;
-  current_exchange_rate?: any;
-  expires_at: Timestamp;
-  auth_token?: string;
-}
+### Profiles & identity
 
-interface SinglePaymentRequestContent {
-  description: string;
-  amount: number;
-  currency: Currency;
-  subscription_id?: string;
-  auth_token?: string;
-}
+- **`fetchProfile(mainKey): Promise<Profile \| null>`**
+- **`setProfile(profile): Promise<void>`**
+- **`fetchNip05Profile(nip05): Promise<Nip05Profile>`**
 
-interface InvoicePaymentRequestContent {
-  amount: number;
-  currency: Currency;
-  description: string;
-  subscription_id?: string;
-  auth_token?: string;
-  current_exchange_rate?: any;
-  expires_at?: Timestamp;
-  invoice?: string;
-}
-```
+### JWT
 
-### Response Types
+- **`issueJwt(target_key, duration_hours): Promise<string>`**
+- **`verifyJwt(public_key, token): Promise<{ target_key: string }>`**
+
+### Relays & Cashu
+
+- **`addRelay(relay): Promise<string>`** / **`removeRelay(relay): Promise<string>`**
+- **`requestCashu(...)`** / **`sendCashuDirect(...)`** / **`mintCashu(...)`** / **`burnCashu(...)`**
+- **`calculateNextOccurrence(calendar, from): Promise<Timestamp \| null>`**
+
+### Events
+
+- **`on(eventType \| EventCallbacks, callback?): void`** — e.g. `on('connected', fn)` or `on({ onConnected, onDisconnected, onError })`.
+- **`off(eventType, callback): void`** — Remove listener.
+
+---
+
+## Types (overview)
+
+- **`Currency`** — `Currency.Millisats`.
+- **`Timestamp`** — `Timestamp.fromDate(date)`, `Timestamp.fromNow(seconds)`, `toDate()`, `toJSON()`.
+- **`Profile`** — `id`, `pubkey`, `name`, `display_name`, `picture`, `about`, `nip05`.
+- **`RecurringPaymentRequestContent`** / **`SinglePaymentRequestContent`** / **`InvoiceRequestContent`** — See TypeScript definitions.
+- **`AuthResponseData`**, **`InvoiceStatus`**, **`RecurringPaymentStatus`** — Response and status types.
+
+Full types are exported from the package; use your editor’s IntelliSense or the source.
+
+---
+
+## Examples (snippets)
+
+**Auth flow + cleanup:**
 
 ```typescript
-interface AuthResponseData {
-  user_key: string;
-  recipient: string;
-  challenge: string;
-  status: AuthResponseStatus;
-}
-
-interface InvoiceStatus {
-  status: 'paid' | 'timeout' | 'error' | 'user_approved' | 'user_success' | 'user_failed' | 'user_rejected';
-  preimage?: string;
-  reason?: string;
-}
-```
-
-## Examples
-
-### Complete Authentication Flow
-
-```typescript
-import { PortalSDK } from 'portal-sdk';
-
-const client = new PortalSDK({
-  serverUrl: 'ws://localhost:3000/ws'
-});
-
+const client = new PortalSDK({ serverUrl: process.env.PORTAL_URL! });
 try {
   await client.connect();
-  await client.authenticate('your-auth-token');
-  
-  const url = await client.newKeyHandshakeUrl((mainKey) => {
-    console.log('Received key handshake from:', mainKey);
-    const authResponse = await client.authenticateKey(mainKey, []);
-    console.log('Auth response:', authResponse);
-  });
-  
-  console.log('Share this URL with the user:', url);
-} catch (error) {
-  console.error('Authentication failed:', error);
+  await client.authenticate(process.env.PORTAL_AUTH_TOKEN!);
+  const url = await client.newKeyHandshakeUrl((key) => console.log('User:', key));
+  console.log(url);
 } finally {
   client.disconnect();
 }
 ```
 
-### Payment Processing
+**Payment with status:**
 
 ```typescript
-import { PortalSDK, Currency, Timestamp } from 'portal-sdk';
-
-const client = new PortalSDK({
-  serverUrl: 'ws://localhost:3000/ws'
-});
-
-await client.connect();
-await client.authenticate('your-auth-token');
-
-// Request a single payment
 await client.requestSinglePayment(
-  'user-pubkey',
-  [],
-  {
-    amount: 1000,
-    currency: Currency.Millisats,
-    description: "Product purchase"
-  },
-  (status) => {
-    if (status.status === 'paid') {
-      console.log('Payment completed!');
-    } else if (status.status === 'timeout') {
-      console.log('Payment timed out');
-    }
-  }
+  pubkey, [], { amount: 1000, currency: Currency.Millisats, description: 'Tip' },
+  (status) => console.log(status.status)
 );
 ```
 
-### Profile Management
+---
 
-```typescript
-import { PortalSDK } from 'portal-sdk';
+## Advanced
 
-const client = new PortalSDK({
-  serverUrl: 'ws://localhost:3000/ws'
-});
+- **Running Portal yourself** — Docker, env vars, and building from source are documented in the [main repo](https://github.com/PortalTechnologies/lib) and [docs](https://github.com/PortalTechnologies/lib/tree/main/docs).
+- **Browser** — The SDK works in Node and browser; WebSocket is handled by the bundled client.
+- **Other languages** — [Java SDK](https://github.com/PortalTechnologiesInc/jvm-client). For raw API access, see the portal-rest [API reference](https://github.com/PortalTechnologies/lib/tree/main/crates/portal-rest#api-endpoints) (advanced).
 
-await client.connect();
-await client.authenticate('your-auth-token');
-
-// Fetch user profile
-const profile = await client.fetchProfile('user-pubkey');
-console.log('User profile:', profile);
-```
-
-### Relay Management
-
-```typescript
-import { PortalSDK } from 'portal-sdk';
-
-const client = new PortalSDK({
-  serverUrl: 'ws://localhost:3000/ws'
-});
-
-await client.connect();
-await client.authenticate('your-auth-token');
-
-// Add a relay to the relay pool
-const addedRelay = await client.addRelay('wss://relay.damus.io');
-console.log('Added relay:', addedRelay);
-
-// Remove a relay from the relay pool
-const removedRelay = await client.removeRelay('wss://relay.damus.io');
-console.log('Removed relay:', removedRelay);
-```
-
-## Error Handling
-
-The client throws errors for various scenarios:
-
-```typescript
-try {
-  await client.connect();
-  await client.authenticate('invalid-token');
-} catch (error) {
-  if (error.message.includes('Authentication failed')) {
-    console.error('Invalid authentication token');
-  } else if (error.message.includes('Connection timeout')) {
-    console.error('Server connection timeout');
-  }
-}
-```
-
-## Browser Support
-
-This client works in both Node.js and browser environments. For browser usage, the WebSocket implementation is automatically handled by the `isomorphic-ws` package.
+---
 
 ## License
 
-MIT License - see LICENSE file for details. 
+MIT — see [LICENSE](../../LICENSE) in the repo.

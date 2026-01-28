@@ -53,7 +53,7 @@ const client = new PortalSDK({
 ```
 
 **Configuration Options:**
-- `serverUrl` (required): WebSocket URL of your Portal daemon
+- `serverUrl` (required): Portal endpoint URL (e.g. `ws://localhost:3000/ws` or your hosted URL)
 - `connectTimeout` (optional): Connection timeout in ms (default: 10000)
 
 ### 2. Connection Management
@@ -94,7 +94,7 @@ client.on({
 
 ### 3. Authentication
 
-Authenticate with your Portal daemon:
+Authenticate with Portal using your auth token:
 
 ```typescript
 try {
