@@ -209,7 +209,7 @@ export type ResponseData =
 
 /** NIP-05 profile (matches nostr Nip05Profile serialization) */
 export interface Nip05Profile {
-  pubkey: string;
+  public_key: string;
   relays?: string[];
 }
 

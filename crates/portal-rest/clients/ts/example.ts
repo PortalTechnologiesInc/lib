@@ -136,6 +136,24 @@ async function main() {
       console.log('No next occurrence found');
     }
 
+    // Example 3: Fetch Nip05 Profile
+    console.log('\n=== Fetch Nip05 Profile ===');
+    const nip05 = 'unldenis@getportal.cc';
+    const nip05Profile = await client.fetchNip05Profile(nip05);
+    const pubkey = nip05Profile.public_key;
+    console.log('Nip05 profile pubkey:', pubkey);
+
+    // Example 4: Request Single Payment
+    console.log('\n=== Request Single Payment ===');
+    await client.requestSinglePayment(pubkey, [], {
+      amount: 1000,
+      currency: Currency.Millisats,
+      description: "Test payment",
+    }, (status) => {
+      console.log('Payment status:', status);
+    });
+    console.log('Payment request sent');
+
     // Keep the connection alive and wait for user input
     console.log('\nConnection is active. Press Enter to disconnect...');
     
