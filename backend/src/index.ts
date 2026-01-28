@@ -339,7 +339,7 @@ function mainFunction() {
                 );
                 
                 console.log('Recurring payment result:', paymentResult);
-                if (paymentResult.status.subscription_id) {
+                if (paymentResult.status.status === 'confirmed' && paymentResult.status.subscription_id) {
                   db.updateSubscriptionStatus(subscriptionId, 'active', nextPaymentAt, paymentResult.status.subscription_id);
                 }
                 
