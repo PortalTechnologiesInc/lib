@@ -73,6 +73,10 @@ export class PortalSDK {
         this.socket.onclose = () => {
           this.connected = false;
           this.socket = null;
+          // Reject any pending command callbacks so auth failure / close doesn't hang
+          const err = new Error('Connection closed');
+          this.commandCallbacks.forEach(({ reject }) => reject(err));
+          this.commandCallbacks.clear();
         };
 
         this.socket.onerror = (error: any) => {

@@ -55,7 +55,7 @@ async function testFullFlow(client: PortalSDK, mainKey: string, subkeys: string[
 async function main() {
   // Create a new client instance
   const client = new PortalSDK({
-    serverUrl: 'ws://localhost:3000/ws',
+    serverUrl: 'ws://localhost:7000/ws',
     connectTimeout: 5000
   });
 
