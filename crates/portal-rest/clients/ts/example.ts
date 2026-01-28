@@ -34,7 +34,7 @@ async function testFullFlow(client: PortalSDK, mainKey: string, subkeys: string[
       amount: 11 * 1000,
       currency: Currency.Millisats,
       description: "Test payment",
-      subscription_id: recurringStatus.status.subscription_id // Optional: link to subscription
+      subscription_id: recurringStatus.status.status === 'confirmed' ? recurringStatus.status.subscription_id : undefined
     };
 
     await client.requestSinglePayment(
@@ -87,10 +87,10 @@ async function main() {
     // Example: JWT Operations
     console.log('\n=== JWT Operations ===');
     const target_key = '02eec5685e141a8fc6ee91e3aad0556bdb4f7b8f3c8c8c8c8c8c8c8c8c8c8c8c8';
-    const expiresAt = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+    const durationHours = 1; // 1 hour
     
     try {
-      const token = await client.issueJwt(target_key, expiresAt);
+      const token = await client.issueJwt(target_key, durationHours);
       console.log('Issued JWT token:', token);
       
       // Example: Verify the JWT token
@@ -121,6 +121,19 @@ async function main() {
       testFullFlow(client, mainKey, []);
     });
     console.log('Auth Init URL:', url);
+
+    // Example 2: Calculate Next Occurrence
+    console.log('\n=== Calculate Next Occurrence ===');
+    const calendar = 'daily';
+    const from = Timestamp.fromNow(0); // now
+    const nextOccurrence = await client.calculateNextOccurrence(calendar, from);
+    if (nextOccurrence) {
+      // Print the next occurrence in a human readable format
+      const nextOccurrenceDate = nextOccurrence.toDate();
+      console.log('Next occurrence:', nextOccurrenceDate.toISOString());
+    } else {
+      console.log('No next occurrence found');
+    }
 
     // Keep the connection alive and wait for user input
     console.log('\nConnection is active. Press Enter to disconnect...');

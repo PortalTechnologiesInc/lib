@@ -23,6 +23,10 @@ export class Timestamp {
     return new Timestamp(Math.floor(Date.now() / 1000) + seconds);
   }
 
+  toDate(): Date {
+    return new Date(Number(this.value) * 1000);
+  }
+
   toJSON(): string {
     return this.value.toString();
   }
@@ -47,6 +51,7 @@ export interface RecurringPaymentRequestContent {
   amount: number;
   currency: Currency;
   recurrence: RecurrenceInfo;
+  description?: string;
   current_exchange_rate?: any;
   expires_at: Timestamp;
   auth_token?: string;
@@ -71,16 +76,29 @@ export interface SinglePaymentRequestContent {
   auth_token?: string;
 }
 
-export interface RecurringPaymentStatusContent {
+/** Confirmed variant of recurring payment status (server tag: "confirmed") */
+export interface RecurringPaymentStatusConfirmed {
+  status: 'confirmed';
   subscription_id: string;
   authorized_amount: number;
   authorized_currency: Currency;
   authorized_recurrence: RecurrenceInfo;
 }
 
+/** Rejected variant of recurring payment status (server tag: "rejected") */
+export interface RecurringPaymentStatusRejected {
+  status: 'rejected';
+  reason?: string;
+}
+
+export type RecurringPaymentStatus = RecurringPaymentStatusConfirmed | RecurringPaymentStatusRejected;
+
+/** @deprecated Use RecurringPaymentStatusConfirmed for the confirmed case */
+export type RecurringPaymentStatusContent = RecurringPaymentStatusConfirmed;
+
 export interface RecurringPaymentResponseContent {
   request_id: string;
-  status: RecurringPaymentStatusContent;
+  status: RecurringPaymentStatus;
 }
 
 export interface InvoiceStatus {
@@ -121,13 +139,14 @@ export interface InvoiceRequestContent {
   amount: number;
   currency: Currency;
   current_exchange_rate?: ExchangeRate;
-  expires_at: Timestamp; 
+  expires_at: Timestamp;
   description?: string;
+  refund_invoice?: string;
 }
 
 export interface InvoiceResponseContent {
   invoice: string;
-  payment_hash: string;
+  payment_hash: string | null;
 }
 
 export interface ExchangeRate {
@@ -142,47 +161,59 @@ export interface JwtClaims {
   exp: number;
 }
 
-// Command/Request types
-export type Command = 
-  | { cmd: 'Auth', params: { token: string } }
-  | { cmd: 'NewKeyHandshakeUrl' }
-  | { cmd: 'AuthenticateKey', params: { main_key: string, subkeys: string[] } }
-  | { cmd: 'RequestRecurringPayment', params: { main_key: string, subkeys: string[], payment_request: RecurringPaymentRequestContent } }
-  | { cmd: 'RequestSinglePayment', params: { main_key: string, subkeys: string[], payment_request: SinglePaymentRequestContent } }
-  | { cmd: 'FetchProfile', params: { main_key: string } }
-  | { cmd: 'CloseRecurringPayment', params: { main_key: string, subkeys: string[], subscription_id: string } }
-  | { cmd: 'ListenClosedRecurringPayment', params: {} }
-  | { cmd: 'RequestInvoice', params: { recipient_key: string, content: InvoiceRequestContent } }
-  | { cmd: 'IssueJwt', params: { target_key: string, duration_hours: number } }
-  | { cmd: 'VerifyJwt', params: { pubkey: string, token: string } }
-  | { cmd: 'RequestCashu', params: { recipient_key: string, subkeys: string[], content: CashuRequestContent } }
-  | { cmd: 'SendCashuDirect', params: { main_key: string, subkeys: string[], token: string } }
-  | { cmd: 'MintCashu', params: { mint_url: string, static_auth_token?: string, unit: string, amount: number, description?: string } }
-  | { cmd: 'BurnCashu', params: { mint_url: string, unit: string, token: string, static_auth_token?: string } }
-  | { cmd: 'AddRelay', params: { relay: string } }
-  | { cmd: 'RemoveRelay', params: { relay: string } }
+// Command/Request types (must match server command.rs)
+export type Command =
+  | { cmd: 'Auth'; params: { token: string } }
+  | { cmd: 'NewKeyHandshakeUrl'; params?: { static_token?: string | null; no_request?: boolean | null } }
+  | { cmd: 'AuthenticateKey'; params: { main_key: string; subkeys: string[] } }
+  | { cmd: 'RequestRecurringPayment'; params: { main_key: string; subkeys: string[]; payment_request: RecurringPaymentRequestContent } }
+  | { cmd: 'RequestSinglePayment'; params: { main_key: string; subkeys: string[]; payment_request: SinglePaymentRequestContent } }
+  | { cmd: 'RequestPaymentRaw'; params: { main_key: string; subkeys: string[]; payment_request: SinglePaymentRequestContent } }
+  | { cmd: 'FetchProfile'; params: { main_key: string } }
+  | { cmd: 'SetProfile'; params: { profile: Profile } }
+  | { cmd: 'CloseRecurringPayment'; params: { main_key: string; subkeys: string[]; subscription_id: string } }
+  | { cmd: 'ListenClosedRecurringPayment' }
+  | { cmd: 'RequestInvoice'; params: { recipient_key: string; subkeys: string[]; content: InvoiceRequestContent } }
+  | { cmd: 'IssueJwt'; params: { target_key: string; duration_hours: number } }
+  | { cmd: 'VerifyJwt'; params: { pubkey: string; token: string } }
+  | { cmd: 'RequestCashu'; params: { recipient_key: string; subkeys: string[]; mint_url: string; unit: string; amount: number } }
+  | { cmd: 'SendCashuDirect'; params: { main_key: string; subkeys: string[]; token: string } }
+  | { cmd: 'MintCashu'; params: { mint_url: string; unit: string; amount: number; static_auth_token?: string | null; description?: string | null } }
+  | { cmd: 'BurnCashu'; params: { mint_url: string; unit: string; token: string; static_auth_token?: string | null } }
+  | { cmd: 'AddRelay'; params: { relay: string } }
+  | { cmd: 'RemoveRelay'; params: { relay: string } }
+  | { cmd: 'CalculateNextOccurrence'; params: { calendar: string; from: Timestamp } }
+  | { cmd: 'FetchNip05Profile'; params: { nip05: string } }
   ;
 
-// Response types
-export type ResponseData = 
-  | { type: 'auth_success', message: string }
-  | { type: 'key_handshake_url', url: string, stream_id: string }
-  | { type: 'auth_response', event: AuthResponseData }
-  | { type: 'recurring_payment', status: RecurringPaymentStatusContent }
-  | { type: 'single_payment', stream_id: string }
-  | { type: 'profile', profile: Profile | null }
-  | { type: 'close_recurring_payment_success', message: string }
-  | { type: 'listen_closed_recurring_payment', stream_id: string }
-  | { type: 'invoice_payment', invoice: string, payment_hash: string | null }
-  | { type: 'issue_jwt', token: string }
-  | { type: 'verify_jwt', target_key: string}
-  | { type: 'cashu_response', status: CashuResponseStatus }
-  | { type: 'send_cashu_direct_success', message: string }
-  | { type: 'cashu_mint', token: string }
-  | { type: 'cashu_burn', amount: number }
-  | { type: 'add_relay', relay: string }
-  | { type: 'remove_relay', relay: string }
+// Response types (must match server response.rs)
+export type ResponseData =
+  | { type: 'auth_success'; message: string }
+  | { type: 'key_handshake_url'; url: string; stream_id: string }
+  | { type: 'auth_response'; event: AuthResponseData }
+  | { type: 'recurring_payment'; status: RecurringPaymentResponseContent }
+  | { type: 'single_payment'; stream_id: string }
+  | { type: 'profile'; profile: Profile | null }
+  | { type: 'close_recurring_payment_success'; message: string }
+  | { type: 'listen_closed_recurring_payment'; stream_id: string }
+  | { type: 'invoice_payment'; invoice: string; payment_hash: string | null }
+  | { type: 'issue_jwt'; token: string }
+  | { type: 'verify_jwt'; target_key: string }
+  | { type: 'cashu_response'; status: CashuResponseStatus }
+  | { type: 'send_cashu_direct_success'; message: string }
+  | { type: 'cashu_mint'; token: string }
+  | { type: 'cashu_burn'; amount: number }
+  | { type: 'add_relay'; relay: string }
+  | { type: 'remove_relay'; relay: string }
+  | { type: 'calculate_next_occurrence'; next_occurrence: Timestamp | null }
+  | { type: 'fetch_nip05_profile'; profile: Nip05Profile }
   ;
+
+/** NIP-05 profile (matches nostr Nip05Profile serialization) */
+export interface Nip05Profile {
+  pubkey: string;
+  relays?: string[];
+}
 
 export type Response = 
   | { type: 'error', id: string, message: string }

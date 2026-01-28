@@ -11,14 +11,17 @@ import {
   AuthResponseData,
   Event,
   InvoicePaymentRequestContent,
+  InvoiceRequestContent,
+  InvoiceResponseContent,
   RecurringPaymentResponseContent,
   CloseRecurringPaymentNotification,
   InvoiceStatus,
-  InvoiceResponseContent,
   CashuRequestContentWithKey,
   CashuResponseContent,
   CashuRequestContent,
   CashuResponseStatus,
+  Timestamp,
+  Nip05Profile,
 } from './types';
 
 /**
@@ -300,11 +303,9 @@ export class PortalSDK {
     paymentRequest: RecurringPaymentRequestContent
   ): Promise<RecurringPaymentResponseContent> {
     const response = await this.sendCommand('RequestRecurringPayment', { main_key: mainKey, subkeys, payment_request: paymentRequest });
-    
     if (response.type === 'recurring_payment') {
-      return response.status;
+      return response.status as RecurringPaymentResponseContent;
     }
-    
     throw new Error('Unexpected response type');
   }
   
@@ -448,15 +449,19 @@ export class PortalSDK {
   }
 
   /**
-   * Request an invoice
+   * Request an invoice from a recipient
    */
   public async requestInvoice(
     recipientKey: string,
-    content: InvoicePaymentRequestContent) : Promise<InvoiceResponseContent> {
-    return this.sendCommand<InvoiceResponseContent>('RequestInvoice', {
+    subkeys: string[],
+    content: InvoiceRequestContent
+  ): Promise<InvoiceResponseContent> {
+    const response = await this.sendCommand<{ type: 'invoice_payment'; invoice: string; payment_hash: string | null }>('RequestInvoice', {
       recipient_key: recipientKey,
+      subkeys,
       content
     });
+    return { invoice: response.invoice, payment_hash: response.payment_hash ?? null };
   }
 
   /**
@@ -549,6 +554,32 @@ export class PortalSDK {
     const response = await this.sendCommand('RemoveRelay', { relay });
     if (response.type === 'remove_relay') {
       return response.relay;
+    }
+    throw new Error('Unexpected response type');
+  }
+
+  /**
+   * Calculate the next occurrence for a calendar from a given timestamp
+   */
+  public async calculateNextOccurrence(calendar: string, from: Timestamp): Promise<Timestamp | null> {
+    const response = await this.sendCommand<{ type: 'calculate_next_occurrence'; next_occurrence: string | number | null }>('CalculateNextOccurrence', {
+      calendar,
+      from
+    });
+    if (response.type === 'calculate_next_occurrence') {
+      const next = response.next_occurrence;
+      return next != null && next !== undefined ? new Timestamp(BigInt(next)) : null;
+    }
+    throw new Error('Unexpected response type');
+  }
+
+  /**
+   * Fetch a NIP-05 profile (e.g. user@domain.com)
+   */
+  public async fetchNip05Profile(nip05: string): Promise<Nip05Profile> {
+    const response = await this.sendCommand<{ type: 'fetch_nip05_profile'; profile: Nip05Profile }>('FetchNip05Profile', { nip05 });
+    if (response.type === 'fetch_nip05_profile') {
+      return response.profile;
     }
     throw new Error('Unexpected response type');
   }

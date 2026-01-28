@@ -202,7 +202,7 @@ await client.listenClosedRecurringPayment((data) => {
 });
 ```
 
-##### `requestInvoice(recipientKey: string, content: InvoicePaymentRequestContent): Promise<InvoiceResponseContent>`
+##### `requestInvoice(recipientKey: string, subkeys: string[], content: InvoiceRequestContent): Promise<InvoiceResponseContent>`
 
 Requests an invoice for payment.
 
@@ -213,7 +213,7 @@ const content: InvoicePaymentRequestContent = {
   description: "Invoice request"
 };
 
-const invoice = await client.requestInvoice('recipient-pubkey', content);
+const invoice = await client.requestInvoice('recipient-pubkey', [], content);
 console.log('Invoice:', invoice.invoice);
 ```
 
