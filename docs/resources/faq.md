@@ -68,11 +68,11 @@ Portal is designed with privacy in mind. Nostr relays don't require registration
 
 - Verify users have a compatible Nostr wallet
 - Check relay connectivity
-- Ensure NOSTR_KEY is set correctly
+- Ensure PORTAL__NOSTR__PRIVATE_KEY is set correctly
 
 ### Payments not working
 
-- Verify NWC_URL is configured
+- Verify PORTAL__WALLET__NWC__URL is configured (with PORTAL__WALLET__LN_BACKEND=nwc)
 - Check wallet has sufficient balance
 - Test wallet connectivity separately
 

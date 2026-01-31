@@ -12,8 +12,8 @@ This crate is the **Portal API** server (REST + WebSocket). Use it via the [Type
 
 ```bash
 docker run -d -p 3000:3000 \
-  -e AUTH_TOKEN=your-secret-token \
-  -e NOSTR_KEY=your-nostr-private-key-hex \
+  -e PORTAL__AUTH__AUTH_TOKEN=your-secret-token \
+  -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
   getportal/sdk-daemon:latest
 ```
 

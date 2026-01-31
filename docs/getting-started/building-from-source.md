@@ -148,8 +148,8 @@ cargo install cargo-edit
 cargo watch -x 'run --package portal-rest'
 
 # Run with environment variables
-AUTH_TOKEN=dev-token \
-NOSTR_KEY=your-key-hex \
+PORTAL__AUTH__AUTH_TOKEN=dev-token \
+PORTAL__NOSTR__PRIVATE_KEY=your-key-hex \
 cargo run --package portal-rest
 
 # Or use the env.example (if it exists)

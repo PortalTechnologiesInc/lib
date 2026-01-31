@@ -46,12 +46,12 @@ const client = new PortalSDK({
 
 ### "Authentication failed"
 
-**Cause**: Invalid or mismatched AUTH_TOKEN.
+**Cause**: Invalid or mismatched auth token.
 
 **Solutions**:
 ```bash
 # Verify token in Docker container
-docker exec portal-sdk-daemon env | grep AUTH_TOKEN
+docker exec portal-sdk-daemon env | grep PORTAL__AUTH__AUTH_TOKEN
 
 # Verify token in your code
 console.log('Using token:', process.env.PORTAL_AUTH_TOKEN?.substring(0, 10) + '...');
@@ -69,14 +69,14 @@ echo "New token: $NEW_TOKEN"
 - Verify user has Alby, Mutiny, or compatible NWC wallet
 - Try QR code instead of direct link
 - Check relay connectivity
-- Verify NOSTR_KEY is set correctly
+- Verify PORTAL__NOSTR__PRIVATE_KEY is set correctly
 
 ```bash
 # Test relay connectivity
 wscat -c wss://relay.damus.io
 
-# Verify NOSTR_KEY format (64 hex chars)
-echo $NOSTR_KEY | wc -c  # Should output 65 (64 + newline)
+# Verify key format (64 hex chars)
+echo $PORTAL__NOSTR__PRIVATE_KEY | wc -c  # Should output 65 (64 + newline)
 ```
 
 ## Payment Issues
@@ -120,12 +120,12 @@ client.requestSinglePayment(user, [], request, (status) => {
 
 ### NWC Not Working
 
-**Cause**: Invalid or expired NWC_URL.
+**Cause**: Invalid or expired NWC URL.
 
 **Solutions**:
 ```bash
-# Verify NWC_URL format
-echo $NWC_URL
+# Verify NWC URL format (PORTAL__WALLET__NWC__URL)
+echo $PORTAL__WALLET__NWC__URL
 # Should start with: nostr+walletconnect://
 
 # Test NWC connection separately
@@ -148,8 +148,8 @@ for relay in wss://relay.damus.io wss://relay.snort.social wss://nos.lol; do
   timeout 5 wscat -c $relay && echo "✅ Connected" || echo "❌ Failed"
 done
 
-# Update NOSTR_RELAYS in .env
-NOSTR_RELAYS=wss://relay.damus.io,wss://relay.snort.social,wss://nos.lol
+# Update PORTAL__NOSTR__RELAYS in .env
+PORTAL__NOSTR__RELAYS=wss://relay.damus.io,wss://relay.snort.social,wss://nos.lol
 ```
 
 ### Messages Not Delivering
@@ -193,8 +193,8 @@ docker images | grep portal
 docker rm -f portal-sdk-daemon
 docker run -d --name portal-sdk-daemon \
   -p 3000:3000 \
-  -e AUTH_TOKEN=$AUTH_TOKEN \
-  -e NOSTR_KEY=$NOSTR_KEY \
+  -e PORTAL__AUTH__AUTH_TOKEN=$PORTAL__AUTH__AUTH_TOKEN \
+  -e PORTAL__NOSTR__PRIVATE_KEY=$PORTAL__NOSTR__PRIVATE_KEY \
   getportal/sdk-daemon:latest
 ```
 

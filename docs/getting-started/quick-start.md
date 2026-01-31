@@ -26,8 +26,8 @@ You need a Nostr private key (hex). Generate one (e.g. [nostrtool.com](https://n
 
 ```bash
 docker run -d -p 3000:3000 \
-  -e AUTH_TOKEN=my-secret-token \
-  -e NOSTR_KEY=your-nostr-private-key-hex \
+  -e PORTAL__AUTH__AUTH_TOKEN=my-secret-token \
+  -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
   getportal/sdk-daemon:latest
 ```
 
@@ -92,7 +92,7 @@ Run the script, open the URL in a browser, and approve in your wallet. You shoul
 | Issue | What to do |
 |-------|------------|
 | Connection refused | Portal not running or wrong URL. For local Docker: `docker ps` and use `ws://localhost:3000/ws`. |
-| Auth failed | Token must match the one Portal was started with (e.g. `AUTH_TOKEN` in Docker). |
-| Invalid Nostr key | Use hex format for `NOSTR_KEY`; convert nsec with e.g. `nak decode nsec ...`. |
+| Auth failed | Token must match the one Portal was started with (e.g. `PORTAL__AUTH__AUTH_TOKEN` in Docker). |
+| Invalid Nostr key | Use hex format for `PORTAL__NOSTR__PRIVATE_KEY`; convert nsec with e.g. `nak decode nsec ...`. |
 
 More: [Troubleshooting](../advanced/troubleshooting.md), [FAQ](../resources/faq.md).

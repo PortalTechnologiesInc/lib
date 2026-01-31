@@ -1,135 +1,63 @@
 # Environment Variables
 
-Configure your Portal SDK Daemon with environment variables.
+Configure your Portal SDK Daemon (portal-rest) with environment variables. The binary reads config from `~/.portal-rest/config.toml` and overrides via `PORTAL__<SECTION>__<KEY>` env vars.
 
-## Required Variables
-
-### AUTH_TOKEN
-
-**Description**: Authentication token for API access. This token must be provided by clients when connecting to the WebSocket API.
-
-**Type**: String
-
-**Security**: Generate a cryptographically secure random token. Never commit this to version control.
-
-**Example**:
-```bash
-# Generate a secure token
-openssl rand -hex 32
-
-# Or use a password generator
-pwgen -s 64 1
-```
-
-**Usage**:
-```bash
-AUTH_TOKEN=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
-```
-
-### NOSTR_KEY
-
-**Description**: Your Portal instance's Nostr private key in hexadecimal format. This key is used to sign messages and authenticate your service on the Nostr network.
-
-**Type**: Hexadecimal string (64 characters)
-
-**Security**: Keep this key absolutely secret. Anyone with access to it can impersonate your Portal instance.
-
-**Format**: Hex format (not nsec format)
-
-**Converting from nsec**:
-```bash
-# If you have an nsec key, convert it to hex:
-nak decode nsec1your-key-here
-```
-
-**Usage**:
-```bash
-NOSTR_KEY=5c0c523f52a5b6fad39ed2403092df8cebc36318b39383bca6c00808626fab7a
-```
-
-## Optional Variables
-
-### NWC_URL
-
-**Description**: Nostr Wallet Connect URL for processing Lightning Network payments. This allows your Portal instance to request and receive payments on behalf of your service.
-
-**Type**: String (nostr+walletconnect:// URL)
-
-**Required for**: Payment processing (single and recurring payments)
-
-**How to get**:
-1. Use a Lightning wallet that supports NWC (Alby, Mutiny, etc.)
-2. Navigate to wallet settings
-3. Find "Nostr Wallet Connect" or "Wallet Connect String"
-4. Copy the connection URL
-
-**Example**:
-```bash
-NWC_URL=nostr+walletconnect://b889ff5b1513b641e2a139f661a661364979c5beee91842f8f0ef42ab558e9d4?relay=wss://relay.damus.io&secret=abcdef123456
-```
-
-**Without NWC**: Portal can still handle authentication and generate payment requests, but users will need to pay invoices manually.
-
-### NOSTR_SUBKEY_PROOF
-
-**Description**: Proof for Nostr subkey delegation. This is used when your Portal instance operates as a subkey delegated from a main key.
-
-**Type**: String (delegation proof)
-
-**Use case**: Advanced scenarios where you want to use a delegated subkey instead of a main key.
-
-**Example**:
-```bash
-NOSTR_SUBKEY_PROOF=delegation-proof-string-here
-```
-
-### NOSTR_RELAYS
-
-**Description**: Comma-separated list of Nostr relay URLs to connect to. Relays are used to publish and receive messages on the Nostr network.
-
-**Type**: Comma-separated string
-
-**Default**: If not specified, Portal uses a default set of popular public relays.
-
-**Recommended relays**:
-- `wss://relay.damus.io` - Popular, well-maintained
-- `wss://relay.snort.social` - Fast and reliable
-- `wss://nos.lol` - Good for payments
-- `wss://relay.nostr.band` - Large relay network
-- `wss://nostr.wine` - Paid relay (more reliable)
-
-**Example**:
-```bash
-NOSTR_RELAYS=wss://relay.damus.io,wss://relay.snort.social,wss://nos.lol
-```
-
-**Considerations**:
-- More relays = better redundancy but more bandwidth
-- Include at least 3-5 relays for reliability
-- Use relays that are geographically close to your users
-- Consider using paid relays for production
-
-## Config file and PORTAL__* overrides
-
-When running the Portal API binary (e.g. `portal-rest`), you can use a config file instead of or in addition to environment variables.
+## Config file and PORTAL__* env vars
 
 - **Config file:** `~/.portal-rest/config.toml` (created with defaults if missing). Copy from `example.config.toml` in the `portal-rest` crate.
 - **Env overrides:** Any setting can be overridden with `PORTAL__<SECTION>__<KEY>=value` (double underscores). Section and key match the TOML structure.
 
-| Config key | Env example | Description |
-|------------|-------------|-------------|
+| Config key | Env variable | Description |
+|------------|--------------|-------------|
 | `info.listen_port` | `PORTAL__INFO__LISTEN_PORT` | Port the API listens on (default 3000). |
-| `auth.auth_token` | `PORTAL__AUTH__AUTH_TOKEN` | API auth token (same as `AUTH_TOKEN` when using Docker). |
-| `nostr.private_key` | `PORTAL__NOSTR__PRIVATE_KEY` | Nostr key in hex (same as `NOSTR_KEY`). |
+| `auth.auth_token` | `PORTAL__AUTH__AUTH_TOKEN` | API auth token. Required for clients to connect. |
+| `nostr.private_key` | `PORTAL__NOSTR__PRIVATE_KEY` | Nostr private key in hex format. Required. |
 | `nostr.relays` | `PORTAL__NOSTR__RELAYS` | Comma-separated relay URLs. |
+| `nostr.subkey_proof` | `PORTAL__NOSTR__SUBKEY_PROOF` | Proof for Nostr subkey delegation (optional). |
 | `wallet.ln_backend` | `PORTAL__WALLET__LN_BACKEND` | `none`, `nwc`, or `breez`. |
-| `wallet.nwc.url` | `PORTAL__WALLET__NWC__URL` | Nostr Wallet Connect URL (same as `NWC_URL`). |
+| `wallet.nwc.url` | `PORTAL__WALLET__NWC__URL` | Nostr Wallet Connect URL (when `ln_backend=nwc`). |
+| `wallet.breez.api_key` | `PORTAL__WALLET__BREEZ__API_KEY` | Breez API key (when `ln_backend=breez`). |
+| `wallet.breez.storage_dir` | `PORTAL__WALLET__BREEZ__STORAGE_DIR` | Breez storage directory. |
+| `wallet.breez.mnemonic` | `PORTAL__WALLET__BREEZ__MNEMONIC` | Breez mnemonic (when `ln_backend=breez`). |
 
 **Run from config:**
 
 ```bash
 portal-rest   # uses ~/.portal-rest/config.toml
 ```
+
+## Required variables
+
+### PORTAL__AUTH__AUTH_TOKEN
+
+**Description**: Authentication token for API access. Clients must provide this token when connecting to the WebSocket API.
+
+**Security**: Generate a cryptographically secure random token. Never commit this to version control.
+
+```bash
+# Generate a secure token
+openssl rand -hex 32
+```
+
+### PORTAL__NOSTR__PRIVATE_KEY
+
+**Description**: Your Portal instance's Nostr private key in hexadecimal format. Used to sign messages and authenticate on the Nostr network.
+
+**Format**: Hex format (64 characters). Convert from nsec with: `nak decode nsec1your-key-here`
+
+## Optional variables
+
+### PORTAL__WALLET__NWC__URL (for payments)
+
+**Description**: Nostr Wallet Connect URL for processing Lightning Network payments. Set `PORTAL__WALLET__LN_BACKEND=nwc` when using this.
+
+**Without NWC**: Portal can still handle authentication and generate payment requests, but users will need to pay invoices manually.
+
+### PORTAL__NOSTR__RELAYS
+
+**Description**: Comma-separated list of Nostr relay URLs. Default comes from config file.
+
+**Recommended relays:** `wss://relay.damus.io`, `wss://relay.snort.social`, `wss://nos.lol`, `wss://relay.nostr.band`
 
 ## Configuration Examples
 
@@ -138,8 +66,9 @@ portal-rest   # uses ~/.portal-rest/config.toml
 Bare minimum for local development:
 
 ```bash
-AUTH_TOKEN=dev-token-change-in-production
-NOSTR_KEY=5c0c523f52a5b6fad39ed2403092df8cebc36318b39383bca6c00808626fab7a
+PORTAL__AUTH__AUTH_TOKEN=dev-token-change-in-production \
+PORTAL__NOSTR__PRIVATE_KEY=5c0c523f52a5b6fad39ed2403092df8cebc36318b39383bca6c00808626fab7a \
+portal-rest
 ```
 
 ### Full Production Setup
@@ -148,14 +77,17 @@ Complete configuration for production deployment:
 
 ```bash
 # Required
-AUTH_TOKEN=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6
-NOSTR_KEY=5c0c523f52a5b6fad39ed2403092df8cebc36318b39383bca6c00808626fab7a
+export PORTAL__AUTH__AUTH_TOKEN=$(openssl rand -hex 32)
+export PORTAL__NOSTR__PRIVATE_KEY=5c0c523f52a5b6fad39ed2403092df8cebc36318b39383bca6c00808626fab7a
 
 # Payment processing
-NWC_URL=nostr+walletconnect://b889ff5b1513b641e2a139f661a661364979c5beee91842f8f0ef42ab558e9d4?relay=wss://relay.damus.io&secret=abcdef123456
+export PORTAL__WALLET__LN_BACKEND=nwc
+export PORTAL__WALLET__NWC__URL=nostr+walletconnect://...
 
 # Network configuration
-NOSTR_RELAYS=wss://relay.damus.io,wss://relay.snort.social,wss://nos.lol,wss://relay.nostr.band,wss://nostr.wine
+export PORTAL__NOSTR__RELAYS=wss://relay.damus.io,wss://relay.snort.social,wss://nos.lol,wss://relay.nostr.band
+
+portal-rest
 ```
 
 ### Using Environment Files
@@ -165,11 +97,12 @@ NOSTR_RELAYS=wss://relay.damus.io,wss://relay.snort.social,wss://nos.lol,wss://r
 Create a `.env` file in your project directory:
 
 ```bash
-# Portal Configuration
-AUTH_TOKEN=your-secret-token
-NOSTR_KEY=your-nostr-key-hex
-NWC_URL=nostr+walletconnect://your-nwc-url
-NOSTR_RELAYS=wss://relay.damus.io,wss://relay.snort.social
+# Portal Configuration (use PORTAL__* format)
+PORTAL__AUTH__AUTH_TOKEN=your-secret-token
+PORTAL__NOSTR__PRIVATE_KEY=your-nostr-key-hex
+PORTAL__WALLET__LN_BACKEND=nwc
+PORTAL__WALLET__NWC__URL=nostr+walletconnect://your-nwc-url
+PORTAL__NOSTR__RELAYS=wss://relay.damus.io,wss://relay.snort.social
 ```
 
 **Important**: Add `.env` to your `.gitignore`:
@@ -185,9 +118,10 @@ docker run --env-file .env -p 3000:3000 getportal/sdk-daemon:latest
 
 # Or pass variables directly
 docker run \
-  -e AUTH_TOKEN=$AUTH_TOKEN \
-  -e NOSTR_KEY=$NOSTR_KEY \
-  -e NWC_URL=$NWC_URL \
+  -e PORTAL__AUTH__AUTH_TOKEN=$PORTAL__AUTH__AUTH_TOKEN \
+  -e PORTAL__NOSTR__PRIVATE_KEY=$PORTAL__NOSTR__PRIVATE_KEY \
+  -e PORTAL__WALLET__LN_BACKEND=nwc \
+  -e PORTAL__WALLET__NWC__URL=$PORTAL__WALLET__NWC__URL \
   -p 3000:3000 \
   getportal/sdk-daemon:latest
 ```
@@ -255,7 +189,7 @@ Regularly rotate your secrets:
 NEW_TOKEN=$(openssl rand -hex 32)
 
 # Update in .env
-sed -i "s/AUTH_TOKEN=.*/AUTH_TOKEN=$NEW_TOKEN/" .env
+sed -i "s/PORTAL__AUTH__AUTH_TOKEN=.*/PORTAL__AUTH__AUTH_TOKEN=$NEW_TOKEN/" .env
 
 # Restart Portal
 docker-compose restart
@@ -267,7 +201,7 @@ docker-compose restart
 
 ```bash
 # View environment variables in running container
-docker exec portal-sdk-daemon env | grep -E 'AUTH_TOKEN|NOSTR_KEY|NWC_URL|NOSTR_RELAYS'
+docker exec portal-sdk-daemon env | grep PORTAL__
 
 # Note: This will show your secrets! Only use for debugging
 ```
@@ -289,28 +223,28 @@ wscat -c ws://localhost:3000/ws
 
 ### "Authentication failed"
 
-**Cause**: AUTH_TOKEN mismatch between server and client
+**Cause**: Auth token mismatch between server and client
 
 **Solution**:
 ```bash
 # Verify token in container
-docker exec portal-sdk-daemon env | grep AUTH_TOKEN
+docker exec portal-sdk-daemon env | grep PORTAL__AUTH__AUTH_TOKEN
 
 # Check your SDK code uses the same token
 ```
 
-### "Invalid NOSTR_KEY format"
+### "Invalid Nostr key format"
 
 **Cause**: Key is not in hex format or is invalid
 
 **Solution**:
 ```bash
 # Key should be 64 hex characters
-echo $NOSTR_KEY | wc -c
+echo $PORTAL__NOSTR__PRIVATE_KEY | wc -c
 # Should output: 65 (64 chars + newline)
 
 # Verify it's valid hex
-echo $NOSTR_KEY | grep -E '^[0-9a-f]{64}$'
+echo $PORTAL__NOSTR__PRIVATE_KEY | grep -E '^[0-9a-f]{64}$'
 ```
 
 ### "Cannot connect to relays"
@@ -323,7 +257,7 @@ echo $NOSTR_KEY | grep -E '^[0-9a-f]{64}$'
 wscat -c wss://relay.damus.io
 
 # Verify relay URLs are correct (must start with wss://)
-echo $NOSTR_RELAYS | tr ',' '\n'
+echo $PORTAL__NOSTR__RELAYS | tr ',' '\n'
 ```
 
 ---

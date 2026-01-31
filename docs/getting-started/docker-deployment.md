@@ -11,8 +11,8 @@ The easiest way to run Portal is using the official Docker image:
 ```bash
 docker run --rm --name portal-sdk-daemon -d \
   -p 3000:3000 \
-  -e AUTH_TOKEN=your-secret-token \
-  -e NOSTR_KEY=your-nostr-private-key \
+  -e PORTAL__AUTH__AUTH_TOKEN=your-secret-token \
+  -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
   getportal/sdk-daemon:latest
 ```
 
@@ -30,10 +30,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - AUTH_TOKEN=${AUTH_TOKEN}
-      - NOSTR_KEY=${NOSTR_KEY}
-      - NWC_URL=${NWC_URL:-}
-      - NOSTR_RELAYS=${NOSTR_RELAYS:-}
+      - PORTAL__AUTH__AUTH_TOKEN=${PORTAL__AUTH__AUTH_TOKEN}
+      - PORTAL__NOSTR__PRIVATE_KEY=${PORTAL__NOSTR__PRIVATE_KEY}
+      - PORTAL__WALLET__LN_BACKEND=${PORTAL__WALLET__LN_BACKEND:-none}
+      - PORTAL__WALLET__NWC__URL=${PORTAL__WALLET__NWC__URL:-}
+      - PORTAL__NOSTR__RELAYS=${PORTAL__NOSTR__RELAYS:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
@@ -46,10 +47,11 @@ services:
 Create a `.env` file:
 
 ```bash
-AUTH_TOKEN=your-secret-token-here
-NOSTR_KEY=your-nostr-private-key-hex
-NWC_URL=nostr+walletconnect://...
-NOSTR_RELAYS=wss://relay.damus.io,wss://relay.snort.social
+PORTAL__AUTH__AUTH_TOKEN=your-secret-token-here
+PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex
+PORTAL__WALLET__LN_BACKEND=nwc
+PORTAL__WALLET__NWC__URL=nostr+walletconnect://...
+PORTAL__NOSTR__RELAYS=wss://relay.damus.io,wss://relay.snort.social
 ```
 
 Start the service:
@@ -64,16 +66,17 @@ docker-compose up -d
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `AUTH_TOKEN` | Secret token for API authentication | `random-secret-token-12345` |
-| `NOSTR_KEY` | Nostr private key in hex format | `5c0c523f52a5b6fad39ed2403092df8cebc36318b39383bca6c00808626fab7a` |
+| `PORTAL__AUTH__AUTH_TOKEN` | Secret token for API authentication | `random-secret-token-12345` |
+| `PORTAL__NOSTR__PRIVATE_KEY` | Nostr private key in hex format | `5c0c523f52a5b6fad39ed2403092df8cebc36318b39383bca6c00808626fab7a` |
 
 ### Optional Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `NWC_URL` | Nostr Wallet Connect URL for processing payments | None |
-| `NOSTR_SUBKEY_PROOF` | Proof for Nostr subkey delegation | None |
-| `NOSTR_RELAYS` | Comma-separated list of relay URLs | Common public relays |
+| `PORTAL__WALLET__LN_BACKEND` | Wallet backend: `none`, `nwc`, or `breez` | `none` |
+| `PORTAL__WALLET__NWC__URL` | Nostr Wallet Connect URL (when `ln_backend=nwc`) | None |
+| `PORTAL__NOSTR__SUBKEY_PROOF` | Proof for Nostr subkey delegation | None |
+| `PORTAL__NOSTR__RELAYS` | Comma-separated list of relay URLs | From config |
 
 ## Configuration Examples
 
@@ -84,8 +87,8 @@ For local development with minimal configuration:
 ```bash
 docker run --rm --name portal-dev \
   -p 3000:3000 \
-  -e AUTH_TOKEN=dev-token \
-  -e NOSTR_KEY=$(cat ~/.nostr/key.hex) \
+  -e PORTAL__AUTH__AUTH_TOKEN=dev-token \
+  -e PORTAL__NOSTR__PRIVATE_KEY=$(cat ~/.nostr/key.hex) \
   getportal/sdk-daemon:latest
 ```
 
@@ -98,10 +101,11 @@ docker run -d \
   --name portal-production \
   --restart unless-stopped \
   -p 3000:3000 \
-  -e AUTH_TOKEN=$(openssl rand -hex 32) \
-  -e NOSTR_KEY=$(cat /secure/nostr-key.hex) \
-  -e NWC_URL="nostr+walletconnect://..." \
-  -e NOSTR_RELAYS="wss://relay.damus.io,wss://relay.snort.social,wss://nos.lol" \
+  -e PORTAL__AUTH__AUTH_TOKEN=$(openssl rand -hex 32) \
+  -e PORTAL__NOSTR__PRIVATE_KEY=$(cat /secure/nostr-key.hex) \
+  -e PORTAL__WALLET__LN_BACKEND=nwc \
+  -e PORTAL__WALLET__NWC__URL="nostr+walletconnect://..." \
+  -e PORTAL__NOSTR__RELAYS="wss://relay.damus.io,wss://relay.snort.social,wss://nos.lol" \
   --health-cmd="curl -f http://localhost:3000/health || exit 1" \
   --health-interval=30s \
   --health-timeout=10s \
@@ -118,8 +122,8 @@ docker run -d \
   --name portal \
   -p 3000:3000 \
   -v portal-data:/app/data \
-  -e AUTH_TOKEN=your-token \
-  -e NOSTR_KEY=your-key \
+  -e PORTAL__AUTH__AUTH_TOKEN=your-token \
+  -e PORTAL__NOSTR__PRIVATE_KEY=your-key \
   getportal/sdk-daemon:latest
 ```
 
@@ -134,8 +138,8 @@ By default, Portal listens on all interfaces (0.0.0.0:3000). To expose it extern
 docker run -d \
   --name portal \
   -p 192.168.1.100:3000:3000 \
-  -e AUTH_TOKEN=your-token \
-  -e NOSTR_KEY=your-key \
+  -e PORTAL__AUTH__AUTH_TOKEN=your-token \
+  -e PORTAL__NOSTR__PRIVATE_KEY=your-key \
   getportal/sdk-daemon:latest
 ```
 
@@ -174,6 +178,56 @@ portal.yourdomain.com {
 
 ## Building Custom Images
 
+### Building from Dockerfile
+
+Build the image from the repository's `Dockerfile`:
+
+```bash
+# Clone the repository
+git clone https://github.com/PortalTechnologiesInc/lib.git
+cd lib
+
+# Build the image
+docker build -t portal-rest:latest .
+
+# Run it
+docker run -d -p 3000:3000 \
+  -e PORTAL__AUTH__AUTH_TOKEN=your-secret-token \
+  -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
+  portal-rest:latest
+```
+
+**With Docker Compose**, create `docker-compose.yml`:
+
+```yaml
+services:
+  portal:
+    build: .
+    image: portal-rest:latest
+    container_name: portal-sdk-daemon
+    ports:
+      - "3000:3000"
+    environment:
+      - PORTAL__AUTH__AUTH_TOKEN=${PORTAL__AUTH__AUTH_TOKEN}
+      - PORTAL__NOSTR__PRIVATE_KEY=${PORTAL__NOSTR__PRIVATE_KEY}
+      - PORTAL__WALLET__LN_BACKEND=${PORTAL__WALLET__LN_BACKEND:-none}
+      - PORTAL__WALLET__NWC__URL=${PORTAL__WALLET__NWC__URL:-}
+      - PORTAL__NOSTR__RELAYS=${PORTAL__NOSTR__RELAYS:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+```
+
+Create a `.env` file with your values, then:
+
+```bash
+docker compose up -d
+```
+
 ### Building from Source with Nix
 
 Portal uses Nix for reproducible builds:
@@ -181,7 +235,7 @@ Portal uses Nix for reproducible builds:
 ```bash
 # Clone the repository
 git clone https://github.com/PortalTechnologiesInc/lib.git
-cd portal
+cd lib
 
 # Build the Docker image
 nix build .#rest-docker
@@ -267,14 +321,14 @@ docker rm portal-sdk-daemon
 docker run -d \
   --name portal-sdk-daemon \
   -p 3000:3000 \
-  -e AUTH_TOKEN=your-token \
-  -e NOSTR_KEY=your-key \
+  -e PORTAL__AUTH__AUTH_TOKEN=your-token \
+  -e PORTAL__NOSTR__PRIVATE_KEY=your-key \
   getportal/sdk-daemon:latest
 ```
 
 ## Security Considerations
 
-1. **Never commit secrets**: Don't include `AUTH_TOKEN` or `NOSTR_KEY` in version control
+1. **Never commit secrets**: Don't include `PORTAL__AUTH__AUTH_TOKEN` or `PORTAL__NOSTR__PRIVATE_KEY` in version control
 2. **Use strong tokens**: Generate cryptographically secure random tokens
 3. **Restrict network access**: Use firewalls to limit who can connect
 4. **Enable HTTPS**: Use a reverse proxy with SSL/TLS
@@ -314,8 +368,8 @@ docker run -d \
   --user 1000:1000 \
   --name portal \
   -p 3000:3000 \
-  -e AUTH_TOKEN=token \
-  -e NOSTR_KEY=key \
+  -e PORTAL__AUTH__AUTH_TOKEN=token \
+  -e PORTAL__NOSTR__PRIVATE_KEY=key \
   getportal/sdk-daemon:latest
 ```
 
