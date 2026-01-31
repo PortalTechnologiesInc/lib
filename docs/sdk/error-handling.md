@@ -2,17 +2,77 @@
 
 Handle errors gracefully in your Portal integration.
 
-## Common Error Types
+## PortalSDKError and error codes
 
-### Connection Errors
+The SDK throws `PortalSDKError` with a `code` property so you can handle cases in code. Always check `err instanceof PortalSDKError` and switch on `err.code`:
+
+```typescript
+import { PortalSDKError } from 'portal-sdk';
+
+try {
+  await client.connect();
+  await client.authenticate(token);
+} catch (err) {
+  if (err instanceof PortalSDKError) {
+    switch (err.code) {
+      case 'AUTH_FAILED':
+        // Invalid or expired token
+        break;
+      case 'CONNECTION_TIMEOUT':
+      case 'CONNECTION_CLOSED':
+        // Connection issues — is Portal running? Check serverUrl.
+        break;
+      case 'NOT_CONNECTED':
+        // Call connect() before other methods
+        break;
+      case 'UNEXPECTED_RESPONSE':
+      case 'SERVER_ERROR':
+      case 'PARSE_ERROR':
+        // Protocol or server error; err.message and optional err.details
+        break;
+      default:
+        break;
+    }
+  }
+  throw err;
+}
+```
+
+### Error codes
+
+| Code | When |
+|------|------|
+| `NOT_CONNECTED` | A method was called before `connect()` or after disconnect. |
+| `CONNECTION_TIMEOUT` | Connection did not open within `connectTimeout`. |
+| `CONNECTION_CLOSED` | Socket closed unexpectedly. |
+| `AUTH_FAILED` | Invalid or rejected auth token. |
+| `UNEXPECTED_RESPONSE` | Server sent an unexpected response type. |
+| `SERVER_ERROR` | Server returned an error (message in `err.message`). |
+| `PARSE_ERROR` | Failed to parse a message; optional `err.details`. |
+
+### Background / connection events
+
+Listen for connection and background errors via `on`:
+
+```typescript
+client.on({
+  onConnected: () => console.log('Connected'),
+  onDisconnected: () => console.log('Disconnected'),
+  onError: (e) => console.error('Portal error:', e),
+});
+```
+
+## Common error patterns
+
+### Connection errors
 
 ```typescript
 try {
   await client.connect();
 } catch (error) {
-  if (error.message.includes('timeout')) {
+  if (error instanceof PortalSDKError && error.code === 'CONNECTION_TIMEOUT') {
     console.error('Connection timeout - is Portal daemon running?');
-  } else if (error.message.includes('ECONNREFUSED')) {
+  } else if (error.message?.includes('ECONNREFUSED')) {
     console.error('Connection refused - check serverUrl');
   } else {
     console.error('Connection error:', error);
@@ -20,13 +80,13 @@ try {
 }
 ```
 
-### Authentication Errors
+### Authentication errors
 
 ```typescript
 try {
   await client.authenticate('token');
 } catch (error) {
-  if (error.message.includes('Authentication failed')) {
+  if (error instanceof PortalSDKError && error.code === 'AUTH_FAILED') {
     console.error('Invalid auth token');
   } else {
     console.error('Auth error:', error);
@@ -34,7 +94,7 @@ try {
 }
 ```
 
-### Payment Errors
+### Payment errors
 
 ```typescript
 client.requestSinglePayment(userPubkey, [], request, (status) => {

@@ -19,6 +19,7 @@
 * [Basic Usage](sdk/basic-usage.md)
 * [Configuration](sdk/configuration.md)
 * [Error Handling](sdk/error-handling.md)
+* [API Reference](sdk/api-reference.md)
 
 # Guides
 

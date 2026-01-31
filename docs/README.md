@@ -1,5 +1,7 @@
 # Welcome to Portal
 
+**Published docs:** [https://portaltechnologiesinc.github.io/lib/](https://portaltechnologiesinc.github.io/lib/)
+
 Portal is a **Nostr-based authentication and payment SDK** allowing applications to authenticate users and process payments through Nostr and Lightning Network.
 
 You can integrate via the **official SDKs** (TypeScript, Java) or run the Portal API yourself and use the protocol directly.
@@ -15,7 +17,7 @@ Portal uses [Nostr](introduction/what-is-nostr.md) and the [Lightning Network](i
 
 ## How to use Portal
 
-1. **Integrate with an SDK** — Use the [TypeScript SDK](sdk/installation.md) or [Java client](https://github.com/PortalTechnologiesInc/jvm-client): connect to a Portal endpoint with an auth token and call the API.
+1. **Integrate with an SDK** — Use the [TypeScript SDK](sdk/installation.md) or [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk): connect to a Portal endpoint with an auth token and call the API.
 2. **Or run the API** — Self-host or develop locally: run the Portal API (Docker or [build from source](getting-started/building-from-source.md)); then use an SDK or connect to the WebSocket API.
 3. **Auth, payments, tickets** — Generate auth URLs (users approve with Nostr wallet); request single or recurring Lightning payments; issue Cashu tokens.
 

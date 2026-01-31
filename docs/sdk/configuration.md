@@ -33,6 +33,17 @@ Connection timeout in milliseconds. Default: 10000 (10 seconds)
 connectTimeout: 5000  // 5 seconds
 ```
 
+### debug (optional)
+
+When `true`, the SDK logs requests and responses to the console (via `console.debug`). Useful for development. Default: `false`.
+
+```typescript
+const client = new PortalSDK({
+  serverUrl: 'ws://localhost:3000/ws',
+  debug: true
+});
+```
+
 ## Environment-Based Configuration
 
 ```typescript

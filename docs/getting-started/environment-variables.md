@@ -109,6 +109,28 @@ NOSTR_RELAYS=wss://relay.damus.io,wss://relay.snort.social,wss://nos.lol
 - Use relays that are geographically close to your users
 - Consider using paid relays for production
 
+## Config file and PORTAL__* overrides
+
+When running the Portal API binary (e.g. `portal-rest`), you can use a config file instead of or in addition to environment variables.
+
+- **Config file:** `~/.portal-rest/config.toml` (created with defaults if missing). Copy from `example.config.toml` in the `portal-rest` crate.
+- **Env overrides:** Any setting can be overridden with `PORTAL__<SECTION>__<KEY>=value` (double underscores). Section and key match the TOML structure.
+
+| Config key | Env example | Description |
+|------------|-------------|-------------|
+| `info.listen_port` | `PORTAL__INFO__LISTEN_PORT` | Port the API listens on (default 3000). |
+| `auth.auth_token` | `PORTAL__AUTH__AUTH_TOKEN` | API auth token (same as `AUTH_TOKEN` when using Docker). |
+| `nostr.private_key` | `PORTAL__NOSTR__PRIVATE_KEY` | Nostr key in hex (same as `NOSTR_KEY`). |
+| `nostr.relays` | `PORTAL__NOSTR__RELAYS` | Comma-separated relay URLs. |
+| `wallet.ln_backend` | `PORTAL__WALLET__LN_BACKEND` | `none`, `nwc`, or `breez`. |
+| `wallet.nwc.url` | `PORTAL__WALLET__NWC__URL` | Nostr Wallet Connect URL (same as `NWC_URL`). |
+
+**Run from config:**
+
+```bash
+portal-rest   # uses ~/.portal-rest/config.toml
+```
+
 ## Configuration Examples
 
 ### Minimal Development Setup
