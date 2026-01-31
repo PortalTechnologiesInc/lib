@@ -1,102 +1,51 @@
 # Welcome to Portal
 
-Portal is a comprehensive toolkit for businesses to **authenticate**, **get paid**, and **issue tickets** to their customers without any intermediaries while maintaining full privacy.
+Portal is a **Nostr-based authentication and payment SDK** allowing applications to authenticate users and process payments through Nostr and Lightning Network.
+
+You can integrate via the **official SDKs** (TypeScript, Java) or run the Portal API yourself and use the protocol directly.
 
 ## What is Portal?
 
-Portal leverages the power of [Nostr](https://github.com/nostr-protocol/nostr) protocol and the [Lightning Network](https://lightning.network/) to provide:
+Portal uses [Nostr](introduction/what-is-nostr.md) and the [Lightning Network](introduction/what-is-lightning.md) to provide:
 
-- **Decentralized Authentication**: Secure user authentication without relying on centralized identity providers
-- **Lightning Payments**: Process instant payments using Bitcoin's Lightning Network
-- **Privacy-First**: No third parties, no data collection, full user privacy
-- **No Intermediaries**: Direct peer-to-peer interactions between businesses and customers
-- **Ticket Issuance**: Issue Cashu ecash tokens as tickets and vouchers for authorized users
+- **Decentralized authentication** — Users sign in with Nostr keys; no passwords or email.
+- **Lightning payments** — Single and recurring payments, real-time status.
+- **Privacy-first** — No third parties, no data collection; direct peer-to-peer where possible.
+- **Tickets & vouchers** — Issue Cashu ecash tokens to authenticated users.
 
-## Key Features
+## How to use Portal
 
-### 🔐 Authentication
-- Nostr-based user authentication using cryptographic keys
-- Support for both main keys and delegated subkeys
-- Secure challenge-response protocol
-- No passwords, no email verification needed
+1. **Integrate with an SDK** — Use the [TypeScript SDK](sdk/installation.md) or [Java client](https://github.com/PortalTechnologiesInc/jvm-client): connect to a Portal endpoint with an auth token and call the API.
+2. **Or run the API** — Self-host or develop locally: run the Portal API (Docker or [build from source](getting-started/building-from-source.md)); then use an SDK or connect to the WebSocket API.
+3. **Auth, payments, tickets** — Generate auth URLs (users approve with Nostr wallet); request single or recurring Lightning payments; issue Cashu tokens.
 
-### 💳 Payment Processing
-- **Single Payments**: One-time Lightning Network payments
-- **Recurring Payments**: Subscription-based payments with customizable schedules
-- **Real-time Status**: Live payment status updates via WebSocket
-- **Currency Support**: Millisats with exchange rate integration
-- **Cashu Support**: Issue and accept Cashu ecash tokens
+## Key features
 
-### 🎫 Ticket Issuance
-- Issue Cashu tokens (ecash) as tickets to authenticated users
-- Request and send Cashu tokens peer-to-peer
-- Mint and burn tokens with your own mint
-- Perfect for event tickets, access tokens, and vouchers
+- **Authentication** — Nostr key handshake, main keys and subkeys, no passwords.
+- **Payments** — Single and recurring Lightning; Cashu mint/burn/request/send.
+- **Profiles** — Fetch and set Nostr profiles; NIP-05.
+- **Sessions** — Issue and verify JWTs for API access.
+- **SDKs** — TypeScript/JavaScript and JVM; React Native bindings.
 
-### 👤 Profile Management
-- Fetch user profiles from Nostr
-- Update and publish service profiles
-- NIP-05 identity verification support
+## Getting started
 
-### 🔑 Session Management
-- JWT token issuance and verification for API authentication
-- Session tokens issued by user's wallet app
-- Businesses verify JWT tokens without needing to issue them
-- Perfect for stateless API authentication
+- **[Quick Start](getting-started/quick-start.md)** — Get going with the TypeScript SDK or run Portal with Docker.
+- **[TypeScript SDK](sdk/installation.md)** — Install, [basic usage](sdk/basic-usage.md), [configuration](sdk/configuration.md), [error handling](sdk/error-handling.md).
+- **[Docker](getting-started/docker-deployment.md)** — Run the Portal API with Docker.
+- **[Building from source](getting-started/building-from-source.md)** — Build and run the Rust project.
+- **[Guides](guides/authentication.md)** — Auth flow, payments, profiles, Cashu, JWT, relays.
 
-### 🌐 Multi-Platform Support
-- REST API with WebSocket support
-- TypeScript/JavaScript SDK
-- JVM/Kotlin client
-- React Native bindings
-- Docker deployment ready
+## Docs overview
 
-## Use Cases
+| Section | For |
+|--------|-----|
+| [Getting Started](getting-started/quick-start.md) | Quick Start, Docker, env vars, building from source. |
+| [TypeScript SDK](sdk/installation.md) | SDK install, usage, config, errors. |
+| [Guides](guides/authentication.md) | Auth, payments, profiles, Cashu, JWT, relays. |
+| [Resources](resources/faq.md) | FAQ, glossary, troubleshooting, contributing. |
 
-Portal is perfect for:
+## Open source
 
-- **SaaS Applications**: Authenticate users and process subscriptions
-- **Content Creators**: Monetize content with Lightning micropayments
-- **Online Services**: Provide privacy-respecting authentication
-- **Event Ticketing**: Issue and verify Cashu token-based tickets
-- **Membership Sites**: Manage recurring memberships
-- **API Services**: Verify JWT tokens issued by user wallets for API access
+Portal is open source (MIT where noted). Contributions are welcome.
 
-## How It Works
-
-1. **Deploy the Portal SDK Daemon**: Run the REST API server using Docker
-2. **Integrate the TypeScript SDK**: Connect your application to Portal
-3. **Authenticate Users**: Generate authentication URLs for users to connect
-4. **Process Payments**: Request single or recurring payments
-5. **Issue Tickets**: Generate and send Cashu tokens as tickets to users
-
-## Architecture
-
-Portal consists of several components:
-
-- **SDK Core**: Rust-based core implementation handling Nostr protocol and Lightning payments
-- **REST API**: WebSocket-based API server for language-agnostic integration
-- **TypeScript Client**: High-level SDK for JavaScript/TypeScript applications
-- **Nostr Relays**: Distributed network for message passing
-- **Lightning Network**: Bitcoin Layer 2 for instant payments
-
-## Getting Started
-
-Ready to integrate Portal into your application? Start with our [Quick Start Guide](getting-started/quick-start.md) or jump directly to:
-
-- [Deploying with Docker](getting-started/docker-deployment.md)
-- [TypeScript SDK Setup](sdk/installation.md)
-- [Authentication Flow](guides/authentication.md)
-- [Static Tokens & Physical Auth](guides/static-tokens.md)
-- [Payment Processing](guides/single-payments.md)
-- [Cashu Tokens](guides/cashu-tokens.md)
-- [Running Your Own Mint](guides/running-a-mint.md)
-
-## Open Source
-
-Portal is open source and available under the MIT License (except for the app library). Contributions are welcome!
-
----
-
-**Next Steps**: Head over to the [Quick Start Guide](getting-started/quick-start.md) to deploy your first Portal instance.
-
+**Next:** [Quick Start](getting-started/quick-start.md)

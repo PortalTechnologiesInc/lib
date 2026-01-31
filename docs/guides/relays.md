@@ -85,5 +85,5 @@ class RelayManager {
 
 ---
 
-**Next**: [API Reference](../api/typescript-sdk.md)
+**Next**: [TypeScript SDK](../sdk/installation.md)
 

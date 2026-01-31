@@ -1,187 +1,163 @@
-# Portal REST API
+# Portal API
 
-This crate provides a RESTful API for the Portal SDK, allowing it to be used from any programming language via a local REST API server.
+This crate is the **Portal API** (REST + WebSocket): the server that exposes that functionality. Use it via the **official SDKs** (TypeScript, Java) or connect to the WebSocket API directly.
 
-## Getting Started
+## Use the SDK
 
-- [Configuration](#configuration)
-- [Start programming](#start-programming)
-- [API Endpoints](#api-endpoints)
+Install the SDK for your language and connect to a Portal endpoint with an auth token.
 
-
-## Configuration
-
-> **Important**: The rest daemon will create the working directory and configuration file automatically if they do not exist. You may create or customize them manually before starting the daemon if you wish.
-
-### Setup Steps
-
-1. **Create working directory**:
-   ```bash
-   mkdir -p ~/.portal-rest
-   ```
-
-2. **Create configuration file**:
-   ```bash
-   # Copy and customize the example config
-   cp example.config.toml ~/.portal-rest/config.toml
-   # Edit ~/.portal-rest/config.toml with your settings
-   ```
-
-3. **Start the rest daemon**:
-   ```bash
-   portal-rest  # Uses ~/.portal-rest/config.toml automatically
-   ```
-
-### Configuration File Locations (in order of precedence)
-
-1. **Default location**: `~/.portal-rest/config.toml`
-2. **Environment variables**: All config options can be set via environment variables
-
-
-### Environment Variables
-
-All configuration options can be overridden via environment variables. The format is:
-
-```
-PORTAL__<SECTION>__<KEY>=value
-```
-
-Use double underscores (`__`) to separate nested keys.
-
-| Config Key | Environment Variable | Description |
-|------------|---------------------|-------------|
-| `info.listen_port` | `PORTAL__INFO__LISTEN_PORT` | The port on which the REST API will listen |
-| `nostr.private_key` | `PORTAL__NOSTR__PRIVATE_KEY` | Nostr private key in hex format |
-| `nostr.relays` | `PORTAL__NOSTR__RELAYS` | Comma-separated list of relay URLs |
-| `nostr.subkey_proof` | `PORTAL__NOSTR__SUBKEY_PROOF` | Nostr subkey proof (optional) |
-| `auth.auth_token` | `PORTAL__AUTH__AUTH_TOKEN` | API authentication token |
-| `wallet.ln_backend` | `PORTAL__WALLET__LN_BACKEND` | Wallet type: `none`, `nwc`, or `breez` |
-| `wallet.nwc.url` | `PORTAL__WALLET__NWC__URL` | Nostr Wallet Connect URL |
-| `wallet.breez.api_key` | `PORTAL__WALLET__BREEZ__API_KEY` | Breez API key |
-| `wallet.breez.storage_dir` | `PORTAL__WALLET__BREEZ__STORAGE_DIR` | Breez storage directory |
-| `wallet.breez.mnemonic` | `PORTAL__WALLET__BREEZ__MNEMONIC` | Breez mnemonic |
-
-**Example:**
+### TypeScript / JavaScript
 
 ```bash
-PORTAL__WALLET__LN_BACKEND=nwc PORTAL__WALLET__NWC__URL="nostr+walletconnect://..." ./portal-rest
+npm install portal-sdk
 ```
 
-### Building and Running
+```typescript
+import { PortalSDK } from 'portal-sdk';
 
+const client = new PortalSDK({
+  serverUrl: process.env.PORTAL_URL ?? 'ws://localhost:3000/ws',
+});
+
+await client.connect();
+await client.authenticate(process.env.PORTAL_AUTH_TOKEN!);
+
+// e.g. generate auth URL for a user
+const url = await client.newKeyHandshakeUrl((mainKey) => {
+  console.log('User authenticated:', mainKey);
+});
 ```
+
+**Full SDK docs:** [TypeScript SDK](clients/ts/README.md) — quick start, workflows, API reference, error handling.
+
+### Java
+
+[Java client](https://github.com/PortalTechnologiesInc/jvm-client) — use the same pattern: connect to a Portal endpoint and authenticate with a token.
+
+---
+
+## Run the API
+
+For self-hosting or local development: run the Portal API (Docker or from source). The SDK connects to it via the API URL and your auth token.
+
+### Quick run with Docker
+
+```bash
+docker run -d -p 3000:3000 \
+  -e AUTH_TOKEN=your-secret-token \
+  -e NOSTR_KEY=your-nostr-private-key-hex \
+  getportal/sdk-daemon:latest
+```
+
+Then use `ws://localhost:3000/ws` as `serverUrl` and `your-secret-token` in `client.authenticate(...)`.
+
+**Verify:** `curl http://localhost:3000/health` → `OK`
+
+### Configuration (file / env)
+
+Portal creates `~/.portal-rest` and a default config if missing. You can customize:
+
+- **Config file:** `~/.portal-rest/config.toml` (copy from `example.config.toml` in this crate).
+- **Environment:** `PORTAL__<SECTION>__<KEY>=value` (e.g. `PORTAL__AUTH__AUTH_TOKEN=...`, `PORTAL__WALLET__LN_BACKEND=nwc`).
+
+| Config key | Env example | Description |
+|------------|-------------|-------------|
+| `info.listen_port` | `PORTAL__INFO__LISTEN_PORT` | Port (default 3000) |
+| `auth.auth_token` | `PORTAL__AUTH__AUTH_TOKEN` | API auth token |
+| `nostr.private_key` | `PORTAL__NOSTR__PRIVATE_KEY` | Nostr key (hex) |
+| `nostr.relays` | `PORTAL__NOSTR__RELAYS` | Relay URLs (comma-separated) |
+| `wallet.ln_backend` | `PORTAL__WALLET__LN_BACKEND` | `none`, `nwc`, or `breez` |
+| `wallet.nwc.url` | `PORTAL__WALLET__NWC__URL` | Nostr Wallet Connect URL |
+
+**Run from config:**
+
+```bash
+portal-rest   # uses ~/.portal-rest/config.toml
+```
+
+### Build from source
+
+```bash
 cargo build --release
-./target/release/rest
+./target/release/portal-rest   # or binary name from this crate
 ```
 
-The server will start on `127.0.0.1:3000`.
+Server listens on `127.0.0.1:3000` by default.
 
-### Build the Docker Image with Nix
-
-To build the Docker image for your architecture using Nix:
+### Docker image (Nix build)
 
 ```bash
 nix build .#rest-docker
-```
-
-This will produce a Docker image tarball in `result/`. You can load it into Docker with:
-
-```bash
 docker load < result
 ```
 
-### Multi-architecture (merged) manifest
+Multi-arch (amd64/arm64): build on each arch, tag and push, then create a manifest; see repo CI or docs for exact steps.
 
-To create and push a multi-architecture manifest (for both amd64 and arm64):
+---
 
-1. Build and load both images on their respective architectures (or use emulation):
-   - On amd64: `nix build .#rest-docker` (tag as `getportal/sdk-daemon:amd64`)
-   - On arm64: `nix build .#rest-docker` (tag as `getportal/sdk-daemon:arm64`)
-2. Push both images to Docker Hub:
+## API reference (advanced)
 
-```bash
-docker push getportal/sdk-daemon:amd64
-docker push getportal/sdk-daemon:arm64
-```
+If you’re **not** using an SDK (e.g. another language or custom client), you can talk to Portal over the WebSocket API.
 
-3. Create and push the merged manifest:
+- **Endpoint:** `GET /ws` (WebSocket).
+- **Auth:** First message must be an `Auth` command with your token.
+- **Protocol:** JSON commands with an `id`, `cmd`, and optional `params`; responses match on `id`.
 
-```bash
-docker manifest create getportal/sdk-daemon:latest \
-  --amend getportal/sdk-daemon:amd64 \
-  --amend getportal/sdk-daemon:arm64
-docker manifest push getportal/sdk-daemon:latest
-```
+### Example commands (overview)
 
-## Start programming
+| Command | Purpose |
+|---------|--------|
+| `Auth` | Authenticate with token (required first). |
+| `NewKeyHandshakeUrl` | Get URL for user key handshake. |
+| `AuthenticateKey` | Authenticate a user key. |
+| `RequestSinglePayment` / `RequestRecurringPayment` | Payments. |
+| `FetchProfile` / `SetProfile` | Profiles. |
+| `IssueJwt` / `VerifyJwt` | JWT. |
+| `AddRelay` / `RemoveRelay` | Relays. |
 
-Since this is a REST API, you can use it from any programming language that supports websocket connections.
+**REST:** `GET /health` → `OK` (health check).
 
-But best is to use the official SDK for your programming language.
+Full request/response shapes and more commands are in the [WebSocket API section](#api-endpoints) below. For day-to-day use, the [TypeScript SDK](clients/ts/README.md) (and Java client) hide these details.
 
-Currently supported SDKs:
-- [TypeScript](clients/ts/README.md)
-- [Java](https://github.com/PortalTechnologiesInc/jvm-client)
-
+---
 
 ## API Endpoints
 
 ### Authentication
 
-All REST API endpoints require a Bearer token for authentication:
+All API usage is authenticated. With the WebSocket API, the first command must be:
 
+```json
+{ "id": "<unique-id>", "cmd": "Auth", "params": { "token": "<AUTH_TOKEN>" } }
 ```
-Authorization: Bearer <AUTH_TOKEN>
-```
 
-### REST Endpoints
+### REST
 
-- `GET /health`: Health check endpoint, returns "OK" when the server is running.
-- `GET /ws`: WebSocket endpoint for real-time operations.
+- `GET /health` — Health check, returns `OK`.
+- `GET /ws` — WebSocket upgrade for real-time API.
 
-### WebSocket Commands
+### WebSocket protocol
 
-The WebSocket API is a command-based system: a command is sent, and a response is received.
+- Send JSON messages: `{ "id": "...", "cmd": "<Command>", "params": { ... } }`.
+- Receive JSON: `{ "type": "success", "id": "...", "data": ... }` or `{ "type": "error", "id": "...", "message": "..." }`.
+- Notifications (e.g. payment status) use `type: "notification"` and the same `id` as the stream.
 
-Each command must be assigned a unique ID, generated on the client side, which is used to match the response to the corresponding command.
-
-The first command **must** be an authentication command.
-
-
-### Available Commands
+### Available commands (reference)
 
 #### `Auth`
 
-Authentication command.
-
-**Request:**
 ```json
-{
-  "id": "unique-id",
-  "cmd": "Auth",
-  "params": {
-    "token": "<AUTH_TOKEN>"
-  }
-}
+{ "id": "unique-id", "cmd": "Auth", "params": { "token": "<AUTH_TOKEN>" } }
 ```
 
 #### `NewKeyHandshakeUrl`
 
-Generate a new authentication initialization URL.
-
-**Request:**
 ```json
-{
-  "id": "unique-id",
-  "cmd": "NewKeyHandshakeUrl"
-}
+{ "id": "unique-id", "cmd": "NewKeyHandshakeUrl" }
 ```
 
 #### `AuthenticateKey`
 
-Authenticate a key.
-
-**Request:**
 ```json
 {
   "id": "unique-id",
@@ -195,163 +171,71 @@ Authenticate a key.
 
 #### `RequestRecurringPayment`
 
-Request a recurring payment.
-
-**Request:**
 ```json
 {
   "id": "unique-id",
   "cmd": "RequestRecurringPayment",
   "params": {
     "main_key": "hex_encoded_pub_key",
-    "subkeys": ["hex_encoded_pub_key", ...],
-    "payment_request": {
-      // Recurring payment request details
-    }
+    "subkeys": [],
+    "payment_request": { /* RecurringPaymentRequestContent */ }
   }
 }
 ```
 
 #### `RequestSinglePayment`
 
-Request a single payment.
-
-**Request:**
 ```json
 {
   "id": "unique-id",
   "cmd": "RequestSinglePayment",
   "params": {
     "main_key": "hex_encoded_pub_key",
-    "subkeys": ["hex_encoded_pub_key", ...],
-    "payment_request": {
-      // Single payment request details
-    }
+    "subkeys": [],
+    "payment_request": { /* SinglePaymentRequestContent */ }
   }
 }
 ```
 
 #### `FetchProfile`
 
-Fetch a profile for a public key.
-
-**Request:**
 ```json
-{
-  "id": "unique-id",
-  "cmd": "FetchProfile",
-  "params": {
-    "main_key": "hex_encoded_pub_key"
-  }
-}
-```
-
-#### `CloseSubscription`
-
-Close a recurring payment for a recipient.
-
-**Request:**
-```json
-{
-  "cmd": "CloseSubscription",
-  "params": {
-    "recipient_key": "hex_encoded_pub_key",
-    "subscription_id": ""
-  }
-}
+{ "id": "unique-id", "cmd": "FetchProfile", "params": { "main_key": "hex_encoded_pub_key" } }
 ```
 
 #### `IssueJwt`
 
-Issue a JWT token for a given public key.
-
-**Request:**
 ```json
 {
   "id": "unique-id",
   "cmd": "IssueJwt",
-  "params": {
-    "pubkey": "hex_encoded_pub_key",
-    "expires_at": 1234567890
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "type": "success",
-  "id": "unique-id",
-  "data": {
-    "type": "issue_jwt",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
+  "params": { "target_key": "hex_encoded_pub_key", "duration_hours": 24 }
 }
 ```
 
 #### `VerifyJwt`
 
-Verify a JWT token and return the claims.
-
-**Request:**
 ```json
-{
-  "id": "unique-id",
-  "cmd": "VerifyJwt",
-  "params": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
-}
+{ "id": "unique-id", "cmd": "VerifyJwt", "params": { "pubkey": "...", "token": "..." } }
 ```
 
-**Response:**
-```json
-{
-  "type": "success",
-  "id": "unique-id",
-  "data": {
-    "type": "verify_jwt",
-    "pubkey": "02eec5685e141a8fc6ee91e3aad0556bdb4f7b8f3c8c8c8c8c8c8c8c8c8c8c8c8",
-  }
-}
-```
+Other commands (`SetProfile`, `CloseRecurringPayment`, `RequestInvoice`, Cashu, relays, etc.) follow the same pattern; see TypeScript SDK types or server source for full shapes.
 
-## Example Integration (JavaScript)
+### Raw WebSocket example (no SDK)
 
 ```javascript
-// Connect to WebSocket
 const ws = new WebSocket('ws://localhost:3000/ws');
 
-// Send authentication when connection opens
 ws.onopen = () => {
-  ws.send(JSON.stringify({
-    cmd: 'Auth',
-    params: {
-      token: 'your-auth-token'
-    }
-  }));
+  ws.send(JSON.stringify({ id: '1', cmd: 'Auth', params: { token: 'your-auth-token' } }));
 };
 
-// Handle messages
 ws.onmessage = (event) => {
-  const response = JSON.parse(event.data);
-  console.log('Received:', response);
-  
-  if (response.type === 'success' && response.data.message === 'Authenticated successfully') {
-    // Now authenticated, can send commands
-    ws.send(JSON.stringify({
-      cmd: 'NewKeyHandshakeUrl'
-    }));
+  const msg = JSON.parse(event.data);
+  if (msg.type === 'success' && msg.data?.type === 'auth_success') {
+    // Authenticated; send other commands with new ids
   }
 };
+```
 
-// Handle errors
-ws.onerror = (error) => {
-  console.error('WebSocket error:', error);
-};
-
-// Handle disconnection
-ws.onclose = () => {
-  console.log('WebSocket connection closed');
-};
-``` 
+For production apps, use the [TypeScript SDK](clients/ts/README.md) or [Java client](https://github.com/PortalTechnologiesInc/jvm-client) instead of raw WebSocket.

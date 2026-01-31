@@ -26,7 +26,7 @@ pnpm add portal-sdk
 
 - **Node.js**: 18.x or higher
 - **TypeScript** (optional): 4.5 or higher
-- **Portal SDK Daemon**: Running instance (see [Docker Deployment](../getting-started/docker-deployment.md))
+- **Portal endpoint and auth token**: From a hosted Portal or from [running Portal yourself](../getting-started/docker-deployment.md) (e.g. Docker)
 
 ## Verify Installation
 
@@ -328,13 +328,13 @@ npm install --save-dev typescript
 # Check your tsconfig.json includes the right settings
 ```
 
-### WebSocket Connection Issues
+### Connection Issues
 
 ```bash
-# Verify Portal daemon is running
+# Verify Portal is running (if self-hosting)
 curl http://localhost:3000/health
 
-# Check WebSocket URL is correct (ws:// not wss:// for local dev)
+# Check endpoint URL (ws:// for local, wss:// for hosted)
 ```
 
 ### Module Resolution Errors
