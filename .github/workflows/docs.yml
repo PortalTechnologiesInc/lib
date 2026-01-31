@@ -1,5 +1,4 @@
 # Build and deploy docs (mdBook) to GitHub Pages when docs/ changes.
-# Enable in repo: Settings → Pages → Build and deployment → Source: "GitHub Actions".
 
 name: Docs (GitHub Pages)
 

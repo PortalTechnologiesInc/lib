@@ -69,7 +69,7 @@ cargo build --package portal-cli --release
 cargo build --package portal-rates --release
 ```
 
-### Build the TypeScript SDK
+### Build the JavaScript/TypeScript client
 
 ```bash
 cd crates/portal-rest/clients/ts
@@ -77,7 +77,7 @@ cd crates/portal-rest/clients/ts
 # Install dependencies
 npm install
 
-# Build the TypeScript SDK
+# Build the client
 npm run build
 
 # Run tests
@@ -176,7 +176,7 @@ cargo test -- --nocapture
 cargo test test_name
 ```
 
-## Building TypeScript Client
+## Building the JavaScript/TypeScript client
 
 ### Development Build
 

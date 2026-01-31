@@ -1,8 +1,13 @@
 # SDK Configuration
 
-Configure the Portal TypeScript SDK for your specific needs.
+Configure the Portal SDK for your specific needs.
 
 ## Basic Configuration
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ```typescript
 const client = new PortalSDK({
@@ -11,7 +16,23 @@ const client = new PortalSDK({
 });
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java basic configuration will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Configuration Options
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ### serverUrl (required)
 
@@ -44,7 +65,23 @@ const client = new PortalSDK({
 });
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java configuration options will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Environment-Based Configuration
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ```typescript
 const config = {
@@ -55,7 +92,23 @@ const config = {
 const client = new PortalSDK(config);
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java environment-based config will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Event Configuration
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 Set up event listeners during initialization:
 
@@ -70,6 +123,17 @@ client.on({
 
 await client.connect();
 ```
+
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java event configuration will be added here.
+
+</section>
+
+</custom-tabs>
 
 ---
 

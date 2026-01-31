@@ -13,7 +13,7 @@
 * [Environment Variables](getting-started/environment-variables.md)
 * [Building from Source](getting-started/building-from-source.md)
 
-# TypeScript SDK
+# SDK
 
 * [Installation](sdk/installation.md)
 * [Basic Usage](sdk/basic-usage.md)

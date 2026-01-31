@@ -90,7 +90,7 @@ docs/
 ├── .gitbook.yaml            # GitBook.com configuration
 ├── introduction/            # Concept explanations
 ├── getting-started/         # Setup guides
-├── sdk/                     # TypeScript SDK docs
+├── sdk/                     # SDK docs
 ├── guides/                  # Feature guides
 ├── api/                     # API reference
 └── resources/               # FAQ, glossary, etc.
@@ -109,7 +109,7 @@ docs/
 - Use clear, concise language
 - Include code examples for all features
 - Start with basic examples, then show advanced usage
-- Use TypeScript for code examples
+- Use JavaScript/TypeScript for code examples (Java where available)
 - Include error handling in examples
 - Add "Next Steps" links at the end of guides
 - Keep examples self-contained and runnable

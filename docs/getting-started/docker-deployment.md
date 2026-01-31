@@ -377,6 +377,6 @@ docker run -d \
 
 **Next Steps**: 
 - [Configure environment variables](environment-variables.md)
-- [Install the TypeScript SDK](../sdk/installation.md)
+- [Install the SDK](../sdk/installation.md)
 - [Build from source](building-from-source.md)
 

@@ -17,7 +17,7 @@ Portal uses [Nostr](introduction/what-is-nostr.md) and the [Lightning Network](i
 
 ## How to use Portal
 
-1. **Integrate with an SDK** — Use the [TypeScript SDK](sdk/installation.md) or [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk): connect to a Portal endpoint with an auth token and call the API.
+1. **Integrate with an SDK** — Use the [JavaScript SDK](sdk/installation.md) or [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk): connect to a Portal endpoint with an auth token and call the API.
 2. **Or run the API** — Self-host or develop locally: run the Portal API (Docker or [build from source](getting-started/building-from-source.md)); then use an SDK or connect to the WebSocket API.
 3. **Auth, payments, tickets** — Generate auth URLs (users approve with Nostr wallet); request single or recurring Lightning payments; issue Cashu tokens.
 
@@ -31,8 +31,8 @@ Portal uses [Nostr](introduction/what-is-nostr.md) and the [Lightning Network](i
 
 ## Getting started
 
-- **[Quick Start](getting-started/quick-start.md)** — Get going with the TypeScript SDK or run Portal with Docker.
-- **[TypeScript SDK](sdk/installation.md)** — Install, [basic usage](sdk/basic-usage.md), [configuration](sdk/configuration.md), [error handling](sdk/error-handling.md).
+- **[Quick Start](getting-started/quick-start.md)** — Get going with the SDK (JavaScript or Java) or run Portal with Docker.
+- **[SDK](sdk/installation.md)** — Install, [basic usage](sdk/basic-usage.md), [configuration](sdk/configuration.md), [error handling](sdk/error-handling.md).
 - **[Docker](getting-started/docker-deployment.md)** — Run the Portal API with Docker.
 - **[Building from source](getting-started/building-from-source.md)** — Build and run the Rust project.
 - **[Guides](guides/authentication.md)** — Auth flow, payments, profiles, Cashu, JWT, relays.
@@ -42,7 +42,7 @@ Portal uses [Nostr](introduction/what-is-nostr.md) and the [Lightning Network](i
 | Section | For |
 |--------|-----|
 | [Getting Started](getting-started/quick-start.md) | Quick Start, Docker, env vars, building from source. |
-| [TypeScript SDK](sdk/installation.md) | SDK install, usage, config, errors. |
+| [SDK](sdk/installation.md) | SDK install, usage, config, errors. |
 | [Guides](guides/authentication.md) | Auth, payments, profiles, Cashu, JWT, relays. |
 | [Resources](resources/faq.md) | FAQ, glossary, troubleshooting, contributing. |
 

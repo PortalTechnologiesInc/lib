@@ -1,8 +1,13 @@
 # Basic Usage
 
-Learn the fundamentals of using the Portal TypeScript SDK.
+Learn the fundamentals of using the Portal SDK.
 
 ## Quick Example
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 Here's a complete example showing the basic workflow:
 
@@ -37,7 +42,23 @@ async function main() {
 main().catch(console.error);
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java quick example will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Core Concepts
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ### 1. Client Initialization
 
@@ -107,7 +128,23 @@ try {
 
 **Important**: You must authenticate before calling any other API methods.
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java client init, connection, and auth will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Basic Workflows
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ### User Authentication Flow
 
@@ -195,7 +232,23 @@ if (profile) {
 }
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java workflows (auth, payments, profile) will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Working with Types
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ### Timestamps
 
@@ -246,7 +299,23 @@ const profile: Profile = {
 await client.setProfile(profile);
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java types (Timestamp, Currency, Profile) will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Error Handling
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ### Try-Catch Pattern
 
@@ -292,7 +361,23 @@ if (!connected) {
 }
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java error handling will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Best Practices
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ### 1. Reuse Client Instance
 
@@ -384,7 +469,23 @@ client.on({
 });
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java best practices will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Complete Example
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 Here's a complete example integrating authentication and payments:
 
@@ -465,6 +566,17 @@ const authUrl = await portal.createAuthUrl((pubkey) => {
 
 console.log('Auth URL:', authUrl);
 ```
+
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java complete example will be added here.
+
+</section>
+
+</custom-tabs>
 
 ---
 

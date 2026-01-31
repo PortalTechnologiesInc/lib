@@ -1,19 +1,35 @@
 # Quick Start
 
-Get started with Portal in a few minutes: use the **TypeScript SDK** (install, connect, first flow) or **run the Portal API** with Docker.
+Get started with Portal in a few minutes: use the **SDK** (JavaScript or Java) to integrate, or **run the Portal API** with Docker.
 
 ## What you need
 
-- **Node.js** 18+ (for the TypeScript SDK).
+- **JavaScript**: Node.js 18+ — **Java**: Java 17+ (TODO: Java SDK docs)
 - A **Portal endpoint** (URL) and **auth token**.  
   - If someone gives you a URL and token (hosted Portal or teammate), use those.  
   - If not, you’ll run Portal locally with Docker in the next section and use `ws://localhost:3000/ws` and your chosen token.
 
 ## Step 1: Install the SDK
 
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
+
 ```bash
 npm install portal-sdk
 ```
+
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java installation instructions will be added here. See [Installation](sdk/installation.md) when available.
+
+</section>
+
+</custom-tabs>
 
 ## Step 2: Get a Portal endpoint and token
 
@@ -39,6 +55,11 @@ Use:
 
 ## Step 3: Connect and authenticate
 
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
+
 Create a file (e.g. `portal-demo.js` or `portal-demo.ts`):
 
 ```javascript
@@ -63,9 +84,25 @@ Run it (with env set if you use Option B):
 PORTAL_AUTH_TOKEN=my-secret-token node portal-demo.js
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java connect and authenticate example will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Step 4: Your first flow — user auth URL
 
 Add a call that generates an auth URL for a user. When they open it and approve (e.g. with an NWC wallet), your callback runs:
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ```javascript
 const url = await client.newKeyHandshakeUrl((mainKey, preferredRelays) => {
@@ -77,6 +114,17 @@ console.log(url);
 ```
 
 Run the script, open the URL in a browser, and approve in your wallet. You should see the user’s key in the console.
+
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java auth URL example will be added here.
+
+</section>
+
+</custom-tabs>
 
 **Done.** You’ve connected to Portal via the SDK.
 

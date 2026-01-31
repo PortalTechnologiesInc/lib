@@ -1,8 +1,13 @@
-# TypeScript SDK Installation
+# Installing the SDK
 
-Install and set up the Portal TypeScript SDK in your project.
+Install and set up the Portal SDK in your project.
 
 ## Installation
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ### Using npm
 
@@ -22,13 +27,13 @@ yarn add portal-sdk
 pnpm add portal-sdk
 ```
 
-## Requirements
+### Requirements
 
 - **Node.js**: 18.x or higher
 - **TypeScript** (optional): 4.5 or higher
 - **Portal endpoint and auth token**: From a hosted Portal or from [running Portal yourself](../getting-started/docker-deployment.md) (e.g. Docker)
 
-## Verify Installation
+### Verify Installation
 
 Create a test file to verify the installation:
 
@@ -43,7 +48,25 @@ Run it:
 node test.js
 ```
 
-## TypeScript Support
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java installation (Gradle/Maven) and setup instructions will be added here.
+
+</section>
+
+</custom-tabs>
+
+## Import and setup
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
+
+### TypeScript Support
 
 The SDK includes full TypeScript definitions. No additional `@types` packages are needed.
 
@@ -96,7 +119,23 @@ import {
 } from 'portal-sdk';
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java import and setup instructions will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Browser Support
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 The SDK works in both Node.js and browser environments.
 
@@ -141,7 +180,23 @@ module.exports = {
 
 The SDK uses `isomorphic-ws` which automatically handles WebSocket in both Node.js and browser environments. Most modern bundlers (Vite, Rollup, esbuild) will handle this automatically.
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java browser/mobile usage will be added when relevant.
+
+</section>
+
+</custom-tabs>
+
 ## Framework Integration
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ### React
 
@@ -264,7 +319,23 @@ app.listen(3001, () => {
 });
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java framework integration (Spring, etc.) will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Environment Variables
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 Store your Portal configuration in environment variables:
 
@@ -287,6 +358,17 @@ await client.connect();
 await client.authenticate(process.env.PORTAL_AUTH_TOKEN || '');
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java configuration (environment, config files) will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Package Information
 
 ### Exports
@@ -296,7 +378,7 @@ The package exports the following:
 - `PortalSDK` - Main client class
 - `Currency` - Currency enum
 - `Timestamp` - Timestamp utility class
-- All TypeScript types and interfaces
+- All type definitions (TypeScript)
 
 ### Bundle Size
 
@@ -311,6 +393,11 @@ The SDK has minimal dependencies:
 
 ## Troubleshooting
 
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
+
 ### "Cannot find module 'portal-sdk'"
 
 ```bash
@@ -319,7 +406,7 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
-### TypeScript Errors
+### TypeScript / module errors
 
 ```bash
 # Ensure TypeScript is installed
@@ -351,6 +438,17 @@ Or use `.mjs` file extension:
 ```bash
 mv app.js app.mjs
 ```
+
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java troubleshooting will be added here.
+
+</section>
+
+</custom-tabs>
 
 ## Next Steps
 

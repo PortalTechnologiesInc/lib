@@ -4,6 +4,11 @@ Handle errors gracefully in your Portal integration.
 
 ## PortalSDKError and error codes
 
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
+
 The SDK throws `PortalSDKError` with a `code` property so you can handle cases in code. Always check `err instanceof PortalSDKError` and switch on `err.code`:
 
 ```typescript
@@ -62,7 +67,23 @@ client.on({
 });
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java PortalSDKError and error codes will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Common error patterns
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ### Connection errors
 
@@ -107,7 +128,23 @@ client.requestSinglePayment(userPubkey, [], request, (status) => {
 });
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java common error patterns will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Error Recovery
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ### Connection Retry
 
@@ -152,13 +189,40 @@ client.on({
 });
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java error recovery will be added here.
+
+</section>
+
+</custom-tabs>
+
 ## Best Practices
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 1. **Always use try-catch** for async operations
 2. **Check status codes** in callbacks
 3. **Implement retry logic** for critical operations
 4. **Log errors** with context
 5. **Show user-friendly messages** to end users
+
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+**TODO:** Java best practices will be added here.
+
+</section>
+
+</custom-tabs>
 
 ---
 

@@ -211,7 +211,7 @@ docker exec portal-sdk-daemon netstat -tlnp
 docker logs portal-sdk-daemon --tail 50
 ```
 
-## TypeScript SDK Issues
+## JavaScript SDK issues
 
 ### "Cannot find module 'portal-sdk'"
 
@@ -242,7 +242,7 @@ const url = window.location.protocol === 'https:'
 const client = new PortalSDK({ serverUrl: url });
 ```
 
-### TypeScript Errors
+### TypeScript / module errors
 
 ```bash
 # Ensure TypeScript is installed
