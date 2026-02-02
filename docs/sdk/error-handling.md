@@ -72,7 +72,7 @@ client.on({
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java PortalSDKError and error codes will be added here.
+Check the `err` parameter in each `sendCommand` callback; handle connection and auth failures before sending commands.
 
 </section>
 
@@ -133,7 +133,7 @@ client.requestSinglePayment(userPubkey, [], request, (status) => {
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java common error patterns will be added here.
+Handle `err != null` in callbacks; retry `connect(authToken)` on failure.
 
 </section>
 
@@ -194,7 +194,7 @@ client.on({
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java error recovery will be added here.
+Check `err` in every `sendCommand` callback; implement retry for `connect`; log errors with context.
 
 </section>
 
@@ -218,7 +218,7 @@ client.on({
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java best practices will be added here.
+Always check the callback `err` parameter; use environment or config for URLs and token.
 
 </section>
 

@@ -17,7 +17,7 @@ Portal uses [Nostr](introduction/what-is-nostr.md) and the [Lightning Network](i
 
 ## How to use Portal
 
-1. **Integrate with an SDK** — Use the [JavaScript SDK](sdk/installation.md) or [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk): connect to a Portal endpoint with an auth token and call the API.
+1. **Integrate with an SDK** — Use the [JavaScript SDK](sdk/installation.md) or [Java SDK](sdk/installation.md) (same docs, switch tab): connect to a Portal endpoint with an auth token and call the API.
 2. **Or run the API** — Self-host or develop locally: run the Portal API (Docker or [build from source](getting-started/building-from-source.md)); then use an SDK or connect to the WebSocket API.
 3. **Auth, payments, tickets** — Generate auth URLs (users approve with Nostr wallet); request single or recurring Lightning payments; issue Cashu tokens.
 

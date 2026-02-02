@@ -47,7 +47,18 @@ main().catch(console.error);
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java quick example will be added here.
+```java
+var portalSDK = new PortalSDK(healthEndpoint, wsEndpoint);
+portalSDK.connect(authToken);
+
+portalSDK.sendCommand(new CalculateNextOccurrenceRequest("weekly", System.currentTimeMillis() / 1000), (res, err) -> {
+    if (err != null) {
+        logger.error("error: {}", err);
+        return;
+    }
+    logger.info("next occurrence: {}", res.next_occurrence());
+});
+```
 
 </section>
 
@@ -133,7 +144,25 @@ try {
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java client init, connection, and auth will be added here.
+### 1. Client Initialization
+
+```java
+var portalSDK = new PortalSDK(healthEndpoint, wsEndpoint);
+```
+
+### 2. Connection and authentication
+
+```java
+portalSDK.connect(authToken);
+```
+
+`connect` establishes the WebSocket and authenticates with the given token.
+
+### 3. Sending commands
+
+Use `sendCommand(request, callback)` for all server commands. Key request classes include **AuthRequest**, **KeyHandshakeUrlRequest**, **RequestSinglePaymentRequest**, **MintCashuRequest**; see the [API Reference](api-reference.md) for the full list.
+
+**Important**: You must call `connect(authToken)` before sending commands.
 
 </section>
 
@@ -237,7 +266,7 @@ if (profile) {
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java workflows (auth, payments, profile) will be added here.
+Use **KeyHandshakeUrlRequest** for auth URLs, **RequestSinglePaymentRequest** for payments, and the appropriate request classes for profiles. Instantiate a request and pass it to `portalSDK.sendCommand(request, (response, err) -> { ... })`.
 
 </section>
 
@@ -304,7 +333,7 @@ await client.setProfile(profile);
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java types (Timestamp, Currency, Profile) will be added here.
+Request/response and notification types are in the SDK. Use the request classes (e.g. **CalculateNextOccurrenceRequest**) and handle responses in the `sendCommand` callback. Main types: **PortalRequest**, **PortalResponse**, **PortalNotification**.
 
 </section>
 
@@ -366,7 +395,7 @@ if (!connected) {
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java error handling will be added here.
+Check the `err` parameter in each `sendCommand` callback; handle connection and auth failures before sending commands. See [Error Handling](error-handling.md).
 
 </section>
 
@@ -474,7 +503,7 @@ client.on({
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java best practices will be added here.
+Reuse one `PortalSDK` instance, call `connect(authToken)` once, and use `sendCommand` for all operations. See [portal-demo](https://github.com/PortalTechnologiesInc/portal-demo) for a full Kotlin example.
 
 </section>
 
@@ -572,7 +601,20 @@ console.log('Auth URL:', authUrl);
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java complete example will be added here.
+```java
+var portalSDK = new PortalSDK(healthEndpoint, wsEndpoint);
+portalSDK.connect(authToken);
+
+portalSDK.sendCommand(new CalculateNextOccurrenceRequest("weekly", System.currentTimeMillis() / 1000), (res, err) -> {
+    if (err != null) {
+        logger.error("error: {}", err);
+        return;
+    }
+    logger.info("next occurrence: {}", res.next_occurrence());
+});
+```
+
+See [portal-demo](https://github.com/PortalTechnologiesInc/portal-demo) for a complete Kotlin example.
 
 </section>
 

@@ -27,7 +27,9 @@ Concise reference for the main `PortalSDK` methods. For examples and workflows, 
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java lifecycle and auth methods will be added here.
+- **PortalSDK(healthEndpoint, wsEndpoint)** — Create client.
+- **connect(authToken)** — Connect and authenticate.
+- **sendCommand(request, callback)** — Send any command. Request classes: **AuthRequest**, **KeyHandshakeUrlRequest**, **RequestSinglePaymentRequest**, **MintCashuRequest**, **CalculateNextOccurrenceRequest**, and others in the SDK.
 
 </section>
 
@@ -54,7 +56,7 @@ Concise reference for the main `PortalSDK` methods. For examples and workflows, 
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java payment methods will be added here.
+Use **RequestSinglePaymentRequest**, **MintCashuRequest**, and other request classes with **sendCommand**. See the [Java SDK repository](https://github.com/PortalTechnologiesInc/java-sdk) for the full list.
 
 </section>
 
@@ -78,7 +80,7 @@ Concise reference for the main `PortalSDK` methods. For examples and workflows, 
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java profile methods will be added here.
+Use the appropriate request classes with **sendCommand** for profile and identity operations.
 
 </section>
 
@@ -101,7 +103,7 @@ Concise reference for the main `PortalSDK` methods. For examples and workflows, 
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java JWT methods will be added here.
+Use the JWT-related request classes with **sendCommand**.
 
 </section>
 
@@ -129,7 +131,7 @@ Concise reference for the main `PortalSDK` methods. For examples and workflows, 
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java relay and Cashu methods will be added here.
+Use **KeyHandshakeUrlRequest**, **RequestSinglePaymentRequest**, **MintCashuRequest**, relay and Cashu request classes with **sendCommand**.
 
 </section>
 
@@ -152,7 +154,7 @@ Concise reference for the main `PortalSDK` methods. For examples and workflows, 
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java event methods will be added here.
+Responses and notifications are delivered in the **sendCommand** callback.
 
 </section>
 
@@ -178,7 +180,7 @@ Full types are exported from `portal-sdk`; use your editor’s IntelliSense or t
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java types will be added here.
+**PortalRequest**, **PortalResponse**, **PortalNotification**, and request/response classes (e.g. **CalculateNextOccurrenceRequest**). See the [Java SDK repository](https://github.com/PortalTechnologiesInc/java-sdk) for the full API.
 
 </section>
 

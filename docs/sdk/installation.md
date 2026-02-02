@@ -53,7 +53,49 @@ node test.js
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java installation (Gradle/Maven) and setup instructions will be added here.
+### Using Gradle
+
+1. Add the Jitpack repository to your `build.gradle`:
+
+```groovy
+repositories {
+    maven { url 'https://jitpack.io' }
+}
+```
+
+2. Add the dependency:
+
+```groovy
+dependencies {
+    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.1.0'
+}
+```
+
+### Using Maven
+
+1. Add the repository to your `pom.xml`:
+
+```xml
+<repository>
+    <id>jitpack.io</id>
+    <url>https://jitpack.io</url>
+</repository>
+```
+
+2. Add the dependency:
+
+```xml
+<dependency>
+    <groupId>com.github.PortalTechnologiesInc</groupId>
+    <artifactId>java-sdk</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+
+### Requirements
+
+- **Java**: 17 or higher
+- **Portal endpoint and auth token**: From a hosted Portal or from [running Portal yourself](../getting-started/docker-deployment.md) (e.g. Docker)
 
 </section>
 
@@ -124,7 +166,14 @@ import {
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java import and setup instructions will be added here.
+Create a `PortalSDK` with your health and WebSocket endpoints, then connect with your auth token:
+
+```java
+var portalSDK = new PortalSDK(healthEndpoint, wsEndpoint);
+portalSDK.connect(authToken);
+```
+
+Use `sendCommand(request, callback)` to send commands; request and response types are in the SDK package.
 
 </section>
 
@@ -185,7 +234,7 @@ The SDK uses `isomorphic-ws` which automatically handles WebSocket in both Node.
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java browser/mobile usage will be added when relevant.
+The Java SDK targets the JVM (Java 17+). For Kotlin examples, see [portal-demo](https://github.com/PortalTechnologiesInc/portal-demo).
 
 </section>
 
@@ -324,7 +373,7 @@ app.listen(3001, () => {
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java framework integration (Spring, etc.) will be added here.
+Wire `PortalSDK` as a bean (e.g. in Spring) and pass health URL, WebSocket URL, and auth token from configuration or environment variables.
 
 </section>
 
@@ -363,7 +412,7 @@ await client.authenticate(process.env.PORTAL_AUTH_TOKEN || '');
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java configuration (environment, config files) will be added here.
+Read health URL, WebSocket URL, and auth token from environment or config and pass them to `PortalSDK` and `connect()`.
 
 </section>
 
@@ -444,7 +493,9 @@ mv app.js app.mjs
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java troubleshooting will be added here.
+- Ensure Jitpack is in `repositories` and the dependency version is correct.
+- Verify health and WebSocket URLs and auth token; use `curl` on the health endpoint.
+- For issues, see the [Java SDK repository](https://github.com/PortalTechnologiesInc/java-sdk).
 
 </section>
 

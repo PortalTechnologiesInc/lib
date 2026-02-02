@@ -21,7 +21,7 @@ const client = new PortalSDK({
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java basic configuration will be added here.
+Create `PortalSDK` with health and WebSocket endpoints: `new PortalSDK(healthEndpoint, wsEndpoint)`. Call `connect(authToken)` to connect and authenticate.
 
 </section>
 
@@ -70,7 +70,7 @@ const client = new PortalSDK({
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java configuration options will be added here.
+Pass health URL, WebSocket URL, and (for `connect`) auth token from environment or config.
 
 </section>
 
@@ -97,7 +97,7 @@ const client = new PortalSDK(config);
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java environment-based config will be added here.
+Handle responses and errors in the `sendCommand(request, (response, err) -> { ... })` callback.
 
 </section>
 
@@ -129,7 +129,7 @@ await client.connect();
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java event configuration will be added here.
+Handle responses and errors in `sendCommand(request, (response, err) -> { ... })`.
 
 </section>
 

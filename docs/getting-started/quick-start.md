@@ -4,7 +4,7 @@ Get started with Portal in a few minutes: use the **SDK** (JavaScript or Java) t
 
 ## What you need
 
-- **JavaScript**: Node.js 18+ — **Java**: Java 17+ (TODO: Java SDK docs)
+- **JavaScript**: Node.js 18+ — **Java**: Java 17+ ([Installation](sdk/installation.md))
 - A **Portal endpoint** (URL) and **auth token**.  
   - If someone gives you a URL and token (hosted Portal or teammate), use those.  
   - If not, you’ll run Portal locally with Docker in the next section and use `ws://localhost:3000/ws` and your chosen token.
@@ -25,7 +25,14 @@ npm install portal-sdk
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java installation instructions will be added here. See [Installation](sdk/installation.md) when available.
+Add Jitpack and the dependency to your `build.gradle`:
+
+```groovy
+repositories { maven { url 'https://jitpack.io' } }
+dependencies { implementation 'com.github.PortalTechnologiesInc:java-sdk:0.1.0' }
+```
+
+See [Installation](sdk/installation.md) for Maven and full details.
 
 </section>
 
@@ -89,7 +96,14 @@ PORTAL_AUTH_TOKEN=my-secret-token node portal-demo.js
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java connect and authenticate example will be added here.
+Create a `PortalSDK` with your health and WebSocket endpoints, then connect with your auth token:
+
+```java
+var portalSDK = new PortalSDK("http://localhost:3000/health", "ws://localhost:3000/ws");
+portalSDK.connect("my-secret-token");
+```
+
+See [Basic Usage](sdk/basic-usage.md) for full usage.
 
 </section>
 
@@ -120,7 +134,7 @@ Run the script, open the URL in a browser, and approve in your wallet. You shoul
 <div slot="title">Java</div>
 <section>
 
-**TODO:** Java auth URL example will be added here.
+Use **KeyHandshakeUrlRequest** and `sendCommand` to get an auth URL; handle the response in the callback. See [API Reference](sdk/api-reference.md) and [Authentication guide](guides/authentication.md).
 
 </section>
 
