@@ -16,7 +16,7 @@ COPY crates/portal-cli/Cargo.toml ./crates/portal-cli/
 COPY crates/portal-sdk/Cargo.toml ./crates/portal-sdk/
 COPY crates/portal-rates/Cargo.toml ./crates/portal-rates/
 COPY crates/portal-wallet/Cargo.toml ./crates/portal-wallet/
-COPY crates/portal-fetch-git-hash/Cargo.toml ./crates/portal-fetch-git-hash/
+COPY crates/portal-macros/Cargo.toml ./crates/portal-macros/
 COPY crates/portal/Cargo.toml ./crates/portal/
 
 COPY crates/portal-rest/src ./crates/portal-rest/src
@@ -27,7 +27,7 @@ COPY crates/portal-sdk/src ./crates/portal-sdk/src
 COPY crates/portal-rates/src ./crates/portal-rates/src
 COPY crates/portal-rates/assets ./crates/portal-rates/assets
 COPY crates/portal-wallet/src ./crates/portal-wallet/src
-COPY crates/portal-fetch-git-hash/src ./crates/portal-fetch-git-hash/src
+COPY crates/portal-macros/src ./crates/portal-macros/src
 COPY crates/portal/src ./crates/portal/src
 
 RUN cargo build --release -p portal-rest

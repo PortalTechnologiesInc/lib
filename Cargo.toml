@@ -1,5 +1,5 @@
 [workspace]
-members = [ "crates/portal-app" , "crates/portal-cli", "crates/portal-rest", "crates/portal-sdk", "crates/portal-rates", "crates/portal-fetch-git-hash", "crates/portal-wallet"]
+members = [ "crates/portal-app" , "crates/portal-cli", "crates/portal-rest", "crates/portal-sdk", "crates/portal-rates", "crates/portal-macros", "crates/portal-wallet"]
 
 [workspace.dependencies]
 # Core dependencies

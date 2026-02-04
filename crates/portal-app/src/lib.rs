@@ -6,8 +6,6 @@ pub mod wallet;
 
 use std::{collections::HashMap, sync::Arc};
 
-use portal_fetch_git_hash::fetch_git_hash;
-
 use bitcoin::{Network, bip32};
 use lightning_invoice::{Bolt11Invoice, ParseOrSemanticError};
 use std::{str::FromStr, time::UNIX_EPOCH};
@@ -69,7 +67,7 @@ uniffi::setup_scaffolding!();
 
 #[uniffi::export]
 pub fn get_git_hash() -> String {
-    fetch_git_hash!().to_string()
+    portal_macros::fetch_git_hash!().to_string()
 }
 
 const PROFILE_SERVICE_URL: &str = "https://profile.getportal.cc";
