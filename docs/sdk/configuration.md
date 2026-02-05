@@ -94,13 +94,6 @@ const client = new PortalSDK(config);
 
 </section>
 
-<div slot="title">Java</div>
-<section>
-
-Handle responses and errors in the `sendCommand(request, (response, err) -> { ... })` callback.
-
-</section>
-
 </custom-tabs>
 
 ## Event Configuration
@@ -123,13 +116,6 @@ client.on({
 
 await client.connect();
 ```
-
-</section>
-
-<div slot="title">Java</div>
-<section>
-
-Handle responses and errors in `sendCommand(request, (response, err) -> { ... })`.
 
 </section>
 

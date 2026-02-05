@@ -161,34 +161,11 @@ import {
 } from 'portal-sdk';
 ```
 
-</section>
-
-<div slot="title">Java</div>
-<section>
-
-Create a `PortalSDK` with your health and WebSocket endpoints, then connect with your auth token:
-
-```java
-var portalSDK = new PortalSDK(healthEndpoint, wsEndpoint);
-portalSDK.connect(authToken);
-```
-
-Use `sendCommand(request, callback)` to send commands; request and response types are in the SDK package.
-
-</section>
-
-</custom-tabs>
-
-## Browser Support
-
-<custom-tabs category="sdk">
-
-<div slot="title">JavaScript</div>
-<section>
+### Browser Support
 
 The SDK works in both Node.js and browser environments.
 
-### Browser Setup
+#### Browser Setup
 
 ```html
 <!DOCTYPE html>
@@ -210,7 +187,7 @@ The SDK works in both Node.js and browser environments.
 </html>
 ```
 
-### Webpack Configuration
+#### Webpack Configuration
 
 If using Webpack, you may need to configure WebSocket:
 
@@ -225,7 +202,7 @@ module.exports = {
 };
 ```
 
-### Browser Bundlers
+#### Browser Bundlers
 
 The SDK uses `isomorphic-ws` which automatically handles WebSocket in both Node.js and browser environments. Most modern bundlers (Vite, Rollup, esbuild) will handle this automatically.
 
@@ -234,7 +211,14 @@ The SDK uses `isomorphic-ws` which automatically handles WebSocket in both Node.
 <div slot="title">Java</div>
 <section>
 
-The Java SDK targets the JVM (Java 17+). For Kotlin examples, see [portal-demo](https://github.com/PortalTechnologiesInc/portal-demo).
+Create a `PortalSDK` with your health and WebSocket endpoints, then connect with your auth token:
+
+```java
+var portalSDK = new PortalSDK(healthEndpoint, wsEndpoint);
+portalSDK.connect(authToken);
+```
+
+Use `sendCommand(request, callback)` to send commands; request and response types are in the SDK package.
 
 </section>
 
@@ -370,13 +354,6 @@ app.listen(3001, () => {
 
 </section>
 
-<div slot="title">Java</div>
-<section>
-
-Wire `PortalSDK` as a bean (e.g. in Spring) and pass health URL, WebSocket URL, and auth token from configuration or environment variables.
-
-</section>
-
 </custom-tabs>
 
 ## Environment Variables
@@ -420,6 +397,11 @@ Read health URL, WebSocket URL, and auth token from environment or config and pa
 
 ## Package Information
 
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
+
 ### Exports
 
 The package exports the following:
@@ -439,6 +421,10 @@ The package exports the following:
 The SDK has minimal dependencies:
 - `ws` - WebSocket client for Node.js
 - `isomorphic-ws` - Universal WebSocket wrapper
+
+</section>
+
+</custom-tabs>
 
 ## Troubleshooting
 
