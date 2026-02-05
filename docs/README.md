@@ -1,7 +1,5 @@
 # Welcome to Portal
 
-**Published docs:** [https://portaltechnologiesinc.github.io/lib/](https://portaltechnologiesinc.github.io/lib/)
-
 Portal is a **Nostr-based authentication and payment SDK** allowing applications to authenticate users and process payments through Nostr and Lightning Network.
 
 You can integrate via the **official SDKs** (TypeScript, Java) or run the Portal API yourself and use the protocol directly.
