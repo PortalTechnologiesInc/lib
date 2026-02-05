@@ -48,8 +48,9 @@ main().catch(console.error);
 <section>
 
 ```java
-var portalSDK = new PortalSDK(healthEndpoint, wsEndpoint);
-portalSDK.connect(authToken);
+var portalSDK = new PortalSDK(wsEndpoint);
+portalSDK.connect();
+portalSDK.authenticate(authToken);
 
 portalSDK.sendCommand(new CalculateNextOccurrenceRequest("weekly", System.currentTimeMillis() / 1000), (res, err) -> {
     if (err != null) {
@@ -147,22 +148,23 @@ try {
 ### 1. Client Initialization
 
 ```java
-var portalSDK = new PortalSDK(healthEndpoint, wsEndpoint);
+var portalSDK = new PortalSDK(wsEndpoint);
 ```
 
 ### 2. Connection and authentication
 
 ```java
-portalSDK.connect(authToken);
+portalSDK.connect();
+portalSDK.authenticate(authToken);
 ```
 
-`connect` establishes the WebSocket and authenticates with the given token.
+`connect()` establishes the WebSocket; `authenticate(authToken)` authenticates with your token.
 
 ### 3. Sending commands
 
 Use `sendCommand(request, callback)` for all server commands. Key request classes include **AuthRequest**, **KeyHandshakeUrlRequest**, **RequestSinglePaymentRequest**, **MintCashuRequest**; see the [API Reference](api-reference.md) for the full list.
 
-**Important**: You must call `connect(authToken)` before sending commands.
+**Important**: You must call `connect()` and `authenticate(authToken)` before sending commands.
 
 </section>
 
@@ -503,7 +505,7 @@ client.on({
 <div slot="title">Java</div>
 <section>
 
-Reuse one `PortalSDK` instance, call `connect(authToken)` once, and use `sendCommand` for all operations. See [portal-demo](https://github.com/PortalTechnologiesInc/portal-demo) for a full Kotlin example.
+Reuse one `PortalSDK` instance, call `connect()` and `authenticate(authToken)` once, and use `sendCommand` for all operations. See [portal-demo](https://github.com/PortalTechnologiesInc/portal-demo) for a full Kotlin example.
 
 </section>
 
@@ -602,8 +604,9 @@ console.log('Auth URL:', authUrl);
 <section>
 
 ```java
-var portalSDK = new PortalSDK(healthEndpoint, wsEndpoint);
-portalSDK.connect(authToken);
+var portalSDK = new PortalSDK(wsEndpoint);
+portalSDK.connect();
+portalSDK.authenticate(authToken);
 
 portalSDK.sendCommand(new CalculateNextOccurrenceRequest("weekly", System.currentTimeMillis() / 1000), (res, err) -> {
     if (err != null) {

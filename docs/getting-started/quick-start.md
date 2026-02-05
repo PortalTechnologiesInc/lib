@@ -29,7 +29,7 @@ Add Jitpack and the dependency to your `build.gradle`:
 
 ```groovy
 repositories { maven { url 'https://jitpack.io' } }
-dependencies { implementation 'com.github.PortalTechnologiesInc:java-sdk:0.1.0' }
+dependencies { implementation 'com.github.PortalTechnologiesInc:java-sdk:0.2.0' }
 ```
 
 See [Installation](sdk/installation.md) for Maven and full details.
@@ -96,11 +96,12 @@ PORTAL_AUTH_TOKEN=my-secret-token node portal-demo.js
 <div slot="title">Java</div>
 <section>
 
-Create a `PortalSDK` with your health and WebSocket endpoints, then connect with your auth token:
+Create a `PortalSDK` with your WebSocket endpoint, then connect and authenticate:
 
 ```java
-var portalSDK = new PortalSDK("http://localhost:3000/health", "ws://localhost:3000/ws");
-portalSDK.connect("my-secret-token");
+var portalSDK = new PortalSDK("ws://localhost:3000/ws");
+portalSDK.connect();
+portalSDK.authenticate("my-secret-token");
 ```
 
 See [Basic Usage](sdk/basic-usage.md) for full usage.

@@ -133,7 +133,7 @@ client.requestSinglePayment(userPubkey, [], request, (status) => {
 <div slot="title">Java</div>
 <section>
 
-Handle `err != null` in callbacks; retry `connect(authToken)` on failure.
+Handle `err != null` in callbacks; retry `connect()` and `authenticate(authToken)` on failure.
 
 </section>
 
@@ -194,7 +194,7 @@ client.on({
 <div slot="title">Java</div>
 <section>
 
-Check `err` in every `sendCommand` callback; implement retry for `connect`; log errors with context.
+Check `err` in every `sendCommand` callback; implement retry for `connect()` and `authenticate(authToken)`; log errors with context.
 
 </section>
 

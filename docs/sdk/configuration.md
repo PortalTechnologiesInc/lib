@@ -21,7 +21,7 @@ const client = new PortalSDK({
 <div slot="title">Java</div>
 <section>
 
-Create `PortalSDK` with health and WebSocket endpoints: `new PortalSDK(healthEndpoint, wsEndpoint)`. Call `connect(authToken)` to connect and authenticate.
+Create `PortalSDK` with the WebSocket endpoint: `new PortalSDK(wsEndpoint)`. Call `connect()` then `authenticate(authToken)`.
 
 </section>
 
@@ -70,7 +70,7 @@ const client = new PortalSDK({
 <div slot="title">Java</div>
 <section>
 
-Pass health URL, WebSocket URL, and (for `connect`) auth token from environment or config.
+Pass WebSocket URL from environment or config to `new PortalSDK(wsUrl)`; pass auth token to `authenticate(authToken)` after `connect()`.
 
 </section>
 

@@ -2,6 +2,8 @@
 
 Install and set up the Portal SDK in your project.
 
+**SDK references:** [JavaScript/TypeScript SDK](https://www.npmjs.com/package/portal-sdk) (npm) · [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk) (GitHub)
+
 ## Installation
 
 <custom-tabs category="sdk">
@@ -67,7 +69,7 @@ repositories {
 
 ```groovy
 dependencies {
-    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.1.0'
+    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.2.0'
 }
 ```
 
@@ -88,7 +90,7 @@ dependencies {
 <dependency>
     <groupId>com.github.PortalTechnologiesInc</groupId>
     <artifactId>java-sdk</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
@@ -211,14 +213,15 @@ The SDK uses `isomorphic-ws` which automatically handles WebSocket in both Node.
 <div slot="title">Java</div>
 <section>
 
-Create a `PortalSDK` with your health and WebSocket endpoints, then connect with your auth token:
+Create a `PortalSDK` with your WebSocket endpoint, then connect and authenticate:
 
 ```java
-var portalSDK = new PortalSDK(healthEndpoint, wsEndpoint);
-portalSDK.connect(authToken);
+var portalSDK = new PortalSDK(wsEndpoint);
+portalSDK.connect();
+portalSDK.authenticate(authToken);
 ```
 
-Use `sendCommand(request, callback)` to send commands; request and response types are in the SDK package.
+Use `sendCommand(request, callback)` to send commands; request and response types are in the SDK package. See the [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk) for details.
 
 </section>
 
@@ -389,7 +392,7 @@ await client.authenticate(process.env.PORTAL_AUTH_TOKEN || '');
 <div slot="title">Java</div>
 <section>
 
-Read health URL, WebSocket URL, and auth token from environment or config and pass them to `PortalSDK` and `connect()`.
+Read WebSocket URL and auth token from environment or config. Create `new PortalSDK(wsUrl)`, then call `connect()` and `authenticate(authToken)`.
 
 </section>
 
@@ -480,8 +483,8 @@ mv app.js app.mjs
 <section>
 
 - Ensure Jitpack is in `repositories` and the dependency version is correct.
-- Verify health and WebSocket URLs and auth token; use `curl` on the health endpoint.
-- For issues, see the [Java SDK repository](https://github.com/PortalTechnologiesInc/java-sdk).
+- Verify WebSocket URL and auth token; use `curl` on your Portal health endpoint if self-hosting.
+- For issues, see the [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk).
 
 </section>
 

@@ -2,6 +2,8 @@
 
 Concise reference for the main `PortalSDK` methods. For examples and workflows, see [Basic Usage](basic-usage.md) and the [Guides](../guides/authentication.md).
 
+**SDK references:** [JavaScript/TypeScript SDK](https://www.npmjs.com/package/portal-sdk) (npm) · [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk) (GitHub)
+
 ## Lifecycle & Auth
 
 <custom-tabs category="sdk">
@@ -27,9 +29,10 @@ Concise reference for the main `PortalSDK` methods. For examples and workflows, 
 <div slot="title">Java</div>
 <section>
 
-- **PortalSDK(healthEndpoint, wsEndpoint)** — Create client.
-- **connect(authToken)** — Connect and authenticate.
-- **sendCommand(request, callback)** — Send any command. Request classes: **AuthRequest**, **KeyHandshakeUrlRequest**, **RequestSinglePaymentRequest**, **MintCashuRequest**, **CalculateNextOccurrenceRequest**, and others in the SDK.
+- **PortalSDK(wsEndpoint)** — Create client with WebSocket URL.
+- **connect()** — Establish WebSocket connection.
+- **authenticate(authToken)** — Authenticate with your token.
+- **sendCommand(request, callback)** — Send any command. Request classes: **AuthRequest**, **KeyHandshakeUrlRequest**, **RequestSinglePaymentRequest**, **MintCashuRequest**, **CalculateNextOccurrenceRequest**, and others. See the [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk) for the full list.
 
 </section>
 
