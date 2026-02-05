@@ -4,7 +4,7 @@ Get started with Portal in a few minutes: use the **SDK** (JavaScript or Java) t
 
 ## What you need
 
-- **JavaScript**: Node.js 18+ — **Java**: Java 17+ ([Installation](sdk/installation.md))
+- **JavaScript**: Node.js 18+ — **Java**: Java 17+ ([Installation](../sdk/installation.md))
 - A **Portal endpoint** (URL) and **auth token**.  
   - If someone gives you a URL and token (hosted Portal or teammate), use those.  
   - If not, you’ll run Portal locally with Docker in the next section and use `ws://localhost:3000/ws` and your chosen token.
@@ -32,7 +32,7 @@ repositories { maven { url 'https://jitpack.io' } }
 dependencies { implementation 'com.github.PortalTechnologiesInc:java-sdk:0.2.0' }
 ```
 
-See [Installation](sdk/installation.md) for Maven and full details.
+See [Installation](../sdk/installation.md) for Maven and full details.
 
 </section>
 
@@ -104,7 +104,7 @@ portalSDK.connect();
 portalSDK.authenticate("my-secret-token");
 ```
 
-See [Basic Usage](sdk/basic-usage.md) for full usage.
+See [Basic Usage](../sdk/basic-usage.md) for full usage.
 
 </section>
 
@@ -135,7 +135,7 @@ Run the script, open the URL in a browser, and approve in your wallet. You shoul
 <div slot="title">Java</div>
 <section>
 
-Use **KeyHandshakeUrlRequest** and `sendCommand` to get an auth URL; handle the response in the callback. See [API Reference](sdk/api-reference.md) and [Authentication guide](guides/authentication.md).
+Use **KeyHandshakeUrlRequest** and `sendCommand` to get an auth URL; handle the response in the callback. See [API Reference](../sdk/api-reference.md) and [Authentication guide](../guides/authentication.md).
 
 </section>
 
@@ -145,7 +145,7 @@ Use **KeyHandshakeUrlRequest** and `sendCommand` to get an auth URL; handle the 
 
 ## What’s next?
 
-- **[Basic usage](sdk/basic-usage.md)** — Connection, auth, payments, profiles.
+- **[Basic usage](../sdk/basic-usage.md)** — Connection, auth, payments, profiles.
 - **[Authentication guide](../guides/authentication.md)** — Deeper auth flow.
 - **[Single payments](../guides/single-payments.md)** — Request Lightning payments.
 - **[Recurring payments](../guides/recurring-payments.md)** — Subscriptions.
