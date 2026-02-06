@@ -10,12 +10,12 @@ edit-url-template = "https://github.com/PortalTechnologiesInc/lib/edit/master/do
 site-url = "/docs/"
 additional-js = ["./tabs.js"]
 
-[output.html.search]
-enable = true
-limit-results = 30
-teaser-word-count = 30
-use-boolean-and = true
-boost-title = 2
-boost-hierarchy = 1
-boost-paragraph = 1
-expand = true
+# [output.html.search]
+# enable = true
+# limit-results = 30
+# teaser-word-count = 30
+# use-boolean-and = true
+# boost-title = 2
+# boost-hierarchy = 1
+# boost-paragraph = 1
+# expand = true
