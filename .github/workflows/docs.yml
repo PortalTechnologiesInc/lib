@@ -30,7 +30,7 @@ jobs:
       - name: Setup mdBook
         uses: peaceiris/actions-mdbook@v1
         with:
-          mdbook-version: 'latest'
+          mdbook-version: '0.4.52'
 
       # Project site is at https://<org>.github.io/lib/ so base path is /lib/
       - name: Set site URL for GitHub Pages

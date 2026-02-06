@@ -2,12 +2,29 @@
 
 Get started with Portal in a few minutes: use the **SDK** (JavaScript or Java) to integrate, or **run the Portal API** with Docker.
 
-## What you need
+## Step 0: Requirements
 
-- **JavaScript**: Node.js 18+ — **Java**: Java 17+ ([Installation](../sdk/installation.md))
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
+
+- Node.js 18+ ([Installation](../sdk/installation.md))
 - A **Portal endpoint** (URL) and **auth token**.  
   - If someone gives you a URL and token (hosted Portal or teammate), use those.  
   - If not, you’ll run Portal locally with Docker in the next section and use `ws://localhost:3000/ws` and your chosen token.
+
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+- Java 17+ ([Installation](../sdk/installation.md))
+- A **Portal endpoint** (URL) and **auth token**.  
+  - If someone gives you a URL and token (hosted Portal or teammate), use those.  
+  - If not, you’ll run Portal locally with Docker in the next section and use `ws://localhost:3000/ws` and your chosen token.
+
+</section>
 
 ## Step 1: Install the SDK
 
