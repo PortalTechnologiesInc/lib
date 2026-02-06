@@ -6,7 +6,7 @@ pub mod wallet;
 
 use std::{collections::HashMap, sync::Arc};
 
-use portal_fetch_git_hash::fetch_git_hash;
+use portal_macros::fetch_git_hash;
 
 use bitcoin::{Network, bip32};
 use lightning_invoice::{Bolt11Invoice, ParseOrSemanticError};

@@ -7,6 +7,7 @@ edition = "2024"
 app = { path = "../portal-app", features = [] }
 portal-sdk = { path = "../portal-sdk", features = [] }
 portal = { path = "../portal", features = ["bindings"] }
+portal-macros = { path = "../portal-macros" }
 
 async-trait = { workspace = true }
 env_logger = { workspace = true }

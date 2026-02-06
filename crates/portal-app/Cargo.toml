@@ -8,7 +8,7 @@ crate-type = ["staticlib", "lib"]
 
 [dependencies]
 portal = { path = "../portal", features = ["bindings"] }
-portal-fetch-git-hash = { path = "../portal-fetch-git-hash" }
+portal-macros = { path = "../portal-macros" }
 portal-rates = { path = "../portal-rates", features = ["bindings"]}
 
 

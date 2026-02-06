@@ -188,7 +188,7 @@ dependencies = [
  "nostrstore",
  "nwc",
  "portal",
- "portal-fetch-git-hash",
+ "portal-macros",
  "portal-rates",
  "rand 0.8.5",
  "reqwest",
@@ -3857,12 +3857,13 @@ dependencies = [
  "log",
  "nwc",
  "portal",
+ "portal-macros",
  "portal-sdk",
  "tokio",
 ]
 
 [[package]]
-name = "portal-fetch-git-hash"
+name = "portal-macros"
 version = "0.1.0"
 dependencies = [
  "uniffi",
