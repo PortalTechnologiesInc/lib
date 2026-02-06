@@ -12,6 +12,7 @@ portal-wallet = { path = "../portal-wallet" }
 portal-sdk = { path = "../portal-sdk" }
 portal = { version = "0.1.0", path = "../portal" }
 portal-rates = { path = "../portal-rates" }
+portal-macros = { path = "../portal-macros" }
 
 nostr = { workspace = true }
 

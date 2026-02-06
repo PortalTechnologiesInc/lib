@@ -17,7 +17,7 @@ docker run -d -p 3000:3000 \
   getportal/sdk-daemon:latest
 ```
 
-Use `ws://localhost:3000/ws` as the SDK `serverUrl` and your token in `client.authenticate(...)`. Check: `curl http://localhost:3000/health` → `OK`.
+Use `ws://localhost:3000/ws` as the SDK `serverUrl` and your token in `client.authenticate(...)`. Check: `curl http://localhost:3000/health` → `OK`, `curl http://localhost:3000/version` → `{"version":"0.1.0","git_commit":"a1b2c3d4"}`.
 
 **From source:**
 

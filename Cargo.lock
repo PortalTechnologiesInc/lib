@@ -3902,6 +3902,7 @@ dependencies = [
  "nostr",
  "nwc",
  "portal",
+ "portal-macros",
  "portal-rates",
  "portal-sdk",
  "portal-wallet",
