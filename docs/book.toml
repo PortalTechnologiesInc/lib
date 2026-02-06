@@ -1,14 +1,21 @@
 [book]
-title = "Portal SDK Documentation"
+title = "Portal Book"
+description = ""
 authors = ["Portal Technologies Inc"]
 language = "en"
 src = "."
 
 [output.html]
-git-repository-url = "https://github.com/PortalTechnologiesInc/lib"
+default-theme = "ayu"
+preferred-dark-theme = "ayu"
+
+additional-js = ["./tabs.js"]
+
 edit-url-template = "https://github.com/PortalTechnologiesInc/lib/edit/master/docs/{path}"
 site-url = "/docs/"
-additional-js = ["./tabs.js"]
+
+git-repository-url = "https://github.com/PortalTechnologiesInc/lib"
+
 
 # [output.html.search]
 # enable = true

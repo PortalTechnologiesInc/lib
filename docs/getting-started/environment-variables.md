@@ -9,16 +9,16 @@ Configure your Portal SDK Daemon (portal-rest) with environment variables. The b
 
 | Config key | Env variable | Description |
 |------------|--------------|-------------|
-| `info.listen_port` | `PORTAL__INFO__LISTEN_PORT` | Port the API listens on (default 3000). |
-| `auth.auth_token` | `PORTAL__AUTH__AUTH_TOKEN` | API auth token. Required for clients to connect. |
-| `nostr.private_key` | `PORTAL__NOSTR__PRIVATE_KEY` | Nostr private key in hex format. Required. |
-| `nostr.relays` | `PORTAL__NOSTR__RELAYS` | Comma-separated relay URLs. |
-| `nostr.subkey_proof` | `PORTAL__NOSTR__SUBKEY_PROOF` | Proof for Nostr subkey delegation (optional). |
-| `wallet.ln_backend` | `PORTAL__WALLET__LN_BACKEND` | `none`, `nwc`, or `breez`. |
-| `wallet.nwc.url` | `PORTAL__WALLET__NWC__URL` | Nostr Wallet Connect URL (when `ln_backend=nwc`). |
-| `wallet.breez.api_key` | `PORTAL__WALLET__BREEZ__API_KEY` | Breez API key (when `ln_backend=breez`). |
-| `wallet.breez.storage_dir` | `PORTAL__WALLET__BREEZ__STORAGE_DIR` | Breez storage directory. |
-| `wallet.breez.mnemonic` | `PORTAL__WALLET__BREEZ__MNEMONIC` | Breez mnemonic (when `ln_backend=breez`). |
+| info.listen_port | `PORTAL__INFO__LISTEN_PORT` | Port the API listens on (default 3000). |
+| auth.auth_token | `PORTAL__AUTH__AUTH_TOKEN` | API auth token. Required for clients to connect. |
+| nostr.private_key | `PORTAL__NOSTR__PRIVATE_KEY` | Nostr private key in hex format. Required. |
+| nostr.relays | `PORTAL__NOSTR__RELAYS` | Comma-separated relay URLs. |
+| nostr.subkey_proof | `PORTAL__NOSTR__SUBKEY_PROOF` | Proof for Nostr subkey delegation (optional). |
+| wallet.ln_backend | `PORTAL__WALLET__LN_BACKEND` | `none`, `nwc`, or `breez`. |
+| wallet.nwc.url | `PORTAL__WALLET__NWC__URL` | Nostr Wallet Connect URL (when `ln_backend=nwc`). |
+| wallet.breez.api_key | `PORTAL__WALLET__BREEZ__API_KEY` | Breez API key (when `ln_backend=breez`). |
+| wallet.breez.storage_dir | `PORTAL__WALLET__BREEZ__STORAGE_DIR` | Breez storage directory. |
+| wallet.breez.mnemonic | `PORTAL__WALLET__BREEZ__MNEMONIC` | Breez mnemonic (when `ln_backend=breez`). |
 
 **Run from config:**
 
