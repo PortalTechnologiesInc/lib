@@ -1,6 +1,6 @@
 {
   "name": "portal-sdk",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Official TypeScript/JavaScript client for the Portal WebSocket API — Nostr auth, Lightning payments, JWT, Cashu, profiles",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
