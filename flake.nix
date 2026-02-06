@@ -27,6 +27,15 @@
           rustc = rustToolchain;
         };
 
+        # Static build: same Rust 1.90 as overlay, musl target (lnurl-models needs rustc 1.88+)
+        rustToolchainStatic = pkgs.rust-bin.stable."1.90.0".default.override {
+          targets = [ "x86_64-unknown-linux-musl" ];
+        };
+        staticRustPlatform = pkgs.makeRustPlatform {
+          cargo = rustToolchainStatic;
+          rustc = rustToolchainStatic;
+        };
+
         rest' = platform: platform.buildRustPackage {
           pname = "portal-rest";
           version = (pkgs.lib.importTOML ./crates/portal-rest/Cargo.toml).package.version;
@@ -92,7 +101,27 @@
           inherit backend;
 
           rest = rest' rustPlatform;
-          rest-static = rest' pkgs.pkgsStatic.rustPlatform;
+          # Static binary for Docker: overlay Rust 1.90 + musl stdenv + static openssl
+          rest-static = staticRustPlatform.buildRustPackage {
+            pname = "portal-rest";
+            version = (pkgs.lib.importTOML ./crates/portal-rest/Cargo.toml).package.version;
+            src = pkgs.lib.sources.sourceFilesBySuffices ./. [ ".rs" "Cargo.toml" "Cargo.lock" "fiatUnits.json" "example.config.toml" ];
+            cargoHash = "";
+            cargoLock = {
+              lockFile = ./Cargo.lock;
+              outputHashes = {
+                "cashu-0.11.0" = "sha256-kwwfQX5vDclfa86xPbbkbu+bh1VQXlX+imunUUoTYV4=";
+                "nostr-0.43.0" = "sha256-1TLthpGnDLUmnBoq2CneWnfTMwRocitbD4+wnrlCA44=";
+                "breez-sdk-common-0.1.0" = "sha256-b8R4V8L7lM0AOy9NxhiIt+RsIBHJdQPpfw9SN1/P//E=";
+              };
+            };
+            buildAndTestSubdir = "crates/portal-rest";
+            doCheck = false;
+            stdenv = pkgs.pkgsStatic.stdenv;
+            nativeBuildInputs = with pkgs; [ protobuf pkg-config ];
+            buildInputs = with pkgs.pkgsStatic; [ openssl ];
+            meta.mainProgram = "rest";
+          };
 
           rest-docker = let
             minimal-closure = pkgs.runCommand "minimal-rust-app" {
@@ -102,7 +131,7 @@
               cp ${rest-static}/bin/rest $out/bin/
 
               for binary in $out/bin/*; do
-                remove-references-to -t ${pkgs.pkgsStatic.rustPlatform.rust.rustc} "$binary"
+                remove-references-to -t ${rustToolchainStatic} "$binary"
               done
             '';
           in pkgs.dockerTools.buildLayeredImage {
@@ -114,9 +143,10 @@
               ExposedPorts = {
                 "3000/tcp" = {};
               };
+              # Only non-secret defaults. Required (AUTH_TOKEN, NOSTR__PRIVATE_KEY) and
+              # optional env are passed when starting the container (docker run -e / --env-file).
               Env = [
-                "AUTH_TOKEN=remeber-to-change-this"
-                "NOSTR_RELAYS=wss://relay.getportal.cc,wss://relay.damus.io,wss://relay.nostr.net"
+                "PORTAL__INFO__LISTEN_PORT=3000"
                 "RUST_LOG=portal=debug,rest=debug,info"
               ];
             };

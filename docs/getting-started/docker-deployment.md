@@ -2,6 +2,24 @@
 
 Deploy the Portal SDK Daemon using Docker for easy setup and management.
 
+## Versioning
+
+The daemon exposes its **application version** (from `portal-rest`’s Cargo.toml) for Docker and support:
+
+- **`GET /version`** (no auth) — returns JSON: `{"version":"0.1.0","git_commit":"a1b2c3d4"}` (or `"unknown"` when not built from git). Use this to verify which image/version is running (e.g. `curl http://localhost:3000/version`).
+- **API paths** — the WebSocket API is at **`/ws`** (auth required).
+
+For **Docker Hub**, tag images with the crate version so users can pin to a release:
+
+```bash
+# Build and tag with version (e.g. from crates/portal-rest/Cargo.toml)
+docker build -t youruser/sdk-daemon:0.1.0 -t youruser/sdk-daemon:latest .
+docker push youruser/sdk-daemon:0.1.0
+docker push youruser/sdk-daemon:latest
+```
+
+Use `:0.1.0` (or the current version) for reproducible deployments; use `:latest` for convenience.
+
 ## Quick Deployment
 
 ### Using Pre-built Image
