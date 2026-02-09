@@ -28,6 +28,12 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use portal_wallet::{BreezSparkWallet, NwcWallet, PortalWallet};
+use portal_macros::fetch_git_hash;
+
+/// Build-time version from Cargo.toml (used for Docker image tagging and runtime /version endpoint).
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Git commit hash at build time (from portal_macros::fetch_git_hash! or PORTAL_GIT_HASH env).
+const GIT_COMMIT: &str = fetch_git_hash!();
 
 #[derive(Debug, thiserror::Error)]
 enum ApiError {
@@ -107,6 +113,19 @@ async fn health_check() -> &'static str {
     "OK"
 }
 
+#[derive(Serialize)]
+struct VersionResponse {
+    version: &'static str,
+    git_commit: &'static str,
+}
+
+async fn version() -> Json<VersionResponse> {
+    Json(VersionResponse {
+        version: APP_VERSION,
+        git_commit: GIT_COMMIT,
+    })
+}
+
 async fn handle_ws_upgrade(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
@@ -127,7 +146,12 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = config::Settings::load()?;
-    info!("Config loaded: {:?}", config);
+    info!(
+        listen_port = config.info.listen_port,
+        wallet = format!("{:?}", config.wallet.ln_backend).to_lowercase(),
+        relays = config.nostr.relays.join(","),
+        "Config loaded",
+    );
 
     // Settings validation
     config.validate()?;
@@ -164,14 +188,21 @@ async fn main() -> anyhow::Result<()> {
         market_api: portal_rates::MarketAPI::new().expect("Failed to create market API"),
     };
 
-    // Create router with middleware
-    let app = Router::new()
+    // Public routes (no auth): health and version for Docker/orchestrators and support.
+    let public = Router::new()
         .route("/health", get(health_check))
+        .route("/version", get(version));
+
+    let ws = Router::new()
         .route("/ws", get(handle_ws_upgrade))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
-        ))
+        ));
+
+    let app = Router::new()
+        .merge(public)
+        .merge(ws)
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
