@@ -146,7 +146,12 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = config::Settings::load()?;
-    info!("Config loaded: {:?}", config);
+    info!(
+        listen_port = config.info.listen_port,
+        wallet = format!("{:?}", config.wallet.ln_backend).to_lowercase(),
+        relays = config.nostr.relays.join(","),
+        "Config loaded",
+    );
 
     // Settings validation
     config.validate()?;
