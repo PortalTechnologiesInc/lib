@@ -102,26 +102,7 @@
 
           rest = rest' rustPlatform;
           # Static binary for Docker: overlay Rust 1.90 + musl stdenv + static openssl
-          rest-static = staticRustPlatform.buildRustPackage {
-            pname = "portal-rest";
-            version = (pkgs.lib.importTOML ./crates/portal-rest/Cargo.toml).package.version;
-            src = pkgs.lib.sources.sourceFilesBySuffices ./. [ ".rs" "Cargo.toml" "Cargo.lock" "fiatUnits.json" "example.config.toml" ];
-            cargoHash = "";
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-              outputHashes = {
-                "cashu-0.11.0" = "sha256-kwwfQX5vDclfa86xPbbkbu+bh1VQXlX+imunUUoTYV4=";
-                "nostr-0.43.0" = "sha256-1TLthpGnDLUmnBoq2CneWnfTMwRocitbD4+wnrlCA44=";
-                "breez-sdk-common-0.1.0" = "sha256-b8R4V8L7lM0AOy9NxhiIt+RsIBHJdQPpfw9SN1/P//E=";
-              };
-            };
-            buildAndTestSubdir = "crates/portal-rest";
-            doCheck = false;
-            stdenv = pkgs.pkgsStatic.stdenv;
-            nativeBuildInputs = with pkgs; [ protobuf pkg-config ];
-            buildInputs = with pkgs.pkgsStatic; [ openssl ];
-            meta.mainProgram = "rest";
-          };
+          rest-static = rest' staticRustPlatform;
 
           rest-docker = let
             minimal-closure = pkgs.runCommand "minimal-rust-app" {
