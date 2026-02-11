@@ -4,7 +4,7 @@ use nostr_relay_pool::{
     relay::{FlagCheck, RelayServiceFlags},
 };
 
-use crate::router::{PortalSubscriptionId, ids::PortalConversationId};
+use crate::router::PortalSubscriptionId;
 
 /// A trait for an abstract channel
 ///

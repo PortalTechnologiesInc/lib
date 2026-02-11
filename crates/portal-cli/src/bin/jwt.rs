@@ -5,14 +5,14 @@ use portal_cli::create_app_instance;
 async fn main() -> Result<(), CliError> {
     env_logger::init();
 
-    let (keypair0, app0) = create_app_instance(
+    let (keypair0, _app0) = create_app_instance(
         "Sender",
         "mass derive myself benefit shed true girl orange family spawn device theme",
         vec!["wss://relay.nostr.net".to_string()],
     )
     .await?;
 
-    let (keypair1, app1) = create_app_instance(
+    let (keypair1, _app1) = create_app_instance(
         "Receiver",
         "draft sunny old taxi chimney ski tilt suffer subway bundle once story",
         vec!["wss://relay.nostr.net".to_string()],

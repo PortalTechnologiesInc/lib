@@ -426,7 +426,7 @@ impl MessageRouterActorState {
                     .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             }
 
-            for (alias_id, filter, subscription_id) in aliases_to_subscribe {
+            for (_, filter, subscription_id) in aliases_to_subscribe {
                 channel
                     .subscribe_to(vec![url.clone()], subscription_id.clone(), filter)
                     .await
@@ -517,7 +517,6 @@ impl MessageRouterActorState {
 
             // Remove aliases
             for alias in conv_state.aliases() {
-                let alias_clone = alias.clone();
                 channel
                     .unsubscribe(conv_state.subscription_id.clone())
                     .await
@@ -595,7 +594,7 @@ impl MessageRouterActorState {
                     }
                 };
 
-                let remaining = if let Some((conv_id, conv_state)) = self.conversations.iter_mut().find(|(_, conv_state)| conv_state.subscription_id == portal_subscription_id) {
+                let remaining = if let Some((_, conv_state)) = self.conversations.iter_mut().find(|(_, conv_state)| conv_state.subscription_id == portal_subscription_id) {
                     let remaining = conv_state.decrement_eose();
                     if remaining == Some(0) {
                         conv_state.clear_eose();
@@ -1156,10 +1155,6 @@ impl ConversationState {
             is_global: true, // Aliases default to global
             subscription_id,
         }
-    }
-    /// Get the ID of this conversation
-    fn id(&self) -> PortalConversationId {
-        self.id.clone()
     }
 
     /// Add a subscriber to this conversation

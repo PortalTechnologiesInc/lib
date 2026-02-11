@@ -6,12 +6,11 @@ use app::{
 };
 use log::{error, info};
 use portal::{
-    nostr::nips::{nip19::ToBech32, nip47::PayInvoiceRequest},
     protocol::{
         key_handshake::KeyHandshakeUrl,
         model::{
             auth::AuthResponseStatus,
-            nip46::{NostrConnectEvent, NostrConnectResponseStatus},
+            nip46::NostrConnectResponseStatus,
             payment::{
                 CashuResponseStatus, PaymentResponseContent, PaymentStatus,
                 RecurringPaymentResponseContent, RecurringPaymentStatus,

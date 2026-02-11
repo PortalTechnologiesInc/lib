@@ -15,7 +15,7 @@ use portal_sdk::PortalSDK;
 use serde::Serialize;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
-use tracing::{info, warn};
+use tracing::info;
 
 mod command;
 mod config;
@@ -27,7 +27,7 @@ pub use portal::nostr::key::PublicKey;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use portal_wallet::{BreezSparkWallet, NwcWallet, PortalWallet};
+use portal_wallet::PortalWallet;
 use portal_macros::fetch_git_hash;
 
 /// Build-time version from Cargo.toml (used for Docker image tagging and runtime /version endpoint).

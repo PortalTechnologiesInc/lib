@@ -1,6 +1,6 @@
 use config::{Config, Environment, File};
 use portal_wallet::{BreezSparkWallet, NwcWallet, PortalWallet};
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use std::sync::Arc;
 use tracing::info;
 

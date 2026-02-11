@@ -16,7 +16,7 @@ pub async fn main() -> Result<(), CliError> {
         "wss://relay.damus.io".to_string(),
     ];
 
-    let (keypair, app) = create_app_instance(
+    let (_keypair, app) = create_app_instance(
         "Reconnect",
         "mass derive myself benefit shed true girl orange family spawn device theme",
         relays.clone(),

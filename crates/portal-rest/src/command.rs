@@ -1,6 +1,6 @@
 use portal::conversation::profile::Profile;
 use portal::protocol::model::payment::{
-    Currency, InvoiceRequestContent, RecurrenceInfo, RecurringPaymentRequestContent,
+    Currency, InvoiceRequestContent, RecurrenceInfo,
     SinglePaymentRequestContent,
 };
 use portal::protocol::model::Timestamp;

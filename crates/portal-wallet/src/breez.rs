@@ -1,4 +1,3 @@
-use std::env;
 
 use axum::async_trait;
 use breez_sdk_spark::{
