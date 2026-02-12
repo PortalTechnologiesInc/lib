@@ -3,7 +3,8 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    # Pin to a rev that includes Rust 1.90.0 (macOS CI had older lock with only up to 1.70)
+    rust-overlay.url = "github:oxalica/rust-overlay?rev=067b3536e55341f579385ce8593cdcc9d022972b";
     flake-utils.url = "github:numtide/flake-utils";
     crane.url = "github:ipetkov/crane";
   };
@@ -28,7 +29,8 @@
           config.android_sdk.accept_license = true;
           config.allowUnfree = true;
         };
-        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+        # Pin to 1.90.0: home@0.5.12 and time@0.3.x require rustc 1.88+
+        rustToolchain = pkgs.rust-bin.stable."1.90.0".default.override {
           extensions = [ "rust-src" "rust-analyzer" ];
           targets = [ "aarch64-linux-android" "x86_64-linux-android" ];
         };
@@ -36,7 +38,7 @@
           rustc = rustToolchain;
           cargo = rustToolchain;
         };
-        rustToolchainApple = pkgs.rust-bin.stable.latest.default.override {
+        rustToolchainApple = pkgs.rust-bin.stable."1.90.0".default.override {
           extensions = [ "rust-src" "rust-analyzer" ];
           targets = [ "aarch64-apple-ios" "aarch64-apple-ios-sim" ];
         };
@@ -62,12 +64,12 @@
 
         craneLib = (crane.mkLib pkgs);
         craneLibAndroid = craneLib.overrideToolchain (
-          p: p.rust-bin.stable.latest.default.override {
+          p: p.rust-bin.stable."1.90.0".default.override {
             targets = [ "aarch64-linux-android" "x86_64-linux-android" ];
           }
         );
         craneLibIos = craneLib.overrideToolchain (
-          p: p.rust-bin.stable.latest.default.override {
+          p: p.rust-bin.stable."1.90.0".default.override {
             targets = [ "aarch64-apple-ios" "aarch64-apple-ios-sim" ];
           }
         );
