@@ -27,7 +27,7 @@ chrono-tz = { version = "0.10.3", features = ["serde"] }
 derive-new = "0.7.0"
 jwt-compact = { version = "0.9.0-beta.1", features = ["es256k"] }
 secp256k1 = "0.29"
-cdk = { git = "https://github.com/PortalTechnologiesInc/cdk", rev = "db8817b8fade55dd23697d0e07c760e48cf11a73" }
+cdk = { git = "https://github.com/PortalTechnologiesInc/cdk", rev = "949c2901b0c7ed1c967f537b1997bff2cc55b696" }
 reqwest = { version = "0.12.20", default-features = false, features = ["rustls-tls"] }
 
 # Additional dependencies used across workspace
@@ -36,13 +36,14 @@ bip39 = { version = "2.2.0", features = ["rand"] }
 bitcoin = "0.32.5"
 nostrstore = "0.43.0"
 async-utility = "0.3.1"
-cdk-common = { git = "https://github.com/PortalTechnologiesInc/cdk", rev = "db8817b8fade55dd23697d0e07c760e48cf11a73" }
-cdk-sqlite = { git = "https://github.com/PortalTechnologiesInc/cdk", rev = "db8817b8fade55dd23697d0e07c760e48cf11a73" }
+cdk-common = { git = "https://github.com/PortalTechnologiesInc/cdk", rev = "949c2901b0c7ed1c967f537b1997bff2cc55b696" }
+cdk-sqlite = { git = "https://github.com/PortalTechnologiesInc/cdk", rev = "949c2901b0c7ed1c967f537b1997bff2cc55b696" }
 axum = { version = "0.6", features = ["ws"] }
 tower-http = { version = "0.4", features = ["cors", "trace"] }
+bitflags = "2.10.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1.12.1", features = ["v4", "serde"] }
+uuid = { version = "1.17", features = ["v4", "serde"] }
 dotenv = "0.15"
 console-subscriber = "0.4.1"
 dashmap = "6.1.0"
@@ -50,6 +51,7 @@ android_logger = "0.15.0"
 async = "0.0.0"
 
 
+breez-sdk-spark = { git = "https://github.com/breez/spark-sdk", tag = "0.7.18" }
 
 [patch.crates-io]
 nostr-sdk = { git = "https://github.com/rust-nostr/nostr.git", rev = "36cc4bbf921044527b03b7e63bf7113d60ac935b" }
