@@ -1,32 +1,30 @@
 # Quick Start
 
-Get started with Portal in a few minutes: use the **SDK** (JavaScript or Java) to integrate, or **run the Portal API** with Docker.
+Use the SDK with an existing Portal endpoint, or run Portal locally with Docker.
 
-## Step 0: Requirements
+## 0. Requirements
 
 <custom-tabs category="sdk">
 
 <div slot="title">JavaScript</div>
 <section>
 
-- Node.js 18+ ([Installation](../sdk/installation.md))
-- A **Portal endpoint** (URL) and **auth token**.  
-  - If someone gives you a URL and token (hosted Portal or teammate), use those.  
-  - If not, you’ll run Portal locally with Docker in the next section and use `ws://localhost:3000/ws` and your chosen token.
+- Node.js 18+
+- A Portal endpoint (URL) and auth token (from a hosted Portal or [run locally](#2-endpoint-and-token))
 
 </section>
 
 <div slot="title">Java</div>
 <section>
 
-- Java 17+ ([Installation](../sdk/installation.md))
-- A **Portal endpoint** (URL) and **auth token**.  
-  - If someone gives you a URL and token (hosted Portal or teammate), use those.  
-  - If not, you’ll run Portal locally with Docker in the next section and use `ws://localhost:3000/ws` and your chosen token.
+- Java 17+
+- A Portal endpoint (URL) and auth token (from a hosted Portal or [run locally](#2-endpoint-and-token))
 
 </section>
 
-## Step 1: Install the SDK
+</custom-tabs>
+
+## 1. Install SDK
 
 <custom-tabs category="sdk">
 
@@ -37,32 +35,49 @@ Get started with Portal in a few minutes: use the **SDK** (JavaScript or Java) t
 npm install portal-sdk
 ```
 
+Or yarn/pnpm. See [SDK Installation](../sdk/installation.md).
+
 </section>
 
 <div slot="title">Java</div>
 <section>
 
-Add Jitpack and the dependency to your `build.gradle`:
+**Gradle** (build.gradle or build.gradle.kts):
 
 ```groovy
-repositories { maven { url 'https://jitpack.io' } }
-dependencies { implementation 'com.github.PortalTechnologiesInc:java-sdk:0.2.0' }
+repositories {
+    maven { url 'https://jitpack.io' }
+}
+dependencies {
+    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.2.1'
+}
 ```
 
-See [Installation](../sdk/installation.md) for Maven and full details.
+**Maven** (pom.xml):
+
+```xml
+<repository>
+    <id>jitpack.io</id>
+    <url>https://jitpack.io</url>
+</repository>
+<dependency>
+    <groupId>com.github.PortalTechnologiesInc</groupId>
+    <artifactId>java-sdk</artifactId>
+    <version>0.2.1</version>
+</dependency>
+```
+
+See [SDK Installation](../sdk/installation.md).
 
 </section>
 
 </custom-tabs>
 
-## Step 2: Get a Portal endpoint and token
+## 2. Endpoint and token
 
-**Option A — You have an endpoint and token**  
-Use them as `serverUrl` and in `authenticate(token)` below. Skip to Step 3.
+**You have them:** Use as serverUrl and in authenticate(token).
 
-**Option B — Run Portal locally (Docker)**
-
-You need a Nostr private key (hex). Generate one (e.g. [nostrtool.com](https://nostrtool.com/) → Key Generator, or `nak key generate`), then:
+**Run locally (Docker):** You need a Nostr private key (hex). Then:
 
 ```bash
 docker run -d -p 3000:3000 \
@@ -71,108 +86,71 @@ docker run -d -p 3000:3000 \
   getportal/sdk-daemon:latest
 ```
 
-Check: `curl http://localhost:3000/health` → `OK`.
+Check: curl http://localhost:3000/health → OK. Use ws://localhost:3000/ws and token my-secret-token.
 
-Use:
-- **Endpoint:** `ws://localhost:3000/ws`
-- **Token:** `my-secret-token`
-
-## Step 3: Connect and authenticate
+## 3. Connect and first flow
 
 <custom-tabs category="sdk">
 
 <div slot="title">JavaScript</div>
 <section>
-
-Create a file (e.g. `portal-demo.js` or `portal-demo.ts`):
 
 ```javascript
 import { PortalSDK } from 'portal-sdk';
 
-async function main() {
-  const client = new PortalSDK({
-    serverUrl: process.env.PORTAL_URL || 'ws://localhost:3000/ws',
-  });
+const client = new PortalSDK({ serverUrl: 'ws://localhost:3000/ws' });
+await client.connect();
+await client.authenticate('my-secret-token');
 
-  await client.connect();
-  await client.authenticate(process.env.PORTAL_AUTH_TOKEN || 'my-secret-token');
-
-  console.log('Connected to Portal');
-}
-main().catch(console.error);
-```
-
-Run it (with env set if you use Option B):
-
-```bash
-PORTAL_AUTH_TOKEN=my-secret-token node portal-demo.js
+const url = await client.newKeyHandshakeUrl((mainKey) => {
+  console.log('User key:', mainKey);
+});
+console.log('Share with user:', url);
 ```
 
 </section>
 
 <div slot="title">Java</div>
 <section>
-
-Create a `PortalSDK` with your WebSocket endpoint, then connect and authenticate:
 
 ```java
-var portalSDK = new PortalSDK("ws://localhost:3000/ws");
-portalSDK.connect();
-portalSDK.authenticate("my-secret-token");
+import cc.getportal.PortalSDK;
+import cc.getportal.command.request.KeyHandshakeUrlRequest;
+import cc.getportal.command.response.KeyHandshakeUrlResponse;
+import cc.getportal.command.notification.KeyHandshakeUrlNotification;
+
+PortalSDK sdk = new PortalSDK("ws://localhost:3000/ws");
+sdk.connect();
+sdk.authenticate("my-secret-token");
+
+sdk.sendCommand(
+    new KeyHandshakeUrlRequest((n) -> {
+        System.out.println("mainKey: " + n.main_key());
+    }),
+    (res, err) -> {
+        if (err != null) {
+            System.err.println("error: " + err);
+            return;
+        }
+        System.out.println("handshake URL: " + res.url());
+    }
+);
 ```
 
-See [Basic Usage](../sdk/basic-usage.md) for full usage.
+See [API Reference](../sdk/api-reference.md) and [Authentication guide](../guides/authentication.md).
 
 </section>
 
 </custom-tabs>
-
-## Step 4: Your first flow — user auth URL
-
-Add a call that generates an auth URL for a user. When they open it and approve (e.g. with an NWC wallet), your callback runs:
-
-<custom-tabs category="sdk">
-
-<div slot="title">JavaScript</div>
-<section>
-
-```javascript
-const url = await client.newKeyHandshakeUrl((mainKey, preferredRelays) => {
-  console.log('User authenticated with key:', mainKey);
-});
-
-console.log('Share this URL with your user:');
-console.log(url);
-```
-
-Run the script, open the URL in a browser, and approve in your wallet. You should see the user’s key in the console.
-
-</section>
-
-<div slot="title">Java</div>
-<section>
-
-Use **KeyHandshakeUrlRequest** and `sendCommand` to get an auth URL; handle the response in the callback. See [API Reference](../sdk/api-reference.md) and [Authentication guide](../guides/authentication.md).
-
-</section>
-
-</custom-tabs>
-
-**Done.** You’ve connected to Portal via the SDK.
-
-## What’s next?
-
-- **[Basic usage](../sdk/basic-usage.md)** — Connection, auth, payments, profiles.
-- **[Authentication guide](../guides/authentication.md)** — Deeper auth flow.
-- **[Single payments](../guides/single-payments.md)** — Request Lightning payments.
-- **[Recurring payments](../guides/recurring-payments.md)** — Subscriptions.
 
 ## Common issues
 
-| Issue | What to do |
-|-------|------------|
-| Connection refused | Portal not running or wrong URL. For local Docker: `docker ps` and use `ws://localhost:3000/ws`. |
-| Auth failed | Token must match the one Portal was started with (e.g. `PORTAL__AUTH__AUTH_TOKEN` in Docker). |
-| Invalid Nostr key | Use hex format for `PORTAL__NOSTR__PRIVATE_KEY`; convert nsec with e.g. `nak decode nsec ...`. |
+| Issue | Fix |
+|-------|-----|
+| Connection refused | Portal not running or wrong URL. For Docker: `docker ps`, use `ws://localhost:3000/ws`. |
+| Auth failed | Token must match `PORTAL__AUTH__AUTH_TOKEN` used when starting Portal. |
+| Invalid Nostr key | Use hex; convert nsec with e.g. `nak decode nsec ...`. |
 
-More: [Troubleshooting](../advanced/troubleshooting.md), [FAQ](../resources/faq.md).
+---
+
+- [Basic usage](../sdk/basic-usage.md) · [Authentication](../guides/authentication.md) · [Single payments](../guides/single-payments.md) · [Troubleshooting](../advanced/troubleshooting.md)

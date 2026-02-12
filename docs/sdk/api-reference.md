@@ -1,6 +1,6 @@
 # SDK API reference
 
-Concise reference for the main `PortalSDK` methods. For examples and workflows, see [Basic Usage](basic-usage.md) and the [Guides](../guides/authentication.md).
+Concise reference for the main PortalSDK methods. For examples and workflows, see [Basic Usage](basic-usage.md) and the [Guides](../guides/authentication.md).
 
 **SDK references:** [JavaScript/TypeScript SDK](https://www.npmjs.com/package/portal-sdk) (npm) · [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk) (GitHub)
 
@@ -29,10 +29,14 @@ Concise reference for the main `PortalSDK` methods. For examples and workflows, 
 <div slot="title">Java</div>
 <section>
 
-- **PortalSDK(wsEndpoint)** — Create client with WebSocket URL.
-- **connect()** — Establish WebSocket connection.
-- **authenticate(authToken)** — Authenticate with your token.
-- **sendCommand(request, callback)** — Send any command. Request classes: **AuthRequest**, **KeyHandshakeUrlRequest**, **RequestSinglePaymentRequest**, **MintCashuRequest**, **CalculateNextOccurrenceRequest**, and others. See the [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk) for the full list.
+| Class / method | Description |
+|----------------|-------------|
+| `PortalSDK(wsEndpoint)` | Create client with WebSocket URL. |
+| `connect()` | Establish WebSocket connection (blocking). |
+| `authenticate(authToken)` | Authenticate with your token (sends `AuthRequest` internally). |
+| `sendCommand(request, (response, err) -> { ... })` | Send any command. Request classes below. |
+
+Auth and users: KeyHandshakeUrlRequest(notificationCallback) or (staticToken, noRequest, notificationCallback); AuthenticateKeyRequest(mainKey, subkeys). Response: KeyHandshakeUrlResponse.url(), AuthenticateKeyResponse.
 
 </section>
 
@@ -59,7 +63,16 @@ Concise reference for the main `PortalSDK` methods. For examples and workflows, 
 <div slot="title">Java</div>
 <section>
 
-Use **RequestSinglePaymentRequest**, **MintCashuRequest**, and other request classes with **sendCommand**. See the [Java SDK repository](https://github.com/PortalTechnologiesInc/java-sdk) for the full list.
+| Request class | Description |
+|---------------|-------------|
+| `RequestSinglePaymentRequest(mainKey, subkeys, paymentContent, statusNotificationCallback)` | One-time Lightning payment. |
+| `RequestRecurringPaymentRequest(mainKey, subkeys, paymentContent)` | Recurring (subscription) payment. |
+| `RequestInvoicePaymentRequest(...)` | Pay an invoice. |
+| `RequestInvoiceRequest(...)` | Request an invoice. |
+| `CloseRecurringPaymentRequest(mainKey, subkeys, subscriptionId)` | Close a subscription. |
+| `ListenClosedRecurringPaymentRequest(onClosedCallback)` | Listen for user cancellations. |
+
+Content types: SinglePaymentRequestContent, RecurringPaymentRequestContent (with RecurrenceInfo). See [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk).
 
 </section>
 
@@ -74,7 +87,7 @@ Use **RequestSinglePaymentRequest**, **MintCashuRequest**, and other request cla
 
 | Method | Description |
 |--------|-------------|
-| `fetchProfile(mainKey)` | Fetch a user's Nostr profile (`Promise<Profile \| null>`). |
+| `fetchProfile(mainKey)` | Fetch a user's Nostr profile (Promise&lt;Profile | null&gt;). |
 | `setProfile(profile): Promise<void>` | Set or update a profile. |
 | `fetchNip05Profile(nip05): Promise<Nip05Profile>` | Resolve a NIP-05 identifier. |
 
@@ -83,7 +96,11 @@ Use **RequestSinglePaymentRequest**, **MintCashuRequest**, and other request cla
 <div slot="title">Java</div>
 <section>
 
-Use the appropriate request classes with **sendCommand** for profile and identity operations.
+| Request class | Description |
+|---------------|-------------|
+| `FetchProfileRequest(mainKey)` | Fetch Nostr profile. Response: `FetchProfileResponse.profile()`. |
+| `SetProfileRequest(profile)` | Set or update a profile. `Profile` model: name, displayName, picture, nip05, etc. |
+| `FetchNip05ProfileRequest(nip05)` | Resolve NIP-05 identifier. |
 
 </section>
 
@@ -106,7 +123,10 @@ Use the appropriate request classes with **sendCommand** for profile and identit
 <div slot="title">Java</div>
 <section>
 
-Use the JWT-related request classes with **sendCommand**.
+| Request class | Description |
+|---------------|-------------|
+| `IssueJwtRequest(targetKey, durationHours)` | Issue a JWT. Response: `IssueJwtResponse.token()`. |
+| `VerifyJwtRequest(publicKey, token)` | Verify a JWT. Response: `VerifyJwtResponse` (claims). |
 
 </section>
 
@@ -127,14 +147,24 @@ Use the JWT-related request classes with **sendCommand**.
 | `sendCashuDirect(...)` | Send Cashu tokens. |
 | `mintCashu(...)` | Mint Cashu tokens. |
 | `burnCashu(...)` | Burn Cashu tokens. |
-| `calculateNextOccurrence(calendar, from)` | Compute next occurrence for a recurrence calendar (`Promise<Timestamp \| null>`). |
+| `calculateNextOccurrence(calendar, from)` | Compute next occurrence for a recurrence calendar (Promise&lt;Timestamp | null&gt;). |
 
 </section>
 
 <div slot="title">Java</div>
 <section>
 
-Use **KeyHandshakeUrlRequest**, **RequestSinglePaymentRequest**, **MintCashuRequest**, relay and Cashu request classes with **sendCommand**.
+| Request class | Description |
+|---------------|-------------|
+| `AddRelayRequest(relayUrl)` | Add a relay. |
+| `RemoveRelayRequest(relayUrl)` | Remove a relay. |
+| `RequestCashuRequest(mintUrl, unit, amount, recipientKey, subkeys)` | Request Cashu tokens from user. |
+| `MintCashuRequest(mintUrl, staticToken?, unit, amount, description?)` | Mint Cashu tokens. |
+| `BurnCashuRequest(mintUrl, staticToken?, unit, token)` | Burn (redeem) a token. |
+| `SendCashuDirectRequest(mainKey, subkeys, token)` | Send Cashu token to user. |
+| `CalculateNextOccurrenceRequest(calendar, fromTimestamp)` | Next occurrence for recurrence. |
+
+See [Cashu guide](../guides/cashu-tokens.md) and [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk).
 
 </section>
 
@@ -157,7 +187,7 @@ Use **KeyHandshakeUrlRequest**, **RequestSinglePaymentRequest**, **MintCashuRequ
 <div slot="title">Java</div>
 <section>
 
-Responses and notifications are delivered in the **sendCommand** callback.
+Responses and notifications are delivered in the `sendCommand` callback.
 
 </section>
 
@@ -170,20 +200,29 @@ Responses and notifications are delivered in the **sendCommand** callback.
 <div slot="title">JavaScript</div>
 <section>
 
-- **`Currency`** — e.g. `Currency.Millisats`.
-- **`Timestamp`** — `Timestamp.fromDate(date)`, `Timestamp.fromNow(seconds)`, `toDate()`, `toJSON()`.
-- **`Profile`** — `id`, `pubkey`, `name`, `display_name`, `picture`, `about`, `nip05`.
-- **`RecurringPaymentRequestContent`**, **`SinglePaymentRequestContent`**, **`InvoiceRequestContent`** — See type definitions in the package.
-- **`AuthResponseData`**, **`InvoiceStatus`**, **`RecurringPaymentStatus`** — Response and status types.
+- **Currency** — e.g. Currency.Millisats.
+- **Timestamp** — Timestamp.fromDate(date), Timestamp.fromNow(seconds), toDate(), toJSON().
+- **Profile** — id, pubkey, name, display_name, picture, about, nip05.
+- **RecurringPaymentRequestContent**, **SinglePaymentRequestContent**, **InvoiceRequestContent** — See type definitions in the package.
+- **AuthResponseData**, **InvoiceStatus**, **RecurringPaymentStatus** — Response and status types.
 
-Full types are exported from `portal-sdk`; use your editor’s IntelliSense or the package source.
+Full types are exported from portal-sdk; use your editor’s IntelliSense or the package source.
 
 </section>
 
 <div slot="title">Java</div>
 <section>
 
-**PortalRequest**, **PortalResponse**, **PortalNotification**, and request/response classes (e.g. **CalculateNextOccurrenceRequest**). See the [Java SDK repository](https://github.com/PortalTechnologiesInc/java-sdk) for the full API.
+| Type | Description |
+|------|-------------|
+| `PortalRequest`, `PortalResponse`, `PortalNotification` | Base types for sendCommand. |
+| `Currency` | e.g. `Currency.MILLISATS`. |
+| `SinglePaymentRequestContent(description, amount, currency, ...)` | Single payment params. |
+| `RecurringPaymentRequestContent(..., RecurrenceInfo, expiresAt)` | Recurring payment params. |
+| `RecurrenceInfo(..., calendar, ..., firstPaymentDue)` | Calendar: "weekly", "monthly", etc. |
+| `Profile(name, displayName, picture, nip05)` | Nostr profile model. |
+
+All request/response/notification classes in cc.getportal.command.request, cc.getportal.command.response, cc.getportal.command.notification, cc.getportal.model. See [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk).
 
 </section>
 
@@ -191,4 +230,4 @@ Full types are exported from `portal-sdk`; use your editor’s IntelliSense or t
 
 ---
 
-**Next:** [Error Handling](error-handling.md) for `PortalSDKError` and error codes.
+**Next:** [Error Handling](error-handling.md) for PortalSDKError and error codes.

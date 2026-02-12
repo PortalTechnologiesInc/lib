@@ -4,6 +4,11 @@ Fetch and manage user profiles from the Nostr network.
 
 ## Fetching User Profiles
 
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
+
 ```typescript
 const profile = await client.fetchProfile(userPubkey);
 
@@ -16,9 +21,36 @@ if (profile) {
 }
 ```
 
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+```java
+import cc.getportal.command.request.FetchProfileRequest;
+import cc.getportal.command.response.FetchProfileResponse;
+
+sdk.sendCommand(
+    new FetchProfileRequest("user-pubkey-hex"),
+    (res, err) -> {
+        if (err != null) return;
+        System.out.println("profile: " + res.profile());
+    }
+);
+```
+
+</section>
+
+</custom-tabs>
+
 ## Setting Your Service Profile
 
 Publish your service's profile to Nostr:
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
 
 ```typescript
 await client.setProfile({
@@ -31,6 +63,27 @@ await client.setProfile({
   nip05: 'verify@myservice.com'
 });
 ```
+
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+```java
+import cc.getportal.command.request.SetProfileRequest;
+import cc.getportal.model.Profile;
+
+sdk.sendCommand(
+    new SetProfileRequest(new Profile("alice", "Alice", "https://...", "alice@example.com")),
+    (res, err) -> {
+        if (err != null) { System.err.println(err); return; }
+    }
+);
+```
+
+</section>
+
+</custom-tabs>
 
 ## Profile Fields
 
@@ -45,4 +98,3 @@ await client.setProfile({
 ---
 
 **Next**: [JWT Tokens](jwt-tokens.md)
-

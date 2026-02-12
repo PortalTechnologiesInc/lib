@@ -1,89 +1,45 @@
 # Relay Management
 
-Dynamically manage Nostr relays in your Portal instance.
+Manage Nostr relays used by your Portal instance. Relays store and forward Nostr messages.
 
-## Overview
+## API
 
-Relays are Nostr servers that store and forward messages. Portal connects to multiple relays for redundancy and better message delivery.
+- **addRelay(relay):** Add a relay (e.g. wss://relay.damus.io). Returns confirmation.
+- **removeRelay(relay):** Remove a relay.
 
-## Adding Relays
+<custom-tabs category="sdk">
 
-```typescript
-const relayUrl = 'wss://relay.damus.io';
-
-const addedRelay = await client.addRelay(relayUrl);
-console.log('Added relay:', addedRelay);
-```
-
-## Removing Relays
+<div slot="title">JavaScript</div>
+<section>
 
 ```typescript
-const relayUrl = 'wss://relay.damus.io';
-
-const removedRelay = await client.removeRelay(relayUrl);
-console.log('Removed relay:', removedRelay);
+await client.addRelay('wss://relay.damus.io');
+await client.removeRelay('wss://relay.damus.io');
 ```
 
-## Popular Relays
+</section>
 
-Here are some reliable public relays:
+<div slot="title">Java</div>
+<section>
 
-- `wss://relay.damus.io` - Popular, well-maintained
-- `wss://relay.snort.social` - Fast and reliable
-- `wss://nos.lol` - Good for payments
-- `wss://relay.nostr.band` - Large relay network
-- `wss://nostr.wine` - Paid relay (more reliable)
+```java
+import cc.getportal.command.request.AddRelayRequest;
+import cc.getportal.command.request.RemoveRelayRequest;
 
-## Best Practices
-
-1. **Use 3-5 relays**: Balance between redundancy and bandwidth
-2. **Geographic diversity**: Choose relays in different locations
-3. **Mix free and paid**: Paid relays often have better uptime
-4. **Monitor connectivity**: Remove relays that are consistently offline
-5. **User preferences**: Respect user's preferred relays from handshake
-
-## Relay Configuration Example
-
-```typescript
-class RelayManager {
-  private client: PortalSDK;
-  private activeRelays = new Set<string>();
-
-  async setupDefaultRelays() {
-    const defaultRelays = [
-      'wss://relay.damus.io',
-      'wss://relay.snort.social',
-      'wss://nos.lol'
-    ];
-
-    for (const relay of defaultRelays) {
-      try {
-        await this.client.addRelay(relay);
-        this.activeRelays.add(relay);
-        console.log('✅ Connected to', relay);
-      } catch (error) {
-        console.error('❌ Failed to connect to', relay);
-      }
-    }
-  }
-
-  async addUserRelays(preferredRelays: string[]) {
-    // Add user's preferred relays from handshake
-    for (const relay of preferredRelays) {
-      if (!this.activeRelays.has(relay)) {
-        try {
-          await this.client.addRelay(relay);
-          this.activeRelays.add(relay);
-        } catch (error) {
-          console.error('Failed to add user relay:', relay);
-        }
-      }
-    }
-  }
-}
+sdk.sendCommand(new AddRelayRequest("wss://relay.damus.io"), (res, err) -> {
+    if (err != null) System.err.println(err);
+});
+sdk.sendCommand(new RemoveRelayRequest("wss://relay.damus.io"), (res, err) -> {
+    if (err != null) System.err.println(err);
+});
 ```
+
+</section>
+
+</custom-tabs>
+
+Common relays: `wss://relay.damus.io`, `wss://relay.snort.social`, `wss://nos.lol`, `wss://relay.nostr.band`. Use several for redundancy; respect user preferred relays from the key handshake when relevant.
 
 ---
 
-**Next**: [SDK](../sdk/installation.md)
-
+**Next:** [SDK](../sdk/installation.md)
