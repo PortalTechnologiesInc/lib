@@ -58,7 +58,6 @@ impl Default for NwcSettings {
 #[derive(Deserialize, Debug, Clone)]
 pub struct BreezSettings {
     pub api_key: String,
-    pub storage_dir: String,
     pub mnemonic: String,
 }
 
@@ -66,7 +65,6 @@ impl Default for BreezSettings {
     fn default() -> Self {
         Self {
             api_key: String::new(),
-            storage_dir: String::from("~/.breez"),
             mnemonic: String::new(),
         }
     }
@@ -74,10 +72,7 @@ impl Default for BreezSettings {
 
 impl Settings {
     pub fn load() -> anyhow::Result<Self> {
-        let config_file = dirs::home_dir()
-            .ok_or(anyhow::anyhow!("Home directory not found"))?
-            .join(".portal-rest")
-            .join("config.toml");
+        let config_file = crate::constants::portal_rest_dir()?.join("config.toml");
 
         // Create default config if it doesn't exist
         if !config_file.exists() {
@@ -150,9 +145,15 @@ impl Settings {
                     .breez
                     .as_ref()
                     .ok_or(anyhow::anyhow!("Breez Wallet is not set"))?;
+                let storage_dir = crate::constants::portal_rest_dir()?
+                    .join("breez")
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid portal-rest path"))?
+                    .to_string();
+                std::fs::create_dir_all(&storage_dir)?;
                 let breez = BreezSparkWallet::new(
                     settings.api_key.clone(),
-                    settings.storage_dir.clone(),
+                    storage_dir,
                     settings.mnemonic.clone(),
                 )
                 .await?;
