@@ -45,7 +45,6 @@ services:
 | `PORTAL__WALLET__LN_BACKEND` | none, nwc, or breez. |
 | `PORTAL__WALLET__NWC__URL` | NWC URL when ln_backend=nwc. |
 | `PORTAL__WALLET__BREEZ__API_KEY` | Breez API key when ln_backend=breez. |
-| `PORTAL__WALLET__BREEZ__STORAGE_DIR` | Breez storage directory. |
 | `PORTAL__WALLET__BREEZ__MNEMONIC` | Breez mnemonic when ln_backend=breez. |
 | `PORTAL__NOSTR__RELAYS` | Comma-separated relay URLs. |
 | `PORTAL__NOSTR__SUBKEY_PROOF` | Proof for Nostr subkey delegation (optional). |

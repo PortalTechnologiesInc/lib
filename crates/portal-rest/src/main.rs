@@ -19,6 +19,7 @@ use tracing::info;
 
 mod command;
 mod config;
+mod constants;
 mod response;
 mod ws;
 

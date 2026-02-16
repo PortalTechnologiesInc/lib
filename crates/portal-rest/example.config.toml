@@ -34,7 +34,7 @@ ln_backend = "none"
 
 
 ## Configuration for the Breez wallet.
+## Data is always stored under ~/.portal-rest/breez
 # [wallet.breez]
 # api_key = "your-breez-api-key"
-# storage_dir = "your-breez-storage-dir"
 # mnemonic = "your-breez-mnemonic"

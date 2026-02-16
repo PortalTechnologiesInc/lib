@@ -6,6 +6,7 @@ Portal (portal-rest) reads ~/.portal-rest/config.toml and overrides with PORTAL_
 
 - **Config:** ~/.portal-rest/config.toml. Example: crates/portal-rest/example.config.toml.
 - **Override:** PORTAL__&lt;SECTION&gt;__&lt;KEY&gt;=value (double underscore). Example: PORTAL__AUTH__AUTH_TOKEN=secret.
+- **Data:** Breez wallet data (when `ln_backend=breez`) is stored under ~/.portal-rest/breez.
 
 | Config key | Env | Description |
 |------------|-----|-------------|
@@ -17,7 +18,6 @@ Portal (portal-rest) reads ~/.portal-rest/config.toml and overrides with PORTAL_
 | wallet.ln_backend | `PORTAL__WALLET__LN_BACKEND` | `none`, `nwc`, or `breez`. |
 | wallet.nwc.url | `PORTAL__WALLET__NWC__URL` | NWC URL (when `ln_backend=nwc`). |
 | wallet.breez.api_key | `PORTAL__WALLET__BREEZ__API_KEY` | Breez API key (when `ln_backend=breez`). |
-| wallet.breez.storage_dir | `PORTAL__WALLET__BREEZ__STORAGE_DIR` | Breez storage directory. |
 | wallet.breez.mnemonic | `PORTAL__WALLET__BREEZ__MNEMONIC` | Breez mnemonic (when `ln_backend=breez`). |
 
 ## Minimal run
