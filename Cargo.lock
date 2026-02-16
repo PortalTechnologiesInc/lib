@@ -80,23 +80,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "android_log-sys"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84521a3cf562bc62942e294181d9eef17eb38ceb8c68677bc49f144e4c3d4f8d"
-
-[[package]]
-name = "android_logger"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbb4e440d04be07da1f1bf44fb4495ebd58669372fe0cffa6e48595ac5bd88a3"
-dependencies = [
- "android_log-sys",
- "env_filter 0.1.4",
- "log",
-]
-
-[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -165,8 +148,6 @@ checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
 name = "app"
 version = "0.4.13"
 dependencies = [
- "android_logger",
- "async",
  "async-trait",
  "async-utility",
  "bip39",
@@ -184,7 +165,6 @@ dependencies = [
  "portal",
  "portal-macros",
  "portal-rates",
- "rand 0.8.5",
  "reqwest",
  "serde",
  "serde_json",
@@ -300,12 +280,6 @@ dependencies = [
  "quote",
  "syn 2.0.115",
 ]
-
-[[package]]
-name = "async"
-version = "0.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6232ae588d3c787fe1175eca53dd2b088fb7405efebd9d145e4e0afe7a4e79f1"
 
 [[package]]
 name = "async-compression"
@@ -1757,16 +1731,6 @@ dependencies = [
 
 [[package]]
 name = "env_filter"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bf3c259d255ca70051b30e2e95b5446cdb8949ac4cd22c0d7fd634d89f568e2"
-dependencies = [
- "log",
- "regex",
-]
-
-[[package]]
-name = "env_filter"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a1c3cc8e57274ec99de65301228b537f1e4eedc1b8e0f9411c6caac8ae7308f"
@@ -1783,7 +1747,7 @@ checksum = "b2daee4ea451f429a58296525ddf28b45a3b64f1acf6587e2067437bb11e218d"
 dependencies = [
  "anstream",
  "anstyle",
- "env_filter 1.0.0",
+ "env_filter",
  "jiff",
  "log",
 ]
@@ -3886,7 +3850,6 @@ version = "0.1.0"
 dependencies = [
  "app",
  "async-trait",
- "base64 0.21.7",
  "env_logger",
  "lightning-invoice",
  "log",
@@ -3900,9 +3863,6 @@ dependencies = [
 [[package]]
 name = "portal-macros"
 version = "0.1.0"
-dependencies = [
- "uniffi",
-]
 
 [[package]]
 name = "portal-rates"
@@ -3925,7 +3885,6 @@ dependencies = [
  "anyhow",
  "axum 0.6.20",
  "base64 0.21.7",
- "bitflags 2.10.0",
  "cdk",
  "cdk-sqlite",
  "chrono",
@@ -3958,11 +3917,9 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "portal",
- "reqwest",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
- "uuid",
 ]
 
 [[package]]

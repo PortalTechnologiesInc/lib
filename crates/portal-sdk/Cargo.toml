@@ -9,6 +9,4 @@ portal = { path = "../portal" }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-uuid = { workspace = true }
 chrono = { workspace = true }
-reqwest = { workspace = true }

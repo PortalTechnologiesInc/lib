@@ -63,10 +63,10 @@ pub enum RatesError {
 struct FiatUnit {
     #[serde(rename = "endPointKey")]
     end_point_key: String,
-    locale: String,
+    // locale: String,
     source: Source,
     symbol: String,
-    country: Option<String>,
+    // country: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
