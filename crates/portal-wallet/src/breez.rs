@@ -1,7 +1,7 @@
 
 use axum::async_trait;
 use breez_sdk_spark::{
-    BreezSdk, ConnectRequest, ListPaymentsRequest, Network, PaymentDetails, PaymentStatus,
+    BreezSdk, ConnectRequest, ListPaymentsRequest, Network, PaymentDetails, PaymentStatus, PaymentType,
     ReceivePaymentMethod, ReceivePaymentRequest, Seed, connect, default_config,
 };
 
@@ -37,13 +37,15 @@ impl BreezSparkWallet {
 impl PortalWallet for BreezSparkWallet {
     async fn make_invoice(&self, sats: u64, description: Option<String>) -> Result<String> {
         let description = description.unwrap_or("Portal invoice".into());
-
+        // Optionally set the expiry duration in seconds
+        let optional_expiry_secs = Some(3600_u32);
         let receive_response = self
             .sdk
             .receive_payment(ReceivePaymentRequest {
                 payment_method: ReceivePaymentMethod::Bolt11Invoice {
                     description,
                     amount_sats: Some(sats / 1000),
+                    expiry_secs: optional_expiry_secs,
                 },
             })
             .await?;
@@ -59,8 +61,20 @@ impl PortalWallet for BreezSparkWallet {
             let list_payments_response = self
                 .sdk
                 .list_payments(ListPaymentsRequest {
+                    // Filter by payment type
+                    type_filter: Some(vec![PaymentType::Receive]),
+                    // Filter by status
+                    status_filter: Some(vec![PaymentStatus::Completed]),
+                    asset_filter: None,
+                    // Time range filters
+                    from_timestamp: None, // Unix timestamp
+                    to_timestamp: None,   // Unix timestamp
+                    // Pagination
                     limit: Some(batch_size),
                     offset: Some(offset),
+                    // Sort order (true = oldest first, false = newest first)
+                    sort_ascending: Some(false),
+                    payment_details_filter: None,
                 })
                 .await?;
 
