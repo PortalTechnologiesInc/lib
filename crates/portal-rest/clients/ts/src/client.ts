@@ -451,4 +451,10 @@ export class PortalSDK {
     const response = await this.sendExpect('GetWalletInfo', {}, 'wallet_info');
     return { wallet_type: response.wallet_type, balance_msat: response.balance_msat };
   }
+
+  /** Pay a Lightning invoice (BOLT-11). Returns the payment preimage on success. Requires backend wallet. */
+  public async payInvoice(invoice: string): Promise<string> {
+    const response = await this.sendExpect('PayInvoice', { invoice }, 'pay_invoice');
+    return response.preimage;
+  }
 }
