@@ -11,8 +11,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Unreleased
 
 #### Added
-- `PayInvoice` WebSocket command
-- `GetWalletInfo` command and TypeScript SDK client
+- `PayInvoice` command
+- `GetWalletInfo` command
+- `RequestSinglePayment` accepts an optional `request_id` parameter
 
 #### Changed
 - Default Breez storage directory changed to `~/.portal-rest/breez`

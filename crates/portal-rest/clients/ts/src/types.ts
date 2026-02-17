@@ -72,6 +72,8 @@ export interface SinglePaymentRequestContent {
   currency: Currency;
   subscription_id?: string;
   auth_token?: string;
+  /** Optional client-provided id for correlating this payment request. */
+  request_id?: string;
 }
 
 /** Confirmed variant of recurring payment status (server tag: "confirmed") */

@@ -580,7 +580,7 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 current_exchange_rate,
                 subscription_id: payment_request.subscription_id,
                 auth_token: payment_request.auth_token,
-                request_id: command.id.clone(),
+                request_id: payment_request.request_id.clone().unwrap_or_else(|| command.id.clone()),
                 description: Some(payment_request.description),
             };
 

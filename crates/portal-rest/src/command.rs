@@ -123,6 +123,7 @@ pub struct SinglePaymentParams {
     pub auth_token: Option<String>,
 
     pub subscription_id: Option<String>,
+    pub request_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
