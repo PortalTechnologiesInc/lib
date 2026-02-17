@@ -95,6 +95,10 @@ pub enum ResponseData {
         next_occurrence: Option<Timestamp>,
     },
 
+    PayInvoice {
+        preimage: String,
+    },
+
     FetchNip05Profile {
         profile: Nip05Profile,
     },

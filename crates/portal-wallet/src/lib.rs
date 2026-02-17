@@ -13,6 +13,7 @@ pub trait PortalWallet: Send + Sync {
     async fn is_invoice_paid(&self, invoice: String) -> Result<(bool, Option<String>)>;
     /// Get balance (msat)
     async fn get_balance(&self) -> Result<u64>;
+    async fn pay_invoice(&self, invoice: String) -> Result<String>;
 }
 
 /// Result type for Portal Wallet operations
@@ -27,6 +28,8 @@ pub enum PortalWalletError {
     NWCError(::nwc::Error),
     #[error("Breez error: {0}")]
     BreezError(breez_sdk_spark::SdkError),
+    #[error("Fee too high: {0}")]
+    FeeTooHigh(String),
 }
 
 impl From<portal::nostr::nips::nip47::Error> for PortalWalletError {
