@@ -106,6 +106,9 @@ pub enum Command {
         calendar: String,
         from: Timestamp,
     },
+    PayInvoice {
+        invoice: String,
+    },
     FetchNip05Profile {
         nip05: String,
     },
