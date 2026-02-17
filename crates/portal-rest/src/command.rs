@@ -112,6 +112,7 @@ pub enum Command {
     FetchNip05Profile {
         nip05: String,
     },
+    GetWalletInfo,
 }
 
 #[derive(Debug, Deserialize)]

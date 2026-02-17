@@ -182,6 +182,7 @@ export type Command =
   | { cmd: 'RemoveRelay'; params: { relay: string } }
   | { cmd: 'CalculateNextOccurrence'; params: { calendar: string; from: Timestamp } }
   | { cmd: 'FetchNip05Profile'; params: { nip05: string } }
+  | { cmd: 'GetWalletInfo' }
   ;
 
 // Response types (must match server response.rs)
@@ -205,6 +206,7 @@ export type ResponseData =
   | { type: 'remove_relay'; relay: string }
   | { type: 'calculate_next_occurrence'; next_occurrence: string | number | null }
   | { type: 'fetch_nip05_profile'; profile: Nip05Profile }
+  | { type: 'wallet_info'; wallet_type: string; balance_msat: number }
   ;
 
 /** NIP-05 profile (matches nostr Nip05Profile serialization) */

@@ -102,6 +102,11 @@ pub enum ResponseData {
     FetchNip05Profile {
         profile: Nip05Profile,
     },
+
+    WalletInfo {
+        wallet_type: String,
+        balance_msat: u64,
+    },
 }
 
 #[derive(Debug, Serialize)]
