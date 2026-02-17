@@ -2,6 +2,7 @@
 
 [![Documentation](https://img.shields.io/badge/docs-portaltechnologiesinc.github.io-blue)](https://portaltechnologiesinc.github.io/lib/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-orange)](CHANGELOG.md)
 
 Portal is a Nostr-based authentication and payment SDK allowing applications to authenticate users and process payments through Nostr and Lightning Network.
 
@@ -39,4 +40,4 @@ Then use `ws://localhost:3000/ws` and your token with the [TypeScript](https://w
 
 ---
 
-**License:** MIT — [LICENSE](LICENSE)
+**License:** MIT — [LICENSE](LICENSE) | **Changelog:** [CHANGELOG.md](CHANGELOG.md)
