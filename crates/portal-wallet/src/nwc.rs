@@ -34,6 +34,15 @@ impl PortalWallet for NwcWallet {
         Ok(payment_response.invoice)
     }
 
+    async fn pay_invoice(&self, invoice: String) -> Result<String> {
+        let response = self
+            .nwc
+            .pay_invoice(portal::nostr::nips::nip47::PayInvoiceRequest::new(invoice))
+            .await?;
+
+        Ok(response.preimage)
+    }
+
     async fn is_invoice_paid(&self, invoice: String) -> Result<(bool, Option<String>)> {
         let invoice = self
             .nwc

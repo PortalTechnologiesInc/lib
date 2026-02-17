@@ -1465,6 +1465,39 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             };
             let _ = ctx.send_message(response).await;
         }
+        Command::PayInvoice { invoice } => {
+            let wallet = match &ctx.wallet {
+                Some(w) => w,
+                None => {
+                    let _ = ctx.send_error_message(&command.id, "Backend wallet is not available: set the NWC_URL or the BREEZ_MNEMONIC environment variable to enable it").await;
+                    return;
+                }
+            };
+
+            let wallet_clone = wallet.clone();
+            let command_id = command.id.clone();
+            let ctx_clone = ctx.clone();
+
+            tokio::task::spawn(async move {
+                match wallet_clone.pay_invoice(invoice).await {
+                    Ok(preimage) => {
+                        let response = Response::Success {
+                            id: command_id,
+                            data: ResponseData::PayInvoice { preimage },
+                        };
+                        let _ = ctx_clone.send_message(response).await;
+                    }
+                    Err(e) => {
+                        let _ = ctx_clone
+                            .send_error_message(
+                                &command_id,
+                                &format!("Failed to pay invoice: {}", e),
+                            )
+                            .await;
+                    }
+                }
+            });
+        }
         Command::FetchNip05Profile { nip05 } => {
             let profile = match fetch_nip05_profile(&nip05).await {
                 Ok(profile) => profile,
