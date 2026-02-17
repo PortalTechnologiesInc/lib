@@ -1,8 +1,7 @@
 
 use axum::async_trait;
 use breez_sdk_spark::{
-    BreezSdk, ConnectRequest, ListPaymentsRequest, Network, PaymentDetails, PaymentStatus, PaymentType,
-    ReceivePaymentMethod, ReceivePaymentRequest, Seed, connect, default_config,
+    BreezSdk, ConnectRequest, GetInfoRequest, ListPaymentsRequest, Network, PaymentDetails, PaymentStatus, PaymentType, ReceivePaymentMethod, ReceivePaymentRequest, Seed, connect, default_config
 };
 
 use crate::{PortalWallet, Result};
@@ -108,5 +107,13 @@ impl PortalWallet for BreezSparkWallet {
         }
 
         Ok((false, None))
+    }
+
+    async fn get_balance(&self) -> Result<u64> {
+        let balance = self.sdk.get_info(GetInfoRequest {
+            ensure_synced: Some(true),
+        })
+        .await?;
+        Ok(balance.balance_sats * 1000)
     }
 }

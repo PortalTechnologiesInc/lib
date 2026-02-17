@@ -45,4 +45,9 @@ impl PortalWallet for NwcWallet {
 
         Ok((invoice.settled_at.is_some(), invoice.preimage))
     }
+
+    async fn get_balance(&self) -> Result<u64> {
+        let balance = self.nwc.get_balance().await?;
+        Ok(balance)
+    }
 }

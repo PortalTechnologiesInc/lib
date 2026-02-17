@@ -445,4 +445,10 @@ export class PortalSDK {
     const response = await this.sendExpect('FetchNip05Profile', { nip05 }, 'fetch_nip05_profile');
     return response.profile;
   }
+
+  /** Get wallet type and balance (msat). Fails if no wallet is configured or balance fetch fails. */
+  public async getWalletInfo(): Promise<{ wallet_type: string; balance_msat: number }> {
+    const response = await this.sendExpect('GetWalletInfo', {}, 'wallet_info');
+    return { wallet_type: response.wallet_type, balance_msat: response.balance_msat };
+  }
 }

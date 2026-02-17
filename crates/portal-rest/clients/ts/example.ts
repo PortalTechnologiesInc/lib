@@ -154,6 +154,11 @@ async function main() {
     });
     console.log('Payment request sent');
 
+    // Example 5: Get Wallet Info
+    console.log('\n=== Get Wallet Info ===');
+    const walletInfo = await client.getWalletInfo();
+    console.log('Wallet info:', walletInfo);
+
     // Keep the connection alive and wait for user input
     console.log('\nConnection is active. Press Enter to disconnect...');
     

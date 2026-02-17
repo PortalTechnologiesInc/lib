@@ -2,6 +2,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::command::{Command, CommandWithId};
+use crate::config;
 use crate::response::*;
 use crate::{AppState, PublicKey};
 use axum::extract::ws::{Message, WebSocket};
@@ -35,6 +36,7 @@ struct SocketContext {
     sdk: Arc<PortalSDK>,
     market_api: Arc<portal_rates::MarketAPI>,
     wallet: Option<Arc<dyn PortalWallet>>,
+    wallet_type: config::LnBackend,
     tx_message: mpsc::Sender<Message>,
     tx_notification: mpsc::Sender<Response>,
     active_streams: ActiveStreams,
@@ -45,6 +47,7 @@ impl SocketContext {
         sdk: Arc<PortalSDK>,
         market_api: Arc<portal_rates::MarketAPI>,
         wallet: Option<Arc<dyn PortalWallet>>,
+        wallet_type: config::LnBackend,
         tx_message: mpsc::Sender<Message>,
         tx_notification: mpsc::Sender<Response>,
     ) -> Self {
@@ -52,6 +55,7 @@ impl SocketContext {
             sdk,
             market_api,
             wallet,
+            wallet_type,
             tx_message,
             tx_notification,
             active_streams: ActiveStreams::new(),
@@ -164,6 +168,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
         state.sdk.clone(),
         state.market_api.clone(),
         state.wallet,
+        state.settings.wallet.ln_backend.clone(),
         tx_message.clone(),
         tx_notification,
     ));
@@ -1481,6 +1486,43 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             let response = Response::Success {
                 id: command.id,
                 data: ResponseData::FetchNip05Profile { profile },
+            };
+            let _ = ctx.send_message(response).await;
+        }
+        Command::GetWalletInfo => {
+            let wallet = match &ctx.wallet {
+                Some(w) => w,
+                None => {
+                    let _ = ctx
+                        .send_error_message(&command.id, "No wallet configured")
+                        .await;
+                    return;
+                }
+            };
+            let balance_msat = match wallet.get_balance().await {
+                Ok(b) => b,
+                Err(e) => {
+                    let _ = ctx
+                        .send_error_message(
+                            &command.id,
+                            &format!("Failed to get balance: {}", e),
+                        )
+                        .await;
+                    return;
+                }
+            };
+            let wallet_type = match &ctx.wallet_type {
+                config::LnBackend::None => "none",
+                config::LnBackend::Nwc => "nwc",
+                config::LnBackend::Breez => "breez",
+            }
+            .to_string();
+            let response = Response::Success {
+                id: command.id,
+                data: ResponseData::WalletInfo {
+                    wallet_type,
+                    balance_msat,
+                },
             };
             let _ = ctx.send_message(response).await;
         }
