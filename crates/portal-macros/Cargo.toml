@@ -10,4 +10,3 @@ license = "GPL-3.0-or-later"
 proc-macro = true
 
 [dependencies]
-uniffi = { workspace = true }

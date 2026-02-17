@@ -11,13 +11,10 @@ portal = { path = "../portal", features = ["bindings"] }
 portal-macros = { path = "../portal-macros" }
 portal-rates = { path = "../portal-rates", features = ["bindings"]}
 
-
 uniffi = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
-android_logger = { workspace = true }
 log = { workspace = true }
-async = { workspace = true }
 async-trait = { workspace = true }
 bip39 = { workspace = true }
 bitcoin = { workspace = true }
@@ -32,11 +29,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 async-utility = { workspace = true }
 # nostrstore-derive = "0.1.0"
-lightning-invoice = "0.33.2"
+lightning-invoice = { workspace = true }
 
 chrono = { workspace = true }
 
 cdk = { workspace = true, features = ["wallet"] }
 cdk-common = { workspace = true }
-
-rand = { workspace = true }

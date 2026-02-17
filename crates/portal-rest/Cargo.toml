@@ -20,7 +20,6 @@ nwc = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 axum = { workspace = true }
 tower-http = { workspace = true }
-bitflags = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
@@ -39,8 +38,8 @@ chrono = { workspace = true }
 cdk = { workspace = true, features = ["wallet"] }
 cdk-sqlite = { workspace = true }
 rand = { workspace = true }
-dirs = "6.0.0"
-config = { version = "0.15.19", features = ["toml"] }
+dirs = { workspace = true }
+config = { workspace = true }
 
 [features]
 task-tracing = ["console-subscriber"]
