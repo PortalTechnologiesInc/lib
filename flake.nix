@@ -119,6 +119,8 @@
             name = "getportal/sdk-daemon";
             tag = if system == "x86_64-linux" then "amd64" else "arm64";
 
+            contents = [ pkgs.cacert ];
+
             config = {
               Cmd = [ "${minimal-closure}/bin/rest" ];
               ExposedPorts = {
@@ -129,6 +131,7 @@
               Env = [
                 "PORTAL__INFO__LISTEN_PORT=3000"
                 "RUST_LOG=portal=debug,rest=debug,info"
+                "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
               ];
             };
           };
