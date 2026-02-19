@@ -56,7 +56,7 @@ impl PortalWallet for BreezSparkWallet {
         Ok(receive_response.payment_request)
     }
 
-    async fn pay_invoice(&self, invoice: String) -> Result<String> {
+    async fn pay_invoice(&self, invoice: String) -> Result<(String, u64)> {
         let prepare_response = self
             .sdk
             .prepare_send_payment(PrepareSendPaymentRequest {
@@ -66,6 +66,8 @@ impl PortalWallet for BreezSparkWallet {
                 conversion_options: None,
             })
             .await?;
+
+        let mut fee_sats = 0;
 
         // Check fee acceptability before sending.
         // Policy:
@@ -81,7 +83,7 @@ impl PortalWallet for BreezSparkWallet {
         } = &prepare_response.payment_method
         {
             let spark_fee = spark_transfer_fee_sats.unwrap_or(0);
-            let total_fee = lightning_fee_sats + spark_fee;
+            fee_sats = lightning_fee_sats + spark_fee;
 
             info!("Lightning fees: {lightning_fee_sats} sats");
             info!("Spark transfer fees: {spark_fee} sats");
@@ -92,28 +94,28 @@ impl PortalWallet for BreezSparkWallet {
 
                 if amount_sats < 500 {
                     // Small payments (below 500 sats): accept any fee.
-                    info!("Total fees: {total_fee} sats (small payment {amount_sats} sats — fee check skipped)");
+                    info!("Total fees: {fee_sats} sats (small payment {amount_sats} sats — fee check skipped)");
                 } else {
                     // 500 sats or above: max acceptable fee = max(1% of amount, 1000 sats).
                     let one_percent = amount_sats / 100;
                     let max_fee = std::cmp::max(one_percent, 1000);
 
-                    info!("Total fees: {total_fee} sats (max allowed: {max_fee} sats, amount: {amount_sats} sats)");
+                    info!("Total fees: {fee_sats} sats (max allowed: {max_fee} sats, amount: {amount_sats} sats)");
 
-                    if total_fee > max_fee {
+                    if fee_sats > max_fee {
                         return Err(PortalWalletError::FeeTooHigh(format!(
-                            "{total_fee} sats exceeds maximum of {max_fee} sats \
+                            "{fee_sats} sats exceeds maximum of {max_fee} sats \
                              (payment amount: {amount_sats} sats)"
                         )));
                     }
                 }
             } else {
                 // No amount in invoice (zero-amount invoice); apply absolute cap of 1000 sats.
-                info!("Total fees: {total_fee} sats (max allowed: 1000 sats, zero-amount invoice)");
+                info!("Total fees: {fee_sats} sats (max allowed: 1000 sats, zero-amount invoice)");
 
-                if total_fee > 1000 {
+                if fee_sats > 1000 {
                     return Err(PortalWalletError::FeeTooHigh(format!(
-                        "{total_fee} sats exceeds absolute maximum of 1000 sats \
+                        "{fee_sats} sats exceeds absolute maximum of 1000 sats \
                          (zero-amount invoice)"
                     )));
                 }
@@ -139,7 +141,7 @@ impl PortalWallet for BreezSparkWallet {
             })
             .unwrap_or_default();
 
-        Ok(preimage)
+        Ok((preimage, fee_sats * 1000))
     }
 
     async fn is_invoice_paid(&self, invoice: String) -> Result<(bool, Option<String>)> {

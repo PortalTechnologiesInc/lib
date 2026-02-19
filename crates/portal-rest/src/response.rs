@@ -97,6 +97,7 @@ pub enum ResponseData {
 
     PayInvoice {
         preimage: String,
+        fees_paid_msat: u64,
     },
 
     FetchNip05Profile {

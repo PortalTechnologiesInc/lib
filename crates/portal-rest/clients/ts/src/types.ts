@@ -210,7 +210,7 @@ export type ResponseData =
   | { type: 'calculate_next_occurrence'; next_occurrence: string | number | null }
   | { type: 'fetch_nip05_profile'; profile: Nip05Profile }
   | { type: 'wallet_info'; wallet_type: string; balance_msat: number }
-  | { type: 'pay_invoice'; preimage: string }
+  | { type: 'pay_invoice'; preimage: string; fees_paid_msat: number }
   ;
 
 /** NIP-05 profile (matches nostr Nip05Profile serialization) */

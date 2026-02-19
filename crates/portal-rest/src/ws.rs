@@ -1485,10 +1485,13 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
 
             tokio::task::spawn(async move {
                 match wallet_clone.pay_invoice(invoice).await {
-                    Ok(preimage) => {
+                    Ok((preimage, fees_paid_msat)) => {
                         let response = Response::Success {
                             id: command_id,
-                            data: ResponseData::PayInvoice { preimage },
+                            data: ResponseData::PayInvoice {
+                                preimage,
+                                fees_paid_msat, // già in msat, no conversion
+                            },
                         };
                         let _ = ctx_clone.send_message(response).await;
                     }

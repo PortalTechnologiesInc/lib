@@ -13,7 +13,8 @@ pub trait PortalWallet: Send + Sync {
     async fn is_invoice_paid(&self, invoice: String) -> Result<(bool, Option<String>)>;
     /// Get balance (msat)
     async fn get_balance(&self) -> Result<u64>;
-    async fn pay_invoice(&self, invoice: String) -> Result<String>;
+    /// Pay invoice, returns (preimage, fees_paid_msat)
+    async fn pay_invoice(&self, invoice: String) -> Result<(String, u64)>;
 }
 
 /// Result type for Portal Wallet operations
