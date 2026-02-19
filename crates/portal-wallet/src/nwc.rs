@@ -40,9 +40,9 @@ impl PortalWallet for NwcWallet {
             .pay_invoice(portal::nostr::nips::nip47::PayInvoiceRequest::new(invoice))
             .await?;
 
-        // NIP-47 returns fees_paid in millisats, convert to sats to match the trait contract
-        let fees_paid_sats = response.fees_paid.unwrap_or(0) / 1000;
-        Ok((response.preimage, fees_paid_sats))
+        // NIP-47 returns fees_paid in millisats
+        let fees_paid_msat = response.fees_paid.unwrap_or(0);
+        Ok((response.preimage, fees_paid_msat))
     }
 
     async fn is_invoice_paid(&self, invoice: String) -> Result<(bool, Option<String>)> {

@@ -141,7 +141,7 @@ impl PortalWallet for BreezSparkWallet {
             })
             .unwrap_or_default();
 
-        Ok((preimage, fee_sats))
+        Ok((preimage, fee_sats * 1000))
     }
 
     async fn is_invoice_paid(&self, invoice: String) -> Result<(bool, Option<String>)> {
