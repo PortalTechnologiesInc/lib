@@ -256,8 +256,8 @@
 
             # Copy the artifacts to the android directory
             mkdir -p android/src/main/jniLibs/{arm64-v8a,x86_64}
-            cp ${libAndroidAarch64}/lib/libapp.a android/src/main/jniLibs/arm64-v8a/libportal.a
-            cp ${libAndroidX86_64}/lib/libapp.a android/src/main/jniLibs/x86_64/libportal.a
+            cp ${libAndroidAarch64}/lib/libapp.a android/src/main/jniLibs/arm64-v8a/libapp.a
+            cp ${libAndroidX86_64}/lib/libapp.a android/src/main/jniLibs/x86_64/libapp.a
 
             ${pkgs.lib.optionalString withIos ''
               # Since those packages are built on a native macos worker, we take them from its package output set
