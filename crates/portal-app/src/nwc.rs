@@ -10,6 +10,16 @@ use portal::protocol::model::Timestamp;
 
 use crate::{AppError, RelayStatus, RelayStatusListener, RelayUrl};
 
+/// Result of a successful `pay_invoice` call.
+/// Returned as a record (not a tuple) because uniffi does not support tuple return types.
+#[derive(uniffi::Record)]
+pub struct PayInvoiceResult {
+    pub preimage: String,
+    /// Fees paid in millisatoshis, as reported by the NWC wallet.
+    /// Zero if the wallet did not include fee information (NIP-47 `fees_paid` is optional).
+    pub fees_paid_msat: u64,
+}
+
 #[derive(uniffi::Object)]
 pub struct NWC {
     inner: nwc::NWC,
@@ -45,13 +55,16 @@ impl NWC {
         Ok(())
     }
 
-    pub async fn pay_invoice(&self, invoice: String) -> Result<String, AppError> {
+    pub async fn pay_invoice(&self, invoice: String) -> Result<PayInvoiceResult, AppError> {
         let response = self
             .inner
             .pay_invoice(portal::nostr::nips::nip47::PayInvoiceRequest::new(invoice))
             .await?;
 
-        Ok(response.preimage)
+        Ok(PayInvoiceResult {
+            preimage: response.preimage,
+            fees_paid_msat: response.fees_paid.unwrap_or(0),
+        })
     }
 
     pub async fn lookup_invoice(&self, invoice: String) -> Result<LookupInvoiceResponse, AppError> {
