@@ -38,3 +38,13 @@ ln_backend = "none"
 # [wallet.breez]
 # api_key = "your-breez-api-key"
 # mnemonic = "your-breez-mnemonic"
+
+
+## Configuration for the web verification service (optional).
+## When configured, enables CreateWebVerificationSession and RequestToken commands.
+# [verification]
+# service_url = "http://localhost:8081"
+# api_key = "your-verification-api-key"
+# mint_url = "https://mint.getportal.cc"
+# mint_unit = "multi"
+# default_mint_amount = 100

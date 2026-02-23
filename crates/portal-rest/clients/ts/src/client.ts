@@ -19,6 +19,8 @@ import {
   CashuResponseStatus,
   Timestamp,
   Nip05Profile,
+  VerificationSessionResponse,
+  TokenResponse,
   isResponseType,
 } from './types';
 import { PortalSDKError } from './errors';
@@ -456,5 +458,27 @@ export class PortalSDK {
   public async payInvoice(invoice: string): Promise<{ preimage: string; fees_paid_msat: number }> {
     const response = await this.sendExpect('PayInvoice', { invoice }, 'pay_invoice');
     return { preimage: response.preimage, fees_paid_msat: response.fees_paid_msat };
+  }
+
+  /** Create a web verification session. Returns session details including ephemeral npub for token requests. */
+  public async createWebVerificationSession(relayUrls?: string[]): Promise<VerificationSessionResponse> {
+    const params: Record<string, unknown> = {};
+    if (relayUrls) params.relay_urls = relayUrls;
+    const response = await this.sendExpect('CreateWebVerificationSession', params, 'verification_session');
+    return {
+      session_id: response.session_id,
+      session_url: response.session_url,
+      ephemeral_npub: response.ephemeral_npub,
+      expires_at: response.expires_at,
+    };
+  }
+
+  /** Request a Cashu token via the verification service. Use the ephemeral_npub from a verification session. */
+  public async requestToken(npub: string, amount?: number, relays?: string[]): Promise<TokenResponse> {
+    const params: Record<string, unknown> = { npub };
+    if (amount !== undefined) params.amount = amount;
+    if (relays) params.relays = relays;
+    const response = await this.sendExpect('RequestToken', params, 'token_response');
+    return { token: response.token, amount: response.amount, unit: response.unit };
   }
 }

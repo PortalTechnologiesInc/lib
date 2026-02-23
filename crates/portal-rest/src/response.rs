@@ -108,6 +108,19 @@ pub enum ResponseData {
         wallet_type: String,
         balance_msat: u64,
     },
+
+    VerificationSession {
+        session_id: String,
+        session_url: String,
+        ephemeral_npub: String,
+        expires_at: u64,
+    },
+
+    TokenResponse {
+        token: String,
+        amount: u64,
+        unit: String,
+    },
 }
 
 #[derive(Debug, Serialize)]

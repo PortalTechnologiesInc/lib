@@ -186,6 +186,8 @@ export type Command =
   | { cmd: 'FetchNip05Profile'; params: { nip05: string } }
   | { cmd: 'GetWalletInfo' }
   | { cmd: 'PayInvoice'; params: { invoice: string } }
+  | { cmd: 'CreateWebVerificationSession'; params?: { relay_urls?: string[] } }
+  | { cmd: 'RequestToken'; params: { npub: string; amount?: number; relays?: string[] } }
   ;
 
 // Response types (must match server response.rs)
@@ -211,6 +213,8 @@ export type ResponseData =
   | { type: 'fetch_nip05_profile'; profile: Nip05Profile }
   | { type: 'wallet_info'; wallet_type: string; balance_msat: number }
   | { type: 'pay_invoice'; preimage: string; fees_paid_msat: number }
+  | { type: 'verification_session'; session_id: string; session_url: string; ephemeral_npub: string; expires_at: number }
+  | { type: 'token_response'; token: string; amount: number; unit: string }
   ;
 
 /** NIP-05 profile (matches nostr Nip05Profile serialization) */
@@ -309,4 +313,17 @@ export interface CashuDirectContent {
 export type CashuResponseStatus =
   | { status: 'success', token: string }
   | { status: 'insufficient_funds' }
-  | { status: 'rejected', reason?: string }; 
+  | { status: 'rejected', reason?: string };
+
+export interface VerificationSessionResponse {
+  session_id: string;
+  session_url: string;
+  ephemeral_npub: string;
+  expires_at: number;
+}
+
+export interface TokenResponse {
+  token: string;
+  amount: number;
+  unit: string;
+}

@@ -37,6 +37,7 @@ struct SocketContext {
     market_api: Arc<portal_rates::MarketAPI>,
     wallet: Option<Arc<dyn PortalWallet>>,
     wallet_type: config::LnBackend,
+    verification: Option<config::VerificationSettings>,
     tx_message: mpsc::Sender<Message>,
     tx_notification: mpsc::Sender<Response>,
     active_streams: ActiveStreams,
@@ -48,6 +49,7 @@ impl SocketContext {
         market_api: Arc<portal_rates::MarketAPI>,
         wallet: Option<Arc<dyn PortalWallet>>,
         wallet_type: config::LnBackend,
+        verification: Option<config::VerificationSettings>,
         tx_message: mpsc::Sender<Message>,
         tx_notification: mpsc::Sender<Response>,
     ) -> Self {
@@ -56,6 +58,7 @@ impl SocketContext {
             market_api,
             wallet,
             wallet_type,
+            verification,
             tx_message,
             tx_notification,
             active_streams: ActiveStreams::new(),
@@ -169,6 +172,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
         state.market_api.clone(),
         state.wallet,
         state.settings.wallet.ln_backend.clone(),
+        state.settings.verification.clone(),
         tx_message.clone(),
         tx_notification,
     ));
@@ -1524,6 +1528,183 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 data: ResponseData::FetchNip05Profile { profile },
             };
             let _ = ctx.send_message(response).await;
+        }
+        Command::CreateWebVerificationSession { relay_urls } => {
+            let verification = match &ctx.verification {
+                Some(v) => v.clone(),
+                None => {
+                    let _ = ctx
+                        .send_error_message(&command.id, "Verification service is not configured")
+                        .await;
+                    return;
+                }
+            };
+
+            let relay_urls = relay_urls.unwrap_or_else(|| {
+                vec![
+                    "wss://relay.damus.io".to_string(),
+                    "wss://relay.getportal.cc".to_string(),
+                ]
+            });
+
+            let client = reqwest::Client::new();
+            let url = format!("{}/verify/sessions", verification.service_url);
+            match client
+                .post(&url)
+                .header("X-Api-Key", &verification.api_key)
+                .json(&serde_json::json!({ "relays": relay_urls }))
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    if !resp.status().is_success() {
+                        let status = resp.status();
+                        let body = resp.text().await.unwrap_or_default();
+                        let _ = ctx
+                            .send_error_message(
+                                &command.id,
+                                &format!(
+                                    "Verification service returned {}: {}",
+                                    status, body
+                                ),
+                            )
+                            .await;
+                        return;
+                    }
+                    match resp.json::<serde_json::Value>().await {
+                        Ok(body) => {
+                            let response = Response::Success {
+                                id: command.id,
+                                data: ResponseData::VerificationSession {
+                                    session_id: body["session_id"]
+                                        .as_str()
+                                        .unwrap_or_default()
+                                        .to_string(),
+                                    session_url: body["session_url"]
+                                        .as_str()
+                                        .unwrap_or_default()
+                                        .to_string(),
+                                    ephemeral_npub: body["ephemeral_npub"]
+                                        .as_str()
+                                        .unwrap_or_default()
+                                        .to_string(),
+                                    expires_at: body["expires_at"].as_u64().unwrap_or(0),
+                                },
+                            };
+                            let _ = ctx.send_message(response).await;
+                        }
+                        Err(e) => {
+                            let _ = ctx
+                                .send_error_message(
+                                    &command.id,
+                                    &format!("Failed to parse verification response: {}", e),
+                                )
+                                .await;
+                        }
+                    }
+                }
+                Err(e) => {
+                    let _ = ctx
+                        .send_error_message(
+                            &command.id,
+                            &format!("Failed to reach verification service: {}", e),
+                        )
+                        .await;
+                }
+            }
+        }
+        Command::RequestToken {
+            npub,
+            amount,
+            relays,
+        } => {
+            let verification = match &ctx.verification {
+                Some(v) => v.clone(),
+                None => {
+                    let _ = ctx
+                        .send_error_message(&command.id, "Verification service is not configured")
+                        .await;
+                    return;
+                }
+            };
+
+            let amount = amount.unwrap_or(verification.default_mint_amount);
+            let relays = relays.unwrap_or_else(|| {
+                vec![
+                    "wss://relay.damus.io".to_string(),
+                    "wss://relay.getportal.cc".to_string(),
+                ]
+            });
+            let unit = verification.mint_unit.clone();
+            let mint_url = verification.mint_url.clone();
+
+            let client = reqwest::Client::new();
+            let url = format!("{}/verify/request-token", verification.service_url);
+            match client
+                .post(&url)
+                .header("X-Api-Key", &verification.api_key)
+                .json(&serde_json::json!({
+                    "npub": npub,
+                    "amount": amount,
+                    "mint_url": mint_url,
+                    "unit": unit,
+                    "relays": relays,
+                }))
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    if !resp.status().is_success() {
+                        let status = resp.status();
+                        let body = resp.text().await.unwrap_or_default();
+                        let _ = ctx
+                            .send_error_message(
+                                &command.id,
+                                &format!(
+                                    "Verification service returned {}: {}",
+                                    status, body
+                                ),
+                            )
+                            .await;
+                        return;
+                    }
+                    match resp.json::<serde_json::Value>().await {
+                        Ok(body) => {
+                            let response = Response::Success {
+                                id: command.id,
+                                data: ResponseData::TokenResponse {
+                                    token: body["token"]
+                                        .as_str()
+                                        .unwrap_or_default()
+                                        .to_string(),
+                                    amount: body["amount"].as_u64().unwrap_or(amount),
+                                    unit: body["unit"]
+                                        .as_str()
+                                        .unwrap_or(&unit)
+                                        .to_string(),
+                                },
+                            };
+                            let _ = ctx.send_message(response).await;
+                        }
+                        Err(e) => {
+                            let _ = ctx
+                                .send_error_message(
+                                    &command.id,
+                                    &format!("Failed to parse token response: {}", e),
+                                )
+                                .await;
+                        }
+                    }
+                }
+                Err(e) => {
+                    let _ = ctx
+                        .send_error_message(
+                            &command.id,
+                            &format!("Failed to reach verification service: {}", e),
+                        )
+                        .await;
+                }
+            }
         }
         Command::GetWalletInfo => {
             let wallet = match &ctx.wallet {

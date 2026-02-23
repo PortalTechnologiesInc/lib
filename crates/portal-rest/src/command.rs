@@ -113,6 +113,14 @@ pub enum Command {
         nip05: String,
     },
     GetWalletInfo,
+    CreateWebVerificationSession {
+        relay_urls: Option<Vec<String>>,
+    },
+    RequestToken {
+        npub: String,
+        amount: Option<u64>,
+        relays: Option<Vec<String>>,
+    },
 }
 
 #[derive(Debug, Deserialize)]

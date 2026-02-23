@@ -29,4 +29,6 @@ export {
   ResponseData,
   Response,
   NotificationData,
+  VerificationSessionResponse,
+  TokenResponse,
 } from './types'; 

@@ -10,6 +10,7 @@ pub struct Settings {
     pub nostr: NostrSettings,
     pub auth: AuthSettings,
     pub wallet: WalletSettings,
+    pub verification: Option<VerificationSettings>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -68,6 +69,25 @@ impl Default for BreezSettings {
             mnemonic: String::new(),
         }
     }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct VerificationSettings {
+    pub service_url: String,
+    pub api_key: String,
+    pub mint_url: String,
+    #[serde(default = "default_mint_unit")]
+    pub mint_unit: String,
+    #[serde(default = "default_mint_amount")]
+    pub default_mint_amount: u64,
+}
+
+fn default_mint_unit() -> String {
+    "multi".to_string()
+}
+
+fn default_mint_amount() -> u64 {
+    100
 }
 
 impl Settings {
