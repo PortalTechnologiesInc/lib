@@ -3901,6 +3901,7 @@ dependencies = [
  "portal-sdk",
  "portal-wallet",
  "rand 0.8.5",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

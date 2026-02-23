@@ -10,6 +10,8 @@ pub struct Settings {
     pub nostr: NostrSettings,
     pub auth: AuthSettings,
     pub wallet: WalletSettings,
+    #[serde(default)]
+    pub verification: VerificationSettings,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -67,6 +69,52 @@ impl Default for BreezSettings {
             api_key: String::new(),
             mnemonic: String::new(),
         }
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct VerificationSettings {
+    /// URL of the verification service (default: http://localhost:8081)
+    #[serde(default = "VerificationSettings::default_service_url")]
+    pub service_url: String,
+    /// API key for the verification service
+    #[serde(default)]
+    pub api_key: String,
+    /// Default mint URL for minting tokens
+    #[serde(default = "VerificationSettings::default_mint_url")]
+    pub mint_url: String,
+    /// Default unit for minting
+    #[serde(default = "VerificationSettings::default_unit")]
+    pub unit: String,
+    /// Default amount for minting
+    #[serde(default = "VerificationSettings::default_amount")]
+    pub default_amount: u64,
+}
+
+impl Default for VerificationSettings {
+    fn default() -> Self {
+        Self {
+            service_url: Self::default_service_url(),
+            api_key: String::new(),
+            mint_url: Self::default_mint_url(),
+            unit: Self::default_unit(),
+            default_amount: Self::default_amount(),
+        }
+    }
+}
+
+impl VerificationSettings {
+    fn default_service_url() -> String {
+        "http://localhost:8081".to_string()
+    }
+    fn default_mint_url() -> String {
+        "https://mint.getportal.cc".to_string()
+    }
+    fn default_unit() -> String {
+        "multi".to_string()
+    }
+    fn default_amount() -> u64 {
+        100
     }
 }
 

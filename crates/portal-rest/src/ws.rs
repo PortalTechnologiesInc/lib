@@ -29,6 +29,7 @@ use portal_wallet::PortalWallet;
 use rand::RngCore;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
+use reqwest;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -37,6 +38,7 @@ struct SocketContext {
     market_api: Arc<portal_rates::MarketAPI>,
     wallet: Option<Arc<dyn PortalWallet>>,
     wallet_type: config::LnBackend,
+    verification: config::VerificationSettings,
     tx_message: mpsc::Sender<Message>,
     tx_notification: mpsc::Sender<Response>,
     active_streams: ActiveStreams,
@@ -48,6 +50,7 @@ impl SocketContext {
         market_api: Arc<portal_rates::MarketAPI>,
         wallet: Option<Arc<dyn PortalWallet>>,
         wallet_type: config::LnBackend,
+        verification: config::VerificationSettings,
         tx_message: mpsc::Sender<Message>,
         tx_notification: mpsc::Sender<Response>,
     ) -> Self {
@@ -56,6 +59,7 @@ impl SocketContext {
             market_api,
             wallet,
             wallet_type,
+            verification,
             tx_message,
             tx_notification,
             active_streams: ActiveStreams::new(),
@@ -169,6 +173,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
         state.market_api.clone(),
         state.wallet,
         state.settings.wallet.ln_backend.clone(),
+        state.settings.verification.clone(),
         tx_message.clone(),
         tx_notification,
     ));
@@ -1561,6 +1566,240 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 },
             };
             let _ = ctx.send_message(response).await;
+        }
+        Command::CreateWebVerificationSession {
+            relay_urls,
+            verification_service_url,
+        } => {
+            let ctx_clone = ctx.clone();
+            let command_id = command.id.clone();
+
+            tokio::task::spawn(async move {
+                let service_url = verification_service_url
+                    .unwrap_or_else(|| ctx_clone.verification.service_url.clone());
+                let relays = relay_urls.unwrap_or_else(|| {
+                    vec![
+                        "wss://relay.damus.io".to_string(),
+                        "wss://relay.getportal.cc".to_string(),
+                    ]
+                });
+
+                let client = reqwest::Client::new();
+                let url = format!("{}/verify/sessions", service_url);
+
+                let mut request = client.post(&url).json(&serde_json::json!({
+                    "relays": relays
+                }));
+
+                if !ctx_clone.verification.api_key.is_empty() {
+                    request = request.header("X-Api-Key", &ctx_clone.verification.api_key);
+                }
+
+                match request.send().await {
+                    Ok(resp) => {
+                        if !resp.status().is_success() {
+                            let status = resp.status();
+                            let body = resp.text().await.unwrap_or_default();
+                            let _ = ctx_clone
+                                .send_error_message(
+                                    &command_id,
+                                    &format!(
+                                        "Verification service returned {}: {}",
+                                        status, body
+                                    ),
+                                )
+                                .await;
+                            return;
+                        }
+
+                        match resp.json::<serde_json::Value>().await {
+                            Ok(json) => {
+                                let session_id = json["session_id"]
+                                    .as_str()
+                                    .unwrap_or_default()
+                                    .to_string();
+                                let session_url = json["session_url"]
+                                    .as_str()
+                                    .unwrap_or_default()
+                                    .to_string();
+                                let ephemeral_npub = json["ephemeral_npub"]
+                                    .as_str()
+                                    .unwrap_or_default()
+                                    .to_string();
+                                let expires_at =
+                                    json["expires_at"].as_u64().unwrap_or_default();
+
+                                let response = Response::Success {
+                                    id: command_id,
+                                    data: ResponseData::WebVerificationSession {
+                                        session_id,
+                                        session_url,
+                                        ephemeral_npub,
+                                        expires_at,
+                                    },
+                                };
+                                let _ = ctx_clone.send_message(response).await;
+                            }
+                            Err(e) => {
+                                let _ = ctx_clone
+                                    .send_error_message(
+                                        &command_id,
+                                        &format!("Failed to parse verification response: {}", e),
+                                    )
+                                    .await;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let _ = ctx_clone
+                            .send_error_message(
+                                &command_id,
+                                &format!("Failed to call verification service: {}", e),
+                            )
+                            .await;
+                    }
+                }
+            });
+        }
+        Command::VerifyAndMint { npub, amount } => {
+            let ctx_clone = ctx.clone();
+            let command_id = command.id.clone();
+
+            tokio::task::spawn(async move {
+                let mint_url_str = ctx_clone.verification.mint_url.clone();
+                let unit_str = ctx_clone.verification.unit.clone();
+                let mint_amount = amount.unwrap_or(ctx_clone.verification.default_amount);
+
+                // 1. Mint a Cashu token
+                let mint_url = match MintUrl::from_str(&mint_url_str) {
+                    Ok(url) => url,
+                    Err(e) => {
+                        let _ = ctx_clone
+                            .send_error_message(
+                                &command_id,
+                                &format!("Invalid mint URL: {}", e),
+                            )
+                            .await;
+                        return;
+                    }
+                };
+                let currency_unit = match CurrencyUnit::from_str(&unit_str) {
+                    Ok(u) => u,
+                    Err(e) => {
+                        let _ = ctx_clone
+                            .send_error_message(
+                                &command_id,
+                                &format!("Invalid unit: {}", e),
+                            )
+                            .await;
+                        return;
+                    }
+                };
+
+                let wallet = match get_cashu_wallet(mint_url, currency_unit, None).await {
+                    Ok(w) => w,
+                    Err(e) => {
+                        let _ = ctx_clone
+                            .send_error_message(
+                                &command_id,
+                                &format!("Failed to create cashu wallet: {}", e),
+                            )
+                            .await;
+                        return;
+                    }
+                };
+
+                let quote = match wallet.mint_quote(mint_amount.into(), None).await {
+                    Ok(q) => q,
+                    Err(e) => {
+                        let _ = ctx_clone
+                            .send_error_message(
+                                &command_id,
+                                &format!("Failed to get mint quote: {}", e),
+                            )
+                            .await;
+                        return;
+                    }
+                };
+
+                if let Err(e) = wallet.mint(&quote.id, SplitTarget::None, None).await {
+                    let _ = ctx_clone
+                        .send_error_message(
+                            &command_id,
+                            &format!("Failed to mint token: {}", e),
+                        )
+                        .await;
+                    return;
+                }
+
+                let prepared_send = match wallet
+                    .prepare_send(mint_amount.into(), SendOptions::default())
+                    .await
+                {
+                    Ok(ps) => ps,
+                    Err(e) => {
+                        let _ = ctx_clone
+                            .send_error_message(
+                                &command_id,
+                                &format!("Failed to prepare send: {}", e),
+                            )
+                            .await;
+                        return;
+                    }
+                };
+
+                let token = match wallet.send(prepared_send, None).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        let _ = ctx_clone
+                            .send_error_message(
+                                &command_id,
+                                &format!("Failed to send token: {}", e),
+                            )
+                            .await;
+                        return;
+                    }
+                };
+
+                // 2. Send token to npub via Nostr (using SDK's send_cashu_direct)
+                let recipient_key = match npub.parse::<PublicKey>() {
+                    Ok(key) => key,
+                    Err(e) => {
+                        let _ = ctx_clone
+                            .send_error_message(
+                                &command_id,
+                                &format!("Invalid npub: {}", e),
+                            )
+                            .await;
+                        return;
+                    }
+                };
+
+                let token_str = token.to_string();
+                if let Err(e) = ctx_clone
+                    .sdk
+                    .send_cashu_direct(
+                        recipient_key,
+                        vec![],
+                        CashuDirectContent {
+                            token: token_str.clone(),
+                        },
+                    )
+                    .await
+                {
+                    warn!("Failed to send cashu via Nostr (returning token anyway): {}", e);
+                }
+
+                let response = Response::Success {
+                    id: command_id,
+                    data: ResponseData::VerifyAndMint {
+                        token: token_str,
+                        amount: mint_amount,
+                        unit: unit_str,
+                    },
+                };
+                let _ = ctx_clone.send_message(response).await;
+            });
         }
     }
 }

@@ -19,6 +19,8 @@ import {
   CashuResponseStatus,
   Timestamp,
   Nip05Profile,
+  VerificationSessionResponse,
+  MintTokenResponse,
   isResponseType,
 } from './types';
 import { PortalSDKError } from './errors';
@@ -456,5 +458,27 @@ export class PortalSDK {
   public async payInvoice(invoice: string): Promise<{ preimage: string; fees_paid_msat: number }> {
     const response = await this.sendExpect('PayInvoice', { invoice }, 'pay_invoice');
     return { preimage: response.preimage, fees_paid_msat: response.fees_paid_msat };
+  }
+
+  /** Create a web verification session via the verification service. */
+  public async createWebVerificationSession(relayUrls?: string[], verificationServiceUrl?: string): Promise<VerificationSessionResponse> {
+    const params: Record<string, unknown> = {};
+    if (relayUrls) params.relay_urls = relayUrls;
+    if (verificationServiceUrl) params.verification_service_url = verificationServiceUrl;
+    const response = await this.sendExpect('CreateWebVerificationSession', params, 'web_verification_session');
+    return {
+      session_id: response.session_id,
+      session_url: response.session_url,
+      ephemeral_npub: response.ephemeral_npub,
+      expires_at: response.expires_at,
+    };
+  }
+
+  /** Mint a Cashu token and send it to an npub via Nostr. */
+  public async verifyAndMint(npub: string, amount?: number): Promise<MintTokenResponse> {
+    const params: Record<string, unknown> = { npub };
+    if (amount !== undefined) params.amount = amount;
+    const response = await this.sendExpect('VerifyAndMint', params, 'verify_and_mint');
+    return { token: response.token, amount: response.amount, unit: response.unit };
   }
 }
