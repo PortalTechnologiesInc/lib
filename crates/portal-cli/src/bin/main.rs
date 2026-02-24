@@ -300,7 +300,7 @@ async fn process_single_payment_request(
     let status = match payment_result {
         Ok(preimage) => PaymentResponseContent {
             status: PaymentStatus::Success {
-                preimage: Some(preimage),
+                preimage: Some(preimage.preimage),
             },
             request_id: request.content.request_id.clone(),
         },

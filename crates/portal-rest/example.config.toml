@@ -12,7 +12,7 @@ listen_port = 3000
 private_key = "your-nostr-private-key"
 
 ## Relays are used to publish and receive messages on the Nostr network.
-relays = ["wss://relay.nostr.net", "wss://relay.damus.io"]
+relays = ["wss://relay.nostr.net", "wss://relay.damus.io", "wss://relay.getportal.cc"]
 
 ## Proof for Nostr subkey delegation. This is used when your Portal instance operates as a subkey delegated from a main key.
 # subkey_proof = "your-nostr-subkey-proof"

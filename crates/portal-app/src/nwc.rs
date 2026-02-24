@@ -12,7 +12,7 @@ use crate::{AppError, RelayStatus, RelayStatusListener, RelayUrl};
 
 /// Result of a successful `pay_invoice` call.
 /// Returned as a record (not a tuple) because uniffi does not support tuple return types.
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct PayInvoiceResult {
     pub preimage: String,
     /// Fees paid in millisatoshis, as reported by the NWC wallet.
