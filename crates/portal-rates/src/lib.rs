@@ -329,17 +329,18 @@ impl MarketAPI {
 }
 
 #[tokio::test]
-async fn test_market_data_fetch() -> Result<(), RatesError> {
+async fn test_market_data_fetch_eur() -> Result<(), RatesError> {
     let api = MarketAPI::new()?;
 
     let market_data = api.fetch_market_data("EUR").await?;
-    println!("Market data: {:?}", market_data);
+    println!("Market data EUR: {:?}", market_data);
 
     assert!(
         !market_data.price.is_empty(),
         "Price string should not be empty"
     );
     assert!(market_data.rate > 0.0, "Rate must be greater than 0");
+    assert!(market_data.price.starts_with('€'), "EUR price should start with €");
 
     let amount = 3000.0;
     let btc = market_data.calculate_btc(amount);
@@ -347,6 +348,27 @@ async fn test_market_data_fetch() -> Result<(), RatesError> {
 
     let sats = market_data.calculate_sats(amount);
     println!("You have {} sats", sats);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_market_data_fetch_usd() -> Result<(), RatesError> {
+    let api = MarketAPI::new()?;
+
+    let market_data = api.fetch_market_data("USD").await?;
+    println!("Market data USD: {:?}", market_data);
+
+    assert!(
+        !market_data.price.is_empty(),
+        "Price string should not be empty"
+    );
+    assert!(market_data.rate > 0.0, "Rate must be greater than 0");
+    assert!(market_data.price.starts_with('$'), "USD price should start with $");
+
+    let amount = 5000.0;
+    let btc = market_data.calculate_btc(amount);
+    println!("You have {:0.8} BTC", btc);
 
     let msats = market_data.calculate_millisats(amount);
     println!("You have {} msats", msats);
