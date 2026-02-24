@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Unreleased
 
+#### Changed
+- `RequestInvoice` command now uses slim `RequestInvoiceParams` (removes `request_id` and `current_exchange_rate` from client params; server computes exchange rate)
+
+#### Fixed
+- Validate `RequestInvoice` response: invoice amount must match expected amount (computed from FIAT conversion). Allows 1 msat tolerance for rounding errors (#157)
+
 ---
 
 ### [0.2.0] - 2026-02-17

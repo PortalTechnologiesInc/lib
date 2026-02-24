@@ -1073,13 +1073,15 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                                 }
                             };
 
-                            if invoice_amount_msat != expected_amount_msat {
+                            // Allow 1 msat tolerance for rounding errors in FIAT → msat conversion
+                            let amount_diff = (invoice_amount_msat as i128 - expected_amount_msat as i128).abs();
+                            if amount_diff > 1 {
                                 let _ = ctx
                                     .send_error_message(
                                         &command.id,
                                         &format!(
-                                            "Invoice amount mismatch: got {} msat, expected {} msat",
-                                            invoice_amount_msat, expected_amount_msat
+                                            "Invoice amount mismatch: got {} msat, expected {} msat (diff: {} msat)",
+                                            invoice_amount_msat, expected_amount_msat, amount_diff
                                         ),
                                     )
                                     .await;
@@ -1660,6 +1662,10 @@ async fn get_cashu_wallet(
 
 /// Extract amount in millisatoshis from a BOLT11 invoice string.
 /// Returns `Ok(None)` for zero-amount invoices, `Err` on parse failure.
+/// 
+/// Used to validate that invoices returned by users match the expected amount
+/// (computed by portal-rest via FIAT→msat conversion). This prevents users from
+/// returning invoices for arbitrary amounts when a specific payment is requested.
 fn extract_invoice_amount_msat(invoice: &str) -> Result<Option<u64>, String> {
     let bolt11 = Bolt11Invoice::from_str(invoice).map_err(|e| e.to_string())?;
     Ok(bolt11.amount_milli_satoshis())
