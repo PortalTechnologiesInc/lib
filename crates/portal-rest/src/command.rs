@@ -1,7 +1,6 @@
 use portal::conversation::profile::Profile;
 use portal::protocol::model::payment::{
-    Currency, InvoiceRequestContent, RecurrenceInfo,
-    SinglePaymentRequestContent,
+    Currency, RecurrenceInfo, SinglePaymentRequestContent,
 };
 use portal::protocol::model::Timestamp;
 use serde::Deserialize;
@@ -61,7 +60,7 @@ pub enum Command {
     RequestInvoice {
         recipient_key: String,
         subkeys: Vec<String>,
-        content: InvoiceRequestContent,
+        content: RequestInvoiceParams,
     },
     IssueJwt {
         target_key: String,
@@ -135,4 +134,14 @@ pub struct RecurringPaymentParams {
 
     pub recurrence: RecurrenceInfo,
     pub expires_at: Timestamp,
+}
+
+
+#[derive(Debug, Deserialize)]
+pub struct RequestInvoiceParams {
+    pub amount: u64,
+    pub currency: Currency,
+    pub expires_at: Timestamp,
+    pub description: Option<String>,
+    pub refund_invoice: Option<String>,
 }

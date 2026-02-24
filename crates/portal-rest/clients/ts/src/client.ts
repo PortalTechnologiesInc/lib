@@ -11,8 +11,8 @@ import {
   AuthResponseData,
   Event,
   InvoicePaymentRequestContent,
-  InvoiceRequestContent,
   InvoiceResponseContent,
+  RequestInvoiceParams,
   RecurringPaymentResponseContent,
   CloseRecurringPaymentNotification,
   InvoiceStatus,
@@ -363,11 +363,11 @@ export class PortalSDK {
     return this.withStream(response.stream_id, handler);
   }
 
-  /** Request an invoice from a recipient. */
+  /** Request an invoice from a recipient. Server computes exchange rate from amount/currency. */
   public async requestInvoice(
     recipientKey: string,
     subkeys: string[],
-    content: InvoiceRequestContent
+    content: RequestInvoiceParams
   ): Promise<InvoiceResponseContent> {
     const response = await this.sendExpect('RequestInvoice', { recipient_key: recipientKey, subkeys, content }, 'invoice_payment');
     return { invoice: response.invoice, payment_hash: response.payment_hash ?? null };

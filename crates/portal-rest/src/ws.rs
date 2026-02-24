@@ -1,3 +1,4 @@
+use lightning_invoice::Bolt11Invoice;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -19,8 +20,8 @@ use portal::nostr_relay_pool::RelayOptions;
 use portal::protocol::calendar::Calendar;
 use portal::protocol::jwt::CustomClaims;
 use portal::protocol::model::payment::{
-    CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, PaymentStatus,
-    RecurringPaymentRequestContent, SinglePaymentRequestContent,
+    CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, InvoiceRequestContent,
+    PaymentStatus, RecurringPaymentRequestContent, SinglePaymentRequestContent,
 };
 use portal::protocol::model::Timestamp;
 use portal::utils::fetch_nip05_profile;
@@ -434,29 +435,24 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 }
             };
 
-            // If the currency is fiat, we need to fetch the exchange rate
-            let mut current_exchange_rate = None;
-            if let Currency::Fiat(currency) = &payment_request.currency {
-                let market_data = ctx.market_api.clone().fetch_market_data(&currency).await;
-                match market_data {
-                    Ok(market_data) => {
-                        current_exchange_rate = Some(ExchangeRate {
-                            rate: market_data.rate,
-                            source: market_data.source,
-                            time: Timestamp::now(),
-                        });
-                    }
-                    Err(e) => {
-                        let _ = ctx
-                            .send_error_message(
-                                &command.id,
-                                &format!("Failed to fetch market data: {}", e),
-                            )
-                            .await;
-                        return;
-                    }
+            let (_, current_exchange_rate) = match resolve_amount_and_exchange_rate(
+                payment_request.amount,
+                &payment_request.currency,
+                ctx.market_api.clone(),
+            )
+            .await
+            {
+                Ok(res) => res,
+                Err(e) => {
+                    let _ = ctx
+                        .send_error_message(
+                            &command.id,
+                            &format!("Failed to fetch market data: {}", e),
+                        )
+                        .await;
+                    return;
                 }
-            }
+            };
 
             let payment_request = RecurringPaymentRequestContent {
                 description: payment_request.description,
@@ -529,35 +525,25 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             };
 
             let amount = payment_request.amount;
-            let mut msat_amount = payment_request.amount;
-
-            // If the currency is fiat, we need to convert it to millisats
-            let mut current_exchange_rate = None;
-            if let Currency::Fiat(currency) = &payment_request.currency {
-                let fiat_amount = amount as f64 / 100.0;
-                let market_data = ctx.market_api.clone().fetch_market_data(&currency).await;
-                match market_data {
-                    Ok(market_data) => {
-                        msat_amount = market_data.calculate_millisats(fiat_amount) as u64;
-                        current_exchange_rate = Some(ExchangeRate {
-                            rate: market_data.rate,
-                            source: market_data.source,
-                            time: Timestamp::now(),
-                        });
-                    }
-                    Err(e) => {
-                        let _ = ctx
-                            .send_error_message(
-                                &command.id,
-                                &format!("Failed to fetch market data: {}", e),
-                            )
-                            .await;
-                        return;
-                    }
+            let (msat_amount, current_exchange_rate) = match resolve_amount_and_exchange_rate(
+                amount,
+                &payment_request.currency,
+                ctx.market_api.clone(),
+            )
+            .await
+            {
+                Ok(res) => res,
+                Err(e) => {
+                    let _ = ctx
+                        .send_error_message(
+                            &command.id,
+                            &format!("Failed to fetch market data: {}", e),
+                        )
+                        .await;
+                    return;
                 }
-            }
+            };
 
-            // TODO: fetch and apply fiat exchange rate
             let invoice = match wallet
                 .make_invoice(msat_amount, Some(payment_request.description.clone()))
                 .await
@@ -1026,14 +1012,80 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                 }
             };
 
+            // Portal-rest computes exchange rate (like SinglePayment). Build full content for SDK.
+            let (expected_amount_msat, current_exchange_rate) = match resolve_amount_and_exchange_rate(
+                content.amount,
+                &content.currency,
+                ctx.market_api.clone(),
+            )
+            .await
+            {
+                Ok(res) => res,
+                Err(e) => {
+                    let _ = ctx
+                        .send_error_message(
+                            &command.id,
+                            &format!("Failed to fetch market data: {}", e),
+                        )
+                        .await;
+                    return;
+                }
+            };
+
+            let sdk_content = InvoiceRequestContent {
+                request_id: command.id.clone(),
+                amount: content.amount,
+                currency: content.currency.clone(),
+                current_exchange_rate,
+                expires_at: content.expires_at,
+                description: content.description.clone(),
+                refund_invoice: content.refund_invoice.clone(),
+            };
+
             match ctx
                 .sdk
-                .request_invoice(recipient_key.into(), subkeys, content)
+                .request_invoice(recipient_key.into(), subkeys, sdk_content)
                 .await
             {
                 Ok(invoice_response) => {
                     match invoice_response {
                         Some(invoice_response) => {
+                            // Validate returned invoice amount matches expected (portal-rest computed)
+                            let invoice_amount_msat = match extract_invoice_amount_msat(&invoice_response.invoice) {
+                                Ok(Some(amt)) => amt,
+                                Ok(None) => {
+                                    let _ = ctx
+                                        .send_error_message(
+                                            &command.id,
+                                            "Invoice amount mismatch: invoice has no amount (zero-amount invoice not allowed for this request)",
+                                        )
+                                        .await;
+                                    return;
+                                }
+                                Err(e) => {
+                                    let _ = ctx
+                                        .send_error_message(
+                                            &command.id,
+                                            &format!("Invalid invoice: {}", e),
+                                        )
+                                        .await;
+                                    return;
+                                }
+                            };
+
+                            if invoice_amount_msat != expected_amount_msat {
+                                let _ = ctx
+                                    .send_error_message(
+                                        &command.id,
+                                        &format!(
+                                            "Invoice amount mismatch: got {} msat, expected {} msat",
+                                            invoice_amount_msat, expected_amount_msat
+                                        ),
+                                    )
+                                    .await;
+                                return;
+                            }
+
                             let response = Response::Success {
                                 id: command.id,
                                 data: ResponseData::InvoicePayment {
@@ -1045,12 +1097,12 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
                             let _ = ctx.send_message(response).await;
                         }
                         None => {
-                            // Recipient did not reply with a invoice
+                            // Recipient did not reply with an invoice
                             let _ = ctx
                                 .send_error_message(
                                     &command.id,
                                     &format!(
-                                        "Recipient '{:?}' did not reply with a invoice",
+                                        "Recipient '{:?}' did not reply with an invoice",
                                         recipient_key
                                     ),
                                 )
@@ -1605,3 +1657,35 @@ async fn get_cashu_wallet(
 
     Ok(wallet)
 }
+
+/// Extract amount in millisatoshis from a BOLT11 invoice string.
+/// Returns `Ok(None)` for zero-amount invoices, `Err` on parse failure.
+fn extract_invoice_amount_msat(invoice: &str) -> Result<Option<u64>, String> {
+    let bolt11 = Bolt11Invoice::from_str(invoice).map_err(|e| e.to_string())?;
+    Ok(bolt11.amount_milli_satoshis())
+}
+
+/// Resolve amount and exchange rate: for Millisats returns (amount, None);
+/// for Fiat fetches market data and returns (amount_msat, Some(ExchangeRate)).
+/// Amount is in cents for fiat.
+async fn resolve_amount_and_exchange_rate(
+    amount: u64,
+    currency: &Currency,
+    market_api: Arc<portal_rates::MarketAPI>,
+) -> Result<(u64, Option<ExchangeRate>), portal_rates::RatesError> {
+    match currency {
+        Currency::Millisats => Ok((amount, None)),
+        Currency::Fiat(currency_code) => {
+            let market_data = market_api.fetch_market_data(currency_code).await?;
+            let fiat_amount = amount as f64 / 100.0;
+            let msat = (market_data.calculate_millisats(fiat_amount) as i64).max(0) as u64;
+            let exchange_rate = ExchangeRate {
+                rate: market_data.rate,
+                source: market_data.source,
+                time: Timestamp::now(),
+            };
+            Ok((msat, Some(exchange_rate)))
+        }
+    }
+}
+
