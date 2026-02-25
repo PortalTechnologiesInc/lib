@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal App Demo — Protocol testing wallet</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #1a1a1f;
+      --border: #2a2a32;
+      --text: #e8e8ed;
+      --muted: #8888a0;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --success: #22c55e;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      min-height: 100vh;
+      padding: 2rem;
+      line-height: 1.5;
+    }
+    .container { max-width: 480px; margin: 0 auto; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .sub { color: var(--muted); font-size: 0.875rem; margin-bottom: 1.5rem; }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    label { display: block; font-size: 0.8125rem; color: var(--muted); margin-bottom: 0.35rem; }
+    input, textarea, button {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.9375rem;
+    }
+    textarea { min-height: 80px; resize: vertical; }
+    button {
+      cursor: pointer;
+      font-weight: 500;
+      border: none;
+      background: var(--accent);
+      color: white;
+      margin-top: 0.75rem;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.danger { background: var(--danger); }
+    button.danger:hover { background: #dc2626; }
+    .status { font-size: 0.8125rem; color: var(--muted); margin-top: 0.5rem; }
+    .status.ready { color: var(--success); }
+    .pubkey { word-break: break-all; font-family: ui-monospace, monospace; font-size: 0.8125rem; }
+    .payment-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 0.75rem 0;
+    }
+    .payment-card dt { color: var(--muted); font-size: 0.75rem; margin-top: 0.5rem; }
+    .payment-card dd { margin: 0.15rem 0 0; font-size: 0.875rem; }
+    .actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+    .actions button { flex: 1; margin-top: 0; }
+    #log { font-size: 0.75rem; color: var(--muted); max-height: 120px; overflow-y: auto; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Portal App Demo</h1>
+    <p class="sub">Single instance from config. Receive one payment request, accept or reject.</p>
+
+    <section id="wallet-section">
+      <p id="config-path" class="status pubkey" style="margin-bottom:0.5rem;"></p>
+      <p id="wallet-status" class="status"></p>
+      <div id="wallet-pubkey-wrap" style="display:none;">
+        <p class="status" style="margin-bottom:0.25rem;">npub</p>
+        <p id="wallet-pubkey" class="pubkey status"></p>
+        <p class="status" style="margin:0.5rem 0 0.25rem;">hex</p>
+        <p id="wallet-pubkey-hex" class="pubkey status"></p>
+        <p id="wallet-payment-mode" class="status" style="margin-top:0.5rem;"></p>
+        <p id="wallet-balance" class="status" style="margin-top:0.5rem;"></p>
+      </div>
+    </section>
+
+    <section id="payment-section" style="display:none;">
+      <h2 style="font-size:1rem; margin:0 0 0.5rem;">Payment request</h2>
+      <p class="status">Waiting for a single payment request…</p>
+      <div id="payment-details"></div>
+      <div id="payment-actions" class="actions" style="display:none;">
+        <button type="button" id="btn-accept">Accept</button>
+        <button type="button" id="btn-reject" class="danger">Reject</button>
+      </div>
+    </section>
+
+    <div id="log"></div>
+  </div>
+
+  <script>
+    const API = '';
+    function log(msg) {
+      const el = document.getElementById('log');
+      if (el) el.textContent = (el.textContent ? el.textContent + '\n' : '') + new Date().toISOString().slice(11, 19) + ' ' + msg;
+    }
+    async function json(path, opts = {}) {
+      const r = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+      const text = await r.text();
+      if (!r.ok) {
+        let msg = text;
+        try { const o = JSON.parse(text); if (o.error) msg = o.error; } catch (_) {}
+        throw new Error(msg || r.statusText);
+      }
+      return text === '' || r.status === 204 ? null : JSON.parse(text);
+    }
+
+    const configPathEl = document.getElementById('config-path');
+    const walletStatus = document.getElementById('wallet-status');
+    const walletPubkey = document.getElementById('wallet-pubkey');
+    const walletPubkeyHex = document.getElementById('wallet-pubkey-hex');
+    const walletPubkeyWrap = document.getElementById('wallet-pubkey-wrap');
+    const walletPaymentMode = document.getElementById('wallet-payment-mode');
+    const walletBalance = document.getElementById('wallet-balance');
+    const paymentSection = document.getElementById('payment-section');
+    const paymentDetails = document.getElementById('payment-details');
+    const paymentActions = document.getElementById('payment-actions');
+    const btnAccept = document.getElementById('btn-accept');
+    const btnReject = document.getElementById('btn-reject');
+
+    async function refreshStatus() {
+      try {
+        const st = await json('/api/status');
+        configPathEl.textContent = 'Config: ' + (st.config_path || '');
+        if (st.ready) {
+          walletStatus.textContent = 'Ready.';
+          walletStatus.classList.add('ready');
+          walletPubkey.textContent = st.pubkey || '';
+          walletPubkeyHex.textContent = st.pubkey_hex || '';
+          walletPaymentMode.textContent = st.payment_wallet_configured ? 'Payment wallet: NWC/Breez (real payments)' : 'Payment wallet: demo only (fake success on Accept)';
+          walletPaymentMode.style.color = st.payment_wallet_configured ? 'var(--success)' : 'var(--muted)';
+          if (st.payment_wallet_configured && st.balance_msat != null) {
+            walletBalance.textContent = 'Balance: ' + st.balance_msat.toLocaleString() + ' msat (' + (st.balance_msat / 1000).toLocaleString() + ' sats)';
+            walletBalance.style.display = 'block';
+          } else {
+            walletBalance.textContent = '';
+            walletBalance.style.display = 'none';
+          }
+          walletPubkeyWrap.style.display = 'block';
+          paymentSection.style.display = 'block';
+          pollPaymentRequest();
+        } else {
+          walletStatus.textContent = 'Not ready (check config).';
+          walletStatus.classList.remove('ready');
+          walletPubkeyWrap.style.display = 'none';
+        }
+      } catch (e) {
+        walletStatus.textContent = 'Error: ' + e.message;
+        log('status error: ' + e.message);
+      }
+    }
+
+    async function pollPaymentRequest() {
+      try {
+        const pr = await json('/api/payment-request');
+        if (pr) {
+          paymentDetails.innerHTML = `
+            <div class="payment-card">
+              <dl>
+                <dt>Request ID</dt><dd>${escapeHtml(pr.request_id)}</dd>
+                <dt>Amount</dt><dd>${pr.amount_msat != null ? pr.amount_msat + ' ' + escapeHtml(pr.currency) : escapeHtml(pr.currency)}</dd>
+                <dt>Description</dt><dd>${pr.description ? escapeHtml(pr.description) : '—'}</dd>
+                <dt>Service</dt><dd class="pubkey">${escapeHtml(pr.service_key)}</dd>
+                <dt>Invoice</dt><dd class="pubkey" style="word-break:break-all;">${escapeHtml(pr.invoice || '')}</dd>
+              </dl>
+            </div>
+          `;
+          paymentActions.style.display = 'flex';
+          btnAccept.onclick = accept;
+          btnReject.onclick = reject;
+          return;
+        }
+      } catch (e) {
+        log('poll error: ' + e.message);
+      }
+      setTimeout(pollPaymentRequest, 2000);
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    async function accept() {
+      btnAccept.disabled = true;
+      btnReject.disabled = true;
+      try {
+        await fetch(API + '/api/payment-request/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        log('Accepted.');
+        paymentDetails.innerHTML = '<p class="status ready">Accepted. Demo sent success. Waiting for next request…</p>';
+        paymentActions.style.display = 'none';
+        setTimeout(pollPaymentRequest, 1000);
+      } catch (e) {
+        log('Accept error: ' + e.message);
+      }
+      btnAccept.disabled = false;
+      btnReject.disabled = false;
+    }
+
+    async function reject() {
+      const reason = prompt('Reject reason (optional):') || undefined;
+      btnAccept.disabled = true;
+      btnReject.disabled = true;
+      try {
+        await fetch(API + '/api/payment-request/reject', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: reason || null })
+        });
+        log('Rejected.');
+        paymentDetails.innerHTML = '<p class="status">Rejected. Waiting for next request…</p>';
+        paymentActions.style.display = 'none';
+        setTimeout(pollPaymentRequest, 1000);
+      } catch (e) {
+        log('Reject error: ' + e.message);
+      }
+      btnAccept.disabled = false;
+      btnReject.disabled = false;
+    }
+
+    refreshStatus();
+  </script>
+</body>
+</html>

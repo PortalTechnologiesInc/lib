@@ -55,7 +55,7 @@ async function testFullFlow(client: PortalSDK, mainKey: string, subkeys: string[
 async function main() {
   // Create a new client instance
   const client = new PortalSDK({
-    serverUrl: 'ws://localhost:7000/ws',
+    serverUrl: '',
     connectTimeout: 5000,
     debug: false
   });
@@ -81,7 +81,7 @@ async function main() {
 
     // First, authenticate with the server
     console.log('\n=== Authentication ===');
-    const authToken = process.env.AUTH_TOKEN || 'your-auth-token'; // Replace with your actual token
+    const authToken = process.env.AUTH_TOKEN || 'password12345'; // Replace with your actual token
     await client.authenticate(authToken);
     console.log('Authentication successful');
 
@@ -138,15 +138,15 @@ async function main() {
 
     // Example 3: Fetch Nip05 Profile
     console.log('\n=== Fetch Nip05 Profile ===');
-    const nip05 = 'unldenis@getportal.cc';
+    const nip05 = 'ancientdragon913@getportal.cc';
     const nip05Profile = await client.fetchNip05Profile(nip05);
     const pubkey = nip05Profile.public_key;
     console.log('Nip05 profile pubkey:', pubkey);
 
     // Example 4: Request Single Payment
     console.log('\n=== Request Single Payment ===');
-    await client.requestSinglePayment(pubkey, [], {
-      amount: 1000 * 3,
+    await client.requestSinglePayment("b64f27e66fdd979d2d0a0afb13f4d601339047fd3d2041a80cbc8d6398f66fdf", [], {
+      amount: 1000 * 2,
       currency: Currency.Millisats,
       description: "Test payment",
       request_id: "test-payment-2",

@@ -1,0 +1,27 @@
+[package]
+name = "portal-app-demo"
+version = "0.1.0"
+edition = "2024"
+description = "Minimal demo app for protocol testing: set wallet, receive one payment request, accept or reject (uses portal-app)"
+
+[[bin]]
+name = "portal-app-demo"
+path = "src/main.rs"
+
+[dependencies]
+app = { path = "../portal-app", features = [] }
+portal-wallet = { path = "../portal-wallet" }
+portal = { path = "../portal", features = ["bindings"] }
+
+axum = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+config = { workspace = true }
+dirs = { workspace = true }

@@ -3845,6 +3845,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "portal-app-demo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "app",
+ "async-trait",
+ "axum 0.6.20",
+ "config",
+ "dirs",
+ "env_logger",
+ "log",
+ "portal",
+ "portal-wallet",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tower-http 0.4.4",
+]
+
+[[package]]
 name = "portal-cli"
 version = "0.1.0"
 dependencies = [
