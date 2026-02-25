@@ -146,8 +146,8 @@ async function main() {
     // Example 4: Request Single Payment
     console.log('\n=== Request Single Payment ===');
     await client.requestSinglePayment("b64f27e66fdd979d2d0a0afb13f4d601339047fd3d2041a80cbc8d6398f66fdf", [], {
-      amount: 1000 * 2,
-      currency: Currency.Millisats,
+      amount: 200,
+      currency: "EUR",
       description: "Test payment",
     }, (status) => {
       console.log('Payment status:', status);

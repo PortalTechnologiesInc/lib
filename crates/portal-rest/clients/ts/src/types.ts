@@ -5,6 +5,9 @@ export enum Currency {
   Millisats = "Millisats",
 }
 
+/** Currency for payment requests: Millisats or a fiat code string (e.g. "EUR", "USD"). */
+export type PaymentCurrency = Currency | string;
+
 // Custom Timestamp type that serializes to string
 export class Timestamp {
   private value: bigint;
@@ -47,7 +50,7 @@ export interface RecurrenceInfo {
 
 export interface RecurringPaymentRequestContent {
   amount: number;
-  currency: Currency;
+  currency: PaymentCurrency;
   recurrence: RecurrenceInfo;
   description?: string;
   current_exchange_rate?: any;
@@ -57,7 +60,7 @@ export interface RecurringPaymentRequestContent {
 
 export interface InvoicePaymentRequestContent {
   amount: number;
-  currency: Currency;
+  currency: PaymentCurrency;
   description: string;
   subscription_id?: string;
   auth_token?: string;
@@ -69,7 +72,7 @@ export interface InvoicePaymentRequestContent {
 export interface SinglePaymentRequestContent {
   description: string;
   amount: number;
-  currency: Currency;
+  currency: PaymentCurrency;
   subscription_id?: string;
   auth_token?: string;
   /** Optional client-provided id for correlating this payment request. */

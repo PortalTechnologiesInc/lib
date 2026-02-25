@@ -67,13 +67,30 @@ struct StatusResponse {
 struct PaymentRequestDto {
     request_id: String,
     event_id: String,
-    amount_msat: Option<u64>,
+    /// Raw amount (msat for Lightning, or smallest fiat unit e.g. cents for USD).
+    amount: u64,
+    /// Human-readable amount and currency, e.g. "10.50 USD" or "100,000 msat (100 sats)".
+    amount_formatted: String,
+    /// True when currency is fiat (e.g. USD).
+    is_fiat: bool,
     currency: String,
+    /// When fiat, optional exchange rate (rate + source) for display.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exchange_rate: Option<ExchangeRateDto>,
+    /// When fiat and exchange_rate present, approximate equivalent in sats (for display).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    equivalent_sats: Option<u64>,
     description: Option<String>,
     service_key: String,
     recipient: String,
     expires_at_secs: u64,
     invoice: Option<String>,
+}
+
+#[derive(Serialize)]
+struct ExchangeRateDto {
+    pub rate: f64,
+    pub source: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -229,15 +246,43 @@ async fn payment_request_loop(app: Arc<PortalApp>, state: Arc<AppState>) {
 }
 
 fn single_request_to_dto(r: &SinglePaymentRequest) -> PaymentRequestDto {
-    let currency = match &r.content.currency {
-        portal::protocol::model::payment::Currency::Millisats => "msat".to_string(),
-        portal::protocol::model::payment::Currency::Fiat(s) => s.clone(),
+    use portal::protocol::model::payment::{Currency, ExchangeRate};
+    let amount = r.content.amount;
+    let (currency, amount_formatted, is_fiat, exchange_rate, equivalent_sats) = match &r.content.currency {
+        Currency::Millisats => {
+            let sats = amount / 1000;
+            let formatted = format!("{} msat ({} sats)", amount, sats);
+            (String::from("msat"), formatted, false, None, None)
+        }
+        Currency::Fiat(code) => {
+            // Fiat amount is typically in smallest unit (e.g. cents for USD): 1050 = 10.50 USD
+            let major = amount as f64 / 100.0;
+            let formatted = format!("{:.2} {}", major, code);
+            let (exchange_rate_dto, equivalent_sats) = match &r.content.current_exchange_rate {
+                Some(ExchangeRate { rate, source, .. }) => {
+                    let eq_sats = (major * *rate) as u64;
+                    (
+                        Some(ExchangeRateDto {
+                            rate: *rate,
+                            source: source.clone(),
+                        }),
+                        Some(eq_sats),
+                    )
+                }
+                None => (None, None),
+            };
+            (code.clone(), formatted, true, exchange_rate_dto, equivalent_sats)
+        }
     };
     PaymentRequestDto {
         request_id: r.content.request_id.clone(),
         event_id: r.event_id.clone(),
-        amount_msat: Some(r.content.amount),
+        amount,
+        amount_formatted,
+        is_fiat,
         currency,
+        exchange_rate,
+        equivalent_sats,
         description: r.content.description.clone(),
         service_key: r.service_key.to_string(),
         recipient: r.recipient.to_string(),

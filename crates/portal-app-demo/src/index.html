@@ -173,11 +173,16 @@
       try {
         const pr = await json('/api/payment-request');
         if (pr) {
+          const amountLine = pr.amount_formatted || (pr.amount != null ? pr.amount + ' ' + escapeHtml(pr.currency) : escapeHtml(pr.currency));
+          const equivLine = pr.is_fiat && pr.equivalent_sats != null ? '<dt>≈ Lightning</dt><dd>' + pr.equivalent_sats.toLocaleString() + ' sats</dd>' : '';
+          const rateLine = pr.exchange_rate ? '<dt>Rate</dt><dd>' + escapeHtml(pr.exchange_rate.source) + ' (1 ' + escapeHtml(pr.currency) + ' ≈ ' + pr.exchange_rate.rate.toFixed(0) + ' sats)</dd>' : '';
           paymentDetails.innerHTML = `
             <div class="payment-card">
               <dl>
                 <dt>Request ID</dt><dd>${escapeHtml(pr.request_id)}</dd>
-                <dt>Amount</dt><dd>${pr.amount_msat != null ? pr.amount_msat + ' ' + escapeHtml(pr.currency) : escapeHtml(pr.currency)}</dd>
+                <dt>Amount</dt><dd>${amountLine}</dd>
+                ${equivLine}
+                ${rateLine}
                 <dt>Description</dt><dd>${pr.description ? escapeHtml(pr.description) : '—'}</dd>
                 <dt>Service</dt><dd class="pubkey">${escapeHtml(pr.service_key)}</dd>
                 <dt>Invoice</dt><dd class="pubkey" style="word-break:break-all;">${escapeHtml(pr.invoice || '')}</dd>

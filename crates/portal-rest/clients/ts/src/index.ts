@@ -2,6 +2,7 @@ export { PortalSDK } from './client';
 export { PortalSDKError, PortalSDKErrorCode } from './errors';
 export {
   Currency,
+  PaymentCurrency,
   Timestamp,
   RecurrenceInfo,
   RecurringPaymentRequestContent,
