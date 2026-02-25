@@ -262,6 +262,14 @@ async fn api_accept(State(state): State<Arc<AppState>>) -> Result<StatusCode, Ap
     let request_id = request.content.request_id.clone();
     let invoice = request.content.invoice.clone();
 
+    let approved = PaymentResponseContent {
+        request_id: request_id.clone(),
+        status: PaymentStatus::Approved,
+    };
+    app.reply_single_payment_request(request.clone(), approved)
+        .await
+        .map_err(|e| Err::internal(e.to_string()))?;
+
     let status = if let Some(pw) = payment_wallet {
         match pw.pay_invoice(invoice).await {
             Ok((preimage, _)) => PaymentResponseContent {

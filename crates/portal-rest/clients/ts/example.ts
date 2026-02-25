@@ -55,7 +55,7 @@ async function testFullFlow(client: PortalSDK, mainKey: string, subkeys: string[
 async function main() {
   // Create a new client instance
   const client = new PortalSDK({
-    serverUrl: '',
+    serverUrl: 'wss://3k4a4t3.portalhub.mehilli.it/ws',
     connectTimeout: 5000,
     debug: false
   });
@@ -149,7 +149,6 @@ async function main() {
       amount: 1000 * 2,
       currency: Currency.Millisats,
       description: "Test payment",
-      request_id: "test-payment-2",
     }, (status) => {
       console.log('Payment status:', status);
     });
