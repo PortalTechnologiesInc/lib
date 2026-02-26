@@ -104,6 +104,19 @@
       </div>
     </section>
 
+    <section id="invoice-request-section" style="display:none;">
+      <h2 style="font-size:1rem; margin:0 0 0.5rem;">Invoice request (requestInvoice)</h2>
+      <p class="status">Waiting for an invoice request…</p>
+      <div id="invoice-request-details"></div>
+      <div id="invoice-request-form" style="display:none;">
+        <p id="invoice-request-hint" class="status" style="margin-bottom:0.75rem;"></p>
+        <div class="actions">
+          <button type="button" id="btn-invoice-accept">Accept</button>
+          <button type="button" id="btn-invoice-reject" class="danger">Reject</button>
+        </div>
+      </div>
+    </section>
+
     <div id="log"></div>
   </div>
 
@@ -136,6 +149,13 @@
     const paymentActions = document.getElementById('payment-actions');
     const btnAccept = document.getElementById('btn-accept');
     const btnReject = document.getElementById('btn-reject');
+    const invoiceRequestSection = document.getElementById('invoice-request-section');
+    const invoiceRequestDetails = document.getElementById('invoice-request-details');
+    const invoiceRequestForm = document.getElementById('invoice-request-form');
+    const invoiceRequestHint = document.getElementById('invoice-request-hint');
+    const btnInvoiceAccept = document.getElementById('btn-invoice-accept');
+    const btnInvoiceReject = document.getElementById('btn-invoice-reject');
+    let paymentWalletConfigured = false;
 
     async function refreshStatus() {
       try {
@@ -146,6 +166,7 @@
           walletStatus.classList.add('ready');
           walletPubkey.textContent = st.pubkey || '';
           walletPubkeyHex.textContent = st.pubkey_hex || '';
+          paymentWalletConfigured = !!st.payment_wallet_configured;
           walletPaymentMode.textContent = st.payment_wallet_configured ? 'Payment wallet: NWC/Breez (real payments)' : 'Payment wallet: demo only (fake success on Accept)';
           walletPaymentMode.style.color = st.payment_wallet_configured ? 'var(--success)' : 'var(--muted)';
           if (st.payment_wallet_configured && st.balance_msat != null) {
@@ -157,7 +178,9 @@
           }
           walletPubkeyWrap.style.display = 'block';
           paymentSection.style.display = 'block';
+          invoiceRequestSection.style.display = 'block';
           pollPaymentRequest();
+          pollInvoiceRequest();
         } else {
           walletStatus.textContent = 'Not ready (check config).';
           walletStatus.classList.remove('ready');
@@ -198,6 +221,83 @@
         log('poll error: ' + e.message);
       }
       setTimeout(pollPaymentRequest, 2000);
+    }
+
+    async function pollInvoiceRequest() {
+      try {
+        const ir = await json('/api/invoice-request');
+        if (ir) {
+          const amountLine = ir.amount_formatted || (ir.amount != null ? ir.amount + ' ' + escapeHtml(ir.currency) : escapeHtml(ir.currency));
+          invoiceRequestDetails.innerHTML = `
+            <div class="payment-card">
+              <dl>
+                <dt>Request ID</dt><dd>${escapeHtml(ir.request_id)}</dd>
+                <dt>Amount</dt><dd>${amountLine}</dd>
+                <dt>Description</dt><dd>${ir.description ? escapeHtml(ir.description) : '—'}</dd>
+                <dt>Recipient</dt><dd class="pubkey">${escapeHtml(ir.recipient)}</dd>
+                <dt>Expires (secs)</dt><dd>${ir.expires_at_secs}</dd>
+              </dl>
+            </div>
+          `;
+          invoiceRequestForm.style.display = 'block';
+          const canAccept = !ir.is_fiat && paymentWalletConfigured;
+          btnInvoiceAccept.disabled = !canAccept;
+          if (invoiceRequestHint) {
+            invoiceRequestHint.textContent = canAccept
+              ? 'Wallet will create the invoice when you accept.'
+              : 'Configure a payment wallet and use amount in sats to accept.';
+            invoiceRequestHint.style.color = canAccept ? 'var(--success)' : 'var(--muted)';
+          }
+          btnInvoiceAccept.onclick = acceptInvoiceRequest;
+          btnInvoiceReject.onclick = rejectInvoiceRequest;
+          return;
+        }
+      } catch (e) {
+        log('invoice-request poll error: ' + e.message);
+      }
+      setTimeout(pollInvoiceRequest, 2000);
+    }
+
+    async function acceptInvoiceRequest() {
+      btnInvoiceAccept.disabled = true;
+      btnInvoiceReject.disabled = true;
+      try {
+        const r = await fetch(API + '/api/invoice-request/reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoice: '', payment_hash: null })
+        });
+        const text = await r.text();
+        if (!r.ok) {
+          let msg = text;
+          try { const o = JSON.parse(text); if (o.error) msg = o.error; } catch (_) {}
+          throw new Error(msg || r.statusText);
+        }
+        log('Accepted. Invoice created with wallet and replied.');
+        invoiceRequestDetails.innerHTML = '<p class="status ready">Replied. Waiting for next invoice request…</p>';
+        invoiceRequestForm.style.display = 'none';
+        setTimeout(pollInvoiceRequest, 1000);
+      } catch (e) {
+        log('Accept error: ' + e.message);
+      }
+      btnInvoiceAccept.disabled = false;
+      btnInvoiceReject.disabled = false;
+    }
+
+    async function rejectInvoiceRequest() {
+      btnInvoiceReject.disabled = true;
+      btnInvoiceAccept.disabled = true;
+      try {
+        await fetch(API + '/api/invoice-request/reject', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        log('Invoice request rejected.');
+        invoiceRequestDetails.innerHTML = '<p class="status">Rejected. Waiting for next invoice request…</p>';
+        invoiceRequestForm.style.display = 'none';
+        setTimeout(pollInvoiceRequest, 1000);
+      } catch (e) {
+        log('Reject error: ' + e.message);
+      }
+      btnInvoiceReject.disabled = false;
+      btnInvoiceAccept.disabled = false;
     }
 
     function escapeHtml(s) {

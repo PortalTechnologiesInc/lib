@@ -9,7 +9,8 @@ pub use nwc::NwcWallet;
 /// Portal Wallet trait
 #[async_trait]
 pub trait PortalWallet: Send + Sync {
-    async fn make_invoice(&self, sats: u64, description: Option<String>) -> Result<String>;
+    /// Create an invoice for the given amount (in millisatoshis).
+    async fn make_invoice(&self, amount_msat: u64, description: Option<String>) -> Result<String>;
     async fn is_invoice_paid(&self, invoice: String) -> Result<(bool, Option<String>)>;
     /// Get balance (msat)
     async fn get_balance(&self) -> Result<u64>;

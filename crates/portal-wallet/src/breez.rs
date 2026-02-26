@@ -38,7 +38,7 @@ impl BreezSparkWallet {
 
 #[async_trait]
 impl PortalWallet for BreezSparkWallet {
-    async fn make_invoice(&self, sats: u64, description: Option<String>) -> Result<String> {
+    async fn make_invoice(&self, amount_msat: u64, description: Option<String>) -> Result<String> {
         let description = description.unwrap_or("Portal invoice".into());
         // Optionally set the expiry duration in seconds
         let optional_expiry_secs = Some(3600_u32);
@@ -47,7 +47,7 @@ impl PortalWallet for BreezSparkWallet {
             .receive_payment(ReceivePaymentRequest {
                 payment_method: ReceivePaymentMethod::Bolt11Invoice {
                     description,
-                    amount_sats: Some(sats / 1000),
+                    amount_sats: Some(amount_msat / 1000),
                     expiry_secs: optional_expiry_secs,
                 },
             })
