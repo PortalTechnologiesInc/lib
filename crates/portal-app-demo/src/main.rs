@@ -646,7 +646,9 @@ async fn api_invoice_request_reply(
     Ok(StatusCode::OK)
 }
 
-/// Reject: clear the pending invoice request without sending any reply (requester will time out).
+/// Reject: clear the pending invoice request **without sending any reply**.
+/// The requester will receive no invoice and will time out waiting for one.
+/// This is intentional for demo purposes — a real implementation might send an explicit error.
 async fn api_invoice_request_reject(State(state): State<Arc<AppState>>) -> Result<StatusCode, ApiError> {
     let _ = state.pending_invoice_request.write().await.take();
     log::info!("Invoice request rejected (no reply sent)");
