@@ -40,6 +40,7 @@ cdk-sqlite = { workspace = true }
 rand = { workspace = true }
 dirs = { workspace = true }
 config = { workspace = true }
+lightning-invoice = { workspace = true }
 
 [features]
 task-tracing = ["console-subscriber"]

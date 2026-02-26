@@ -15,7 +15,7 @@ export {
   AuthResponseData,
   Profile,
   Nip05Profile,
-  InvoiceRequestContent,
+  RequestInvoiceParams,
   InvoicePaymentRequestContent,
   InvoiceResponseContent,
   InvoiceStatus,

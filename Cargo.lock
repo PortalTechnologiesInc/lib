@@ -3914,6 +3914,7 @@ dependencies = [
  "dashmap",
  "dirs",
  "futures",
+ "lightning-invoice",
  "nostr 0.43.0",
  "nwc",
  "portal",

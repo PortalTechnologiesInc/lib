@@ -136,15 +136,15 @@ export interface Profile {
   nip05?: string;
 }
 
-// Invoice related types
-export interface InvoiceRequestContent {
-  request_id: string;
+// Invoice related types (slim params for RequestInvoice; server computes exchange rate)
+export interface RequestInvoiceParams {
   amount: number;
   currency: Currency;
-  current_exchange_rate?: ExchangeRate;
   expires_at: Timestamp;
-  description?: string;
-  refund_invoice?: string;
+  description?: string | null;
+  refund_invoice?: string | null;
+  /** Optional request ID. If not provided, the command ID is used. */
+  request_id?: string | null;
 }
 
 export interface InvoiceResponseContent {
@@ -176,7 +176,7 @@ export type Command =
   | { cmd: 'SetProfile'; params: { profile: Profile } }
   | { cmd: 'CloseRecurringPayment'; params: { main_key: string; subkeys: string[]; subscription_id: string } }
   | { cmd: 'ListenClosedRecurringPayment' }
-  | { cmd: 'RequestInvoice'; params: { recipient_key: string; subkeys: string[]; content: InvoiceRequestContent } }
+  | { cmd: 'RequestInvoice'; params: { recipient_key: string; subkeys: string[]; content: RequestInvoiceParams } }
   | { cmd: 'IssueJwt'; params: { target_key: string; duration_hours: number } }
   | { cmd: 'VerifyJwt'; params: { pubkey: string; token: string } }
   | { cmd: 'RequestCashu'; params: { recipient_key: string; subkeys: string[]; mint_url: string; unit: string; amount: number } }
