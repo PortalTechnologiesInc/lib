@@ -144,4 +144,6 @@ pub struct RequestInvoiceParams {
     pub expires_at: Timestamp,
     pub description: Option<String>,
     pub refund_invoice: Option<String>,
+    /// Optional request ID. If not provided, the command ID is used.
+    pub request_id: Option<String>,
 }

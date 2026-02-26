@@ -1033,7 +1033,10 @@ async fn handle_command(command: CommandWithId, ctx: Arc<SocketContext>) {
             };
 
             let sdk_content = InvoiceRequestContent {
-                request_id: command.id.clone(),
+                request_id: content.request_id.clone().unwrap_or_else(|| command.id.clone()),
+                // `amount` here is the raw amount as supplied by the SDK client — it may be
+                // fiat cents (e.g. 100 = 1.00 EUR) or msat depending on `currency`.
+                // Do NOT interpret this as msat; use `expected_amount_msat` for msat comparisons.
                 amount: content.amount,
                 currency: content.currency.clone(),
                 current_exchange_rate,

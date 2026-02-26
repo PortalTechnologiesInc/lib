@@ -140,6 +140,8 @@ export interface RequestInvoiceParams {
   expires_at: Timestamp;
   description?: string | null;
   refund_invoice?: string | null;
+  /** Optional request ID. If not provided, the command ID is used. */
+  request_id?: string | null;
 }
 
 export interface InvoiceResponseContent {
