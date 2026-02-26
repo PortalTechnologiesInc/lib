@@ -1,6 +1,6 @@
 [workspace]
 resolver = "1"
-members = [ "crates/portal-app" , "crates/portal-cli", "crates/portal-rest", "crates/portal-sdk", "crates/portal-rates", "crates/portal-macros", "crates/portal-wallet"]
+members = [ "crates/portal-app" , "crates/portal-app-demo", "crates/portal-cli", "crates/portal-rest", "crates/portal-sdk", "crates/portal-rates", "crates/portal-macros", "crates/portal-wallet"]
 
 [workspace.dependencies]
 # -----------------------------------------------------------------------------

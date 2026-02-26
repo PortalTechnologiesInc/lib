@@ -1,0 +1,26 @@
+## Config for portal-app-demo. Copy to ~/.portal-app-demo/config.toml
+## Override via env: PORTAL_APP_DEMO__<SECTION>__<KEY>=value (double underscores)
+## Example: PORTAL_APP_DEMO__INFO__LISTEN_PORT=3030
+
+[info]
+listen_port = 3030
+
+[identity]
+## Identity: either mnemonic (12 words) or nsec. Used for Portal app (relays, payment requests).
+mnemonic = "word1 word2 ... word12"
+# nsec = "nsec1..."
+
+[nostr]
+relays = ["wss://relay.nostr.net", "wss://relay.getportal.cc"]
+
+[wallet]
+## Payment wallet when accepting: "none", "nwc", or "breez"
+ln_backend = "none"
+
+# [wallet.nwc]
+# url = "nostr+walletconnect://..."
+
+## Breez: data is stored under ~/.portal-app-demo/breez (single session)
+# [wallet.breez]
+# api_key = "your-breez-api-key"
+# mnemonic = "your-breez-mnemonic"
