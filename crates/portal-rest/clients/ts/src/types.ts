@@ -139,7 +139,7 @@ export interface Profile {
 // Invoice related types (slim params for RequestInvoice; server computes exchange rate)
 export interface RequestInvoiceParams {
   amount: number;
-  currency: Currency;
+  currency: PaymentCurrency;
   expires_at: Timestamp;
   description?: string | null;
   refund_invoice?: string | null;

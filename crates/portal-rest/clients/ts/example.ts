@@ -167,8 +167,8 @@ async function main() {
     console.log('\n=== Request Invoice ===');
     try {
       const invoice = await client.requestInvoice(pubkey, [], {
-        amount: 20 * 1000,
-        currency: Currency.Millisats,
+        amount: 599,  // 5.99 EUR
+        currency: "EUR",
         expires_at: Timestamp.fromNow(3600),
         description: "Test invoice request",
       });

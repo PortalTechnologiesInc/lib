@@ -27,7 +27,7 @@ use axum::{
 use error::ApiError;
 use error::ApiError as Err;
 use portal::protocol::model::payment::{
-    InvoiceRequestContentWithKey, PaymentResponseContent, PaymentStatus,
+    Currency, ExchangeRate, InvoiceRequestContentWithKey, PaymentResponseContent, PaymentStatus,
 };
 use portal_wallet::PortalWallet;
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,28 @@ use tower_http::cors::{Any, CorsLayer};
 // State
 // -----------------------------------------------------------------------------
 
+/// One entry in the recent invoice-requests log (auto-accepted).
+#[derive(Clone, Serialize)]
+struct InvoiceRequestLogEntry {
+    request_id: String,
+    amount_formatted: String,
+    currency: String,
+    is_fiat: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    equivalent_sats: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    at_secs: u64,
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+    /// Bolt11 invoice (ln...) when status is accepted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    invoice: Option<String>,
+}
+
+const MAX_RECENT_INVOICE_REQUESTS: usize = 100;
+
 struct AppState {
     app: RwLock<Option<Arc<PortalApp>>>,
     pubkey: RwLock<Option<String>>,
@@ -45,6 +67,7 @@ struct AppState {
     payment_wallet: RwLock<Option<Arc<dyn PortalWallet>>>,
     pending_request: RwLock<Option<SinglePaymentRequest>>,
     pending_invoice_request: RwLock<Option<InvoiceRequestContentWithKey>>,
+    recent_invoice_requests: RwLock<Vec<InvoiceRequestLogEntry>>,
     config_path: String,
 }
 
@@ -109,6 +132,10 @@ struct InvoiceRequestDto {
     amount_formatted: String,
     is_fiat: bool,
     currency: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exchange_rate: Option<ExchangeRateDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    equivalent_sats: Option<u64>,
     description: Option<String>,
     recipient: String,
     expires_at_secs: u64,
@@ -173,6 +200,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         payment_wallet: RwLock::new(payment_wallet),
         pending_request: RwLock::new(None),
         pending_invoice_request: RwLock::new(None),
+        recent_invoice_requests: RwLock::new(Vec::new()),
         config_path: config_path.clone(),
     });
 
@@ -202,6 +230,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/invoice-request", get(api_invoice_request))
         .route("/api/invoice-request/reply", post(api_invoice_request_reply))
         .route("/api/invoice-request/reject", post(api_invoice_request_reject))
+        .route("/api/invoice-requests/recent", get(api_invoice_requests_recent))
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .with_state(state);
 
@@ -282,7 +311,92 @@ async fn invoice_request_loop(app: Arc<PortalApp>, state: Arc<AppState>) {
         match app.next_invoice_request().await {
             Ok(request) => {
                 log::info!("Received invoice request: {:?}", request);
-                *state.pending_invoice_request.write().await = Some(request);
+                // Deduplicate: router may deliver the same event to multiple subscriptions
+                {
+                    let recent = state.recent_invoice_requests.read().await;
+                    let request_id = request.inner.request_id.as_str();
+                    let now_secs = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    if recent.iter().any(|e| e.request_id == request_id && now_secs.saturating_sub(e.at_secs) < 30) {
+                        log::debug!("Skipping duplicate invoice request: {}", request_id);
+                        continue;
+                    }
+                }
+                // Store so manual Accept still works if auto-accept fails
+                *state.pending_invoice_request.write().await = Some(request.clone());
+                let dto = invoice_request_to_dto(&request);
+                let at_secs = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+
+                let payment_wallet = state.payment_wallet.read().await.clone();
+                let amount_msat = invoice_request_amount_msat(&request);
+
+                let (status, error, invoice_opt) = match (payment_wallet.as_ref(), amount_msat) {
+                    (Some(wallet), Some(msat)) => {
+                        if msat == 0 {
+                            ("failed", Some("Amount is zero".into()), None)
+                        } else {
+                            match wallet
+                                .make_invoice(msat, request.inner.description.clone())
+                                .await
+                            {
+                                Ok(invoice) => {
+                                    if let Err(e) = app
+                                        .reply_invoice_request(
+                                            request.clone(),
+                                            MakeInvoiceResponse {
+                                                invoice: invoice.clone(),
+                                                payment_hash: None,
+                                            },
+                                        )
+                                        .await
+                                    {
+                                        log::warn!("Invoice reply failed: {}", e);
+                                        ("failed", Some(format!("Reply failed: {}", e)), None)
+                                    } else {
+                                        log::info!("Invoice request auto-accepted, invoice created");
+                                        *state.pending_invoice_request.write().await = None;
+                                        ("accepted", None, Some(invoice))
+                                    }
+                                }
+                                Err(e) => {
+                                    log::warn!("make_invoice failed: {}", e);
+                                    ("failed", Some(e.to_string()), None)
+                                }
+                            }
+                        }
+                    }
+                    (None, _) => {
+                        log::warn!("Invoice request not replied: no payment wallet configured");
+                        ("failed", Some("No payment wallet configured".into()), None)
+                    }
+                    (_, None) => {
+                        log::warn!("Invoice request not replied: fiat has no exchange rate");
+                        ("failed", Some("Fiat request has no exchange rate".into()), None)
+                    }
+                };
+
+                let entry = InvoiceRequestLogEntry {
+                    request_id: dto.request_id,
+                    amount_formatted: dto.amount_formatted,
+                    currency: dto.currency,
+                    is_fiat: dto.is_fiat,
+                    equivalent_sats: dto.equivalent_sats,
+                    description: dto.description,
+                    at_secs,
+                    status: status.to_string(),
+                    error,
+                    invoice: invoice_opt,
+                };
+                let mut recent = state.recent_invoice_requests.write().await;
+                recent.insert(0, entry);
+                if recent.len() > MAX_RECENT_INVOICE_REQUESTS {
+                    recent.truncate(MAX_RECENT_INVOICE_REQUESTS);
+                }
             }
             Err(e) => {
                 log::error!("invoice_request_loop error: {:?}", e);
@@ -293,25 +407,37 @@ async fn invoice_request_loop(app: Arc<PortalApp>, state: Arc<AppState>) {
 }
 
 fn invoice_request_to_dto(r: &InvoiceRequestContentWithKey) -> InvoiceRequestDto {
-    use portal::protocol::model::payment::Currency;
     let c = &r.inner;
     let amount = c.amount;
-    let (currency, amount_formatted, is_fiat) = match &c.currency {
+    let (currency, amount_formatted, is_fiat, exchange_rate, equivalent_sats) = match &c.currency {
         Currency::Millisats => {
             let sats = amount / 1000;
             (
                 String::from("msat"),
                 format!("{} msat ({} sats)", amount, sats),
                 false,
+                None,
+                None,
             )
         }
         Currency::Fiat(code) => {
             let major = amount as f64 / 100.0;
-            (
-                code.clone(),
-                format!("{:.2} {}", major, code),
-                true,
-            )
+            let formatted = format!("{:.2} {}", major, code);
+            let (exchange_rate_dto, equivalent_sats) = match &c.current_exchange_rate {
+                Some(ExchangeRate { rate, source, .. }) => {
+                    // rate = fiat per BTC (same as portal_rates), so sats = (fiat_amount / rate) * 100e6
+                    let eq_sats = ((major / *rate) * 100_000_000.0) as u64;
+                    (
+                        Some(ExchangeRateDto {
+                            rate: *rate,
+                            source: source.clone(),
+                        }),
+                        Some(eq_sats),
+                    )
+                }
+                None => (None, None),
+            };
+            (code.clone(), formatted, true, exchange_rate_dto, equivalent_sats)
         }
     };
     InvoiceRequestDto {
@@ -320,9 +446,24 @@ fn invoice_request_to_dto(r: &InvoiceRequestContentWithKey) -> InvoiceRequestDto
         amount_formatted,
         is_fiat,
         currency,
+        exchange_rate,
+        equivalent_sats,
         description: c.description.clone(),
         recipient: r.recipient.to_string(),
         expires_at_secs: c.expires_at.as_u64(),
+    }
+}
+
+/// Compute amount in msat for wallet.make_invoice. Returns None if fiat and no exchange rate.
+/// For fiat, rate is "fiat per BTC" (same as portal_rates), so msat = (fiat_amount / rate) * 100e9.
+fn invoice_request_amount_msat(r: &InvoiceRequestContentWithKey) -> Option<u64> {
+    let c = &r.inner;
+    match &c.currency {
+        Currency::Millisats => Some(c.amount),
+        Currency::Fiat(_) => {
+            let major = c.amount as f64 / 100.0;
+            c.current_exchange_rate.as_ref().map(|er| ((major / er.rate) * 100_000_000_000.0) as u64)
+        }
     }
 }
 
@@ -341,7 +482,8 @@ fn single_request_to_dto(r: &SinglePaymentRequest) -> PaymentRequestDto {
             let formatted = format!("{:.2} {}", major, code);
             let (exchange_rate_dto, equivalent_sats) = match &r.content.current_exchange_rate {
                 Some(ExchangeRate { rate, source, .. }) => {
-                    let eq_sats = (major * *rate) as u64;
+                    // rate = fiat per BTC (same as portal_rates), so sats = (fiat_amount / rate) * 100e6
+                    let eq_sats = ((major / *rate) * 100_000_000.0) as u64;
                     (
                         Some(ExchangeRateDto {
                             rate: *rate,
@@ -477,24 +619,17 @@ async fn api_invoice_request_reply(
     let (invoice, payment_hash) = if !invoice.is_empty() {
         (invoice.to_string(), body.payment_hash)
     } else {
-        // Try to create invoice via wallet if amount is in msat
+        // Create invoice via wallet (msat or fiat with exchange rate)
         let payment_wallet = state.payment_wallet.read().await.clone();
-        match payment_wallet.as_ref() {
-            Some(wallet) => {
-                use portal::protocol::model::payment::Currency;
-                match &request.inner.currency {
-                    Currency::Millisats => {
-                        let inv = wallet
-                            .make_invoice(request.inner.amount, request.inner.description.clone())
-                            .await
-                            .map_err(|e| Err::internal(e.to_string()))?;
-                        (inv, None)
-                    }
-                    _ => return Err(Err::bad_request("Provide invoice in body for fiat requests, or use msat")),
-                }
-            }
-            None => return Err(Err::bad_request("No payment wallet configured; provide invoice in body")),
-        }
+        let wallet = payment_wallet.as_ref().ok_or_else(|| Err::bad_request("No payment wallet configured; provide invoice in body"))?;
+        let amount_msat = invoice_request_amount_msat(&request)
+            .filter(|&m| m > 0)
+            .ok_or_else(|| Err::bad_request("Cannot create invoice: fiat has no exchange rate or amount is zero"))?;
+        let inv = wallet
+            .make_invoice(amount_msat, request.inner.description.clone())
+            .await
+            .map_err(|e| Err::internal(e.to_string()))?;
+        (inv, None)
     };
 
     app.reply_invoice_request(
@@ -516,4 +651,11 @@ async fn api_invoice_request_reject(State(state): State<Arc<AppState>>) -> Resul
     let _ = state.pending_invoice_request.write().await.take();
     log::info!("Invoice request rejected (no reply sent)");
     Ok(StatusCode::OK)
+}
+
+async fn api_invoice_requests_recent(
+    State(state): State<Arc<AppState>>,
+) -> Json<Vec<InvoiceRequestLogEntry>> {
+    let recent = state.recent_invoice_requests.read().await.clone();
+    Json(recent)
 }
