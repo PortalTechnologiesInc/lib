@@ -49,7 +49,7 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 dependencies {
-    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.2.1'
+    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.3.0'
 }
 ```
 
@@ -63,7 +63,7 @@ dependencies {
 <dependency>
     <groupId>com.github.PortalTechnologiesInc</groupId>
     <artifactId>java-sdk</artifactId>
-    <version>0.2.1</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 
@@ -83,7 +83,7 @@ See [SDK Installation](../sdk/installation.md).
 docker run -d -p 3000:3000 \
   -e PORTAL__AUTH__AUTH_TOKEN=my-secret-token \
   -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
-  getportal/sdk-daemon:latest
+  getportal/sdk-daemon:0.3.0
 ```
 
 Check: curl http://localhost:3000/health → OK. Use ws://localhost:3000/ws and token my-secret-token.
