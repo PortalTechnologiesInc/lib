@@ -50,7 +50,7 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 dependencies {
-    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.2.1'
+    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.3.0'
 }
 ```
 
@@ -64,7 +64,7 @@ dependencies {
 <dependency>
     <groupId>com.github.PortalTechnologiesInc</groupId>
     <artifactId>java-sdk</artifactId>
-    <version>0.2.1</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 
@@ -107,6 +107,10 @@ Use sendCommand(request, (response, err) -> { ... }) for commands. Request/respo
 </section>
 
 </custom-tabs>
+
+---
+
+> **Compatibility:** the SDK `major.minor` version must match the SDK Daemon (`getportal/sdk-daemon`) `major.minor`. Patch versions are independent. See [Versioning & Compatibility](../getting-started/versioning.md).
 
 ---
 
