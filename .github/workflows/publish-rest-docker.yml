@@ -1,0 +1,67 @@
+name: Publish portal-rest Docker
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to push (e.g. 0.3.0)"
+        required: true
+      push_latest:
+        description: "Also update :latest tag"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "portal-rest-v*"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Setup Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Build Docker image
+        run: nix build .#rest-docker --print-build-logs
+
+      - name: Load image into Docker
+        run: docker load < result
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Strip "portal-rest-v" prefix from tag
+            VERSION="${GITHUB_REF_NAME#portal-rest-v}"
+            PUSH_LATEST=true
+          else
+            VERSION="${{ inputs.version }}"
+            PUSH_LATEST="${{ inputs.push_latest }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "push_latest=$PUSH_LATEST" >> $GITHUB_OUTPUT
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tag and push
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          docker tag getportal/sdk-daemon:amd64 getportal/sdk-daemon:${VERSION}
+          docker tag getportal/sdk-daemon:amd64 getportal/sdk-daemon:${VERSION}-amd64
+          docker push getportal/sdk-daemon:amd64
+          docker push getportal/sdk-daemon:${VERSION}
+          docker push getportal/sdk-daemon:${VERSION}-amd64
+          if [ "${{ steps.version.outputs.push_latest }}" = "true" ]; then
+            docker tag getportal/sdk-daemon:amd64 getportal/sdk-daemon:latest
+            docker push getportal/sdk-daemon:latest
+          fi
