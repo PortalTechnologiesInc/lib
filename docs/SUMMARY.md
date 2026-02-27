@@ -12,6 +12,7 @@
 * [Docker Deployment](getting-started/docker-deployment.md)
 * [Environment Variables](getting-started/environment-variables.md)
 * [Building from Source](getting-started/building-from-source.md)
+* [Versioning & Compatibility](getting-started/versioning.md)
 
 # SDK
 
