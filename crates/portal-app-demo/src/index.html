@@ -71,6 +71,11 @@
     }
     .payment-card dt { color: var(--muted); font-size: 0.75rem; margin-top: 0.5rem; }
     .payment-card dd { margin: 0.15rem 0 0; font-size: 0.875rem; }
+    .invoice-row { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; margin: 0.35rem 0; min-height: auto; }
+    .invoice-row dl { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.75rem; font-size: 0.75rem; margin: 0; }
+    .invoice-row dt { color: var(--muted); margin: 0; }
+    .invoice-row dd { margin: 0; word-break: break-all; }
+    .invoice-row .invoice-ln { font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--muted); max-height: 2.2em; overflow: hidden; text-overflow: ellipsis; grid-column: 1 / -1; }
     .actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
     .actions button { flex: 1; margin-top: 0; }
     #log { font-size: 0.75rem; color: var(--muted); max-height: 120px; overflow-y: auto; margin-top: 1rem; }
@@ -102,6 +107,20 @@
         <button type="button" id="btn-accept">Accept</button>
         <button type="button" id="btn-reject" class="danger">Reject</button>
       </div>
+    </section>
+
+    <section id="invoice-request-section" style="display:none;">
+      <h2 style="font-size:1rem; margin:0 0 0.5rem;">Invoice requests (requestInvoice)</h2>
+      <p class="status">Invoice requests are auto-accepted when a wallet is configured. If one is pending (auto-accept failed), use Accept below.</p>
+      <div id="invoice-request-pending" style="display:none;">
+        <div class="payment-card" id="invoice-request-pending-card"></div>
+        <div class="actions" style="margin-top:0.5rem;">
+          <button type="button" id="btn-invoice-accept">Accept</button>
+          <button type="button" id="btn-invoice-reject" class="danger" title="No reply is sent — the requester will time out waiting for an invoice.">Reject</button>
+        </div>
+        <p class="status" style="margin-top:0.35rem; font-size:0.7rem;">⚠️ Reject sends no reply — the requester will time out.</p>
+      </div>
+      <div id="invoice-request-recent"></div>
     </section>
 
     <div id="log"></div>
@@ -136,6 +155,13 @@
     const paymentActions = document.getElementById('payment-actions');
     const btnAccept = document.getElementById('btn-accept');
     const btnReject = document.getElementById('btn-reject');
+    const invoiceRequestSection = document.getElementById('invoice-request-section');
+    const invoiceRequestPending = document.getElementById('invoice-request-pending');
+    const invoiceRequestPendingCard = document.getElementById('invoice-request-pending-card');
+    const invoiceRequestRecent = document.getElementById('invoice-request-recent');
+    const btnInvoiceAccept = document.getElementById('btn-invoice-accept');
+    const btnInvoiceReject = document.getElementById('btn-invoice-reject');
+    let paymentWalletConfigured = false;
 
     async function refreshStatus() {
       try {
@@ -146,6 +172,7 @@
           walletStatus.classList.add('ready');
           walletPubkey.textContent = st.pubkey || '';
           walletPubkeyHex.textContent = st.pubkey_hex || '';
+          paymentWalletConfigured = !!st.payment_wallet_configured;
           walletPaymentMode.textContent = st.payment_wallet_configured ? 'Payment wallet: NWC/Breez (real payments)' : 'Payment wallet: demo only (fake success on Accept)';
           walletPaymentMode.style.color = st.payment_wallet_configured ? 'var(--success)' : 'var(--muted)';
           if (st.payment_wallet_configured && st.balance_msat != null) {
@@ -157,7 +184,10 @@
           }
           walletPubkeyWrap.style.display = 'block';
           paymentSection.style.display = 'block';
+          invoiceRequestSection.style.display = 'block';
           pollPaymentRequest();
+          pollInvoiceRequestPending();
+          pollRecentInvoiceRequests();
         } else {
           walletStatus.textContent = 'Not ready (check config).';
           walletStatus.classList.remove('ready');
@@ -198,6 +228,109 @@
         log('poll error: ' + e.message);
       }
       setTimeout(pollPaymentRequest, 2000);
+    }
+
+    async function pollInvoiceRequestPending() {
+      try {
+        const ir = await json('/api/invoice-request');
+        if (ir) {
+          const amountLine = ir.amount_formatted || (ir.amount != null ? ir.amount + ' ' + escapeHtml(ir.currency) : escapeHtml(ir.currency));
+          const equivLine = ir.equivalent_sats != null ? ' ≈ ' + ir.equivalent_sats.toLocaleString() + ' sats' : '';
+          invoiceRequestPendingCard.innerHTML = `
+            <dl>
+              <dt>Request ID</dt><dd>${escapeHtml(ir.request_id)}</dd>
+              <dt>Amount</dt><dd>${amountLine}${equivLine}</dd>
+              <dt>Description</dt><dd>${ir.description ? escapeHtml(ir.description) : '—'}</dd>
+              <dt>Recipient</dt><dd class="pubkey">${escapeHtml(ir.recipient)}</dd>
+            </dl>
+          `;
+          invoiceRequestPending.style.display = 'block';
+          btnInvoiceAccept.onclick = acceptInvoiceRequest;
+          btnInvoiceReject.onclick = rejectInvoiceRequest;
+        } else {
+          invoiceRequestPending.style.display = 'none';
+        }
+      } catch (e) {
+        log('invoice-request pending poll error: ' + e.message);
+      }
+      setTimeout(pollInvoiceRequestPending, 2000);
+    }
+
+    async function acceptInvoiceRequest() {
+      if (btnInvoiceAccept) btnInvoiceAccept.disabled = true;
+      if (btnInvoiceReject) btnInvoiceReject.disabled = true;
+      try {
+        const r = await fetch(API + '/api/invoice-request/reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoice: '', payment_hash: null })
+        });
+        const text = await r.text();
+        if (!r.ok) {
+          let msg = text;
+          try { const o = JSON.parse(text); if (o.error) msg = o.error; } catch (_) {}
+          throw new Error(msg || r.statusText);
+        }
+        log('Accepted. Invoice created and replied.');
+        invoiceRequestPending.style.display = 'none';
+        pollRecentInvoiceRequests();
+      } catch (e) {
+        log('Accept error: ' + e.message);
+      }
+      if (btnInvoiceAccept) btnInvoiceAccept.disabled = false;
+      if (btnInvoiceReject) btnInvoiceReject.disabled = false;
+    }
+
+    async function rejectInvoiceRequest() {
+      if (btnInvoiceReject) btnInvoiceReject.disabled = true;
+      if (btnInvoiceAccept) btnInvoiceAccept.disabled = true;
+      try {
+        await fetch(API + '/api/invoice-request/reject', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        log('Invoice request rejected.');
+        invoiceRequestPending.style.display = 'none';
+        pollRecentInvoiceRequests();
+      } catch (e) {
+        log('Reject error: ' + e.message);
+      }
+      if (btnInvoiceReject) btnInvoiceReject.disabled = false;
+      if (btnInvoiceAccept) btnInvoiceAccept.disabled = false;
+    }
+
+    function formatTime(secs) {
+      if (secs == null) return '—';
+      const d = new Date(secs * 1000);
+      return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    async function pollRecentInvoiceRequests() {
+      try {
+        const list = await json('/api/invoice-requests/recent');
+        if (list && list.length > 0) {
+          invoiceRequestRecent.innerHTML = list.map(function (e) {
+            const equiv = e.equivalent_sats != null ? ' ≈ ' + e.equivalent_sats.toLocaleString() + ' sats' : '';
+            const err = e.error ? '<dt></dt><dd class="status" style="color:var(--danger);">' + escapeHtml(e.error) + '</dd>' : '';
+            const statusColor = e.status === 'accepted' ? 'var(--success)' : 'var(--danger)';
+            const invoiceLine = e.invoice ? '<dt>Invoice</dt><dd class="invoice-ln" title="' + escapeHtml(e.invoice) + '">' + escapeHtml(e.invoice) + '</dd>' : '';
+            return `
+              <div class="invoice-row">
+                <dl>
+                  <dt>Time</dt><dd>${formatTime(e.at_secs)}</dd>
+                  <dt>Amount</dt><dd>${escapeHtml(e.amount_formatted)}${equiv}</dd>
+                  <dt>Status</dt><dd style="color:${statusColor};">${escapeHtml(e.status)}</dd>
+                  ${e.description ? '<dt>Desc</dt><dd>' + escapeHtml(e.description) + '</dd>' : ''}
+                  ${invoiceLine}
+                  ${err}
+                </dl>
+              </div>
+            `;
+          }).join('');
+        } else {
+          invoiceRequestRecent.innerHTML = '<p class="status">No invoice requests yet. Recent auto-accepted requests will appear here.</p>';
+        }
+      } catch (e) {
+        log('invoice-requests recent error: ' + e.message);
+      }
+      setTimeout(pollRecentInvoiceRequests, 2000);
     }
 
     function escapeHtml(s) {

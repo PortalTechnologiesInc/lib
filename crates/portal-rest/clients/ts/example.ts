@@ -55,7 +55,7 @@ async function testFullFlow(client: PortalSDK, mainKey: string, subkeys: string[
 async function main() {
   // Create a new client instance
   const client = new PortalSDK({
-    serverUrl: 'wss://3k4a4t3.portalhub.mehilli.it/ws',
+    serverUrl: 'ws://localhost:7000/ws',
     connectTimeout: 5000,
     debug: false
   });
@@ -140,12 +140,14 @@ async function main() {
     console.log('\n=== Fetch Nip05 Profile ===');
     const nip05 = 'ancientdragon913@getportal.cc';
     const nip05Profile = await client.fetchNip05Profile(nip05);
-    const pubkey = nip05Profile.public_key;
-    console.log('Nip05 profile pubkey:', pubkey);
+    console.log('Nip05 profile pubkey:', nip05Profile?.public_key ?? 'No profile found');
+
+
+    const pubkey = "b64f27e66fdd979d2d0a0afb13f4d601339047fd3d2041a80cbc8d6398f66fdf";
 
     // Example 4: Request Single Payment
     console.log('\n=== Request Single Payment ===');
-    await client.requestSinglePayment("b64f27e66fdd979d2d0a0afb13f4d601339047fd3d2041a80cbc8d6398f66fdf", [], {
+    await client.requestSinglePayment(pubkey, [], {
       amount: 200,
       currency: "EUR",
       description: "Test payment",
@@ -158,6 +160,23 @@ async function main() {
     console.log('\n=== Get Wallet Info ===');
     const walletInfo = await client.getWalletInfo();
     console.log('Wallet info:', walletInfo);
+
+    // Example 6: Request Invoice (same recipient as single payment)
+    // The recipient (portal-app-demo with identity matching `pubkey`) must be running and must
+    // reply to the "Invoice request" section in the demo UI for this to resolve.
+    console.log('\n=== Request Invoice ===');
+    try {
+      const invoice = await client.requestInvoice(pubkey, [], {
+        amount: 599,  // 5.99 EUR
+        currency: "EUR",
+        expires_at: Timestamp.fromNow(3600),
+        description: "Test invoice request",
+      });
+      console.log('Invoice received:', invoice);
+    } catch (e) {
+      console.error('Request invoice failed (reply to the invoice request in the demo UI?):', e);
+    }
+
 
     // Keep the connection alive and wait for user input
     console.log('\nConnection is active. Press Enter to disconnect...');

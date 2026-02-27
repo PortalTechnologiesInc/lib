@@ -139,10 +139,13 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(feature = "task-tracing")]
     console_subscriber::init();
 
-    // Set up logging
+    // Set up logging (default to info if RUST_LOG is not set)
     #[cfg(not(feature = "task-tracing"))]
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
         .with(tracing_subscriber::fmt::Layer::default().compact())
         .init();
 

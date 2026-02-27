@@ -20,11 +20,11 @@ impl NwcWallet {
 
 #[async_trait]
 impl PortalWallet for NwcWallet {
-    async fn make_invoice(&self, sats: u64, description: Option<String>) -> Result<String> {
+    async fn make_invoice(&self, amount_msat: u64, description: Option<String>) -> Result<String> {
         let payment_response = self
             .nwc
             .make_invoice(portal::nostr::nips::nip47::MakeInvoiceRequest {
-                amount: sats,
+                amount: amount_msat,
                 description: description,
                 description_hash: None,
                 expiry: None,
