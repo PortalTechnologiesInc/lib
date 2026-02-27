@@ -1,0 +1,100 @@
+name: Publish portal-rest Docker
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to push (e.g. 0.3.0)"
+        required: true
+      push_latest:
+        description: "Also update :latest tag"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "portal-rest-v*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Setup Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Build Docker image
+        run: nix build .#rest-docker --print-build-logs
+
+      - name: Load image into Docker
+        run: docker load < result
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME#portal-rest-v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push arch-specific image
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          docker tag getportal/sdk-daemon:${{ matrix.arch }} getportal/sdk-daemon:${VERSION}-${{ matrix.arch }}
+          docker push getportal/sdk-daemon:${VERSION}-${{ matrix.arch }}
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve version and flags
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME#portal-rest-v}" >> $GITHUB_OUTPUT
+            echo "push_latest=true" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "push_latest=${{ inputs.push_latest }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Version manifest (points to correct arch automatically)
+          docker buildx imagetools create \
+            --tag getportal/sdk-daemon:${VERSION} \
+            getportal/sdk-daemon:${VERSION}-amd64 \
+            getportal/sdk-daemon:${VERSION}-arm64
+          if [ "${{ steps.version.outputs.push_latest }}" = "true" ]; then
+            docker buildx imagetools create \
+              --tag getportal/sdk-daemon:latest \
+              getportal/sdk-daemon:${VERSION}-amd64 \
+              getportal/sdk-daemon:${VERSION}-arm64
+          fi
