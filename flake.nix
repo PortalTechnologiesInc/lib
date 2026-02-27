@@ -71,7 +71,7 @@
           name = "portal-ts-client";
           version = (builtins.fromJSON (builtins.readFile ./crates/portal-rest/clients/ts/package.json)).version;
           src = ./crates/portal-rest/clients/ts;
-          npmDepsHash = "sha256-nM/XE4CRUAP7W4FQ9t68kBHrUIvNbBxZC+gwpZcCCfA=";
+          npmDepsHash = "sha256-UdI9Qp/E7+FCBuPa6viUxqEaJ27ZOGaBW7Wgfij2zH4=";
         };
         backend = pkgs.buildNpmPackage {
           name = "portal-backend";
