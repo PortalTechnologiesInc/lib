@@ -10,8 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Unreleased
 
+---
+
+### [0.3.0] - 2026-02-26
+
 #### Changed
 - `RequestInvoice` command now uses slim `RequestInvoiceParams`: `current_exchange_rate` removed (server computes it); `request_id` is now optional (defaults to command ID if omitted)
+- SDK versions (portal-sdk npm, portal-java-sdk) are now aligned with portal-rest version for easy compatibility tracking
 
 #### Fixed
 - Validate `RequestInvoice` response: invoice amount must match expected amount (computed from FIAT conversion). Allows 1 msat tolerance for rounding errors (#157)
