@@ -13,9 +13,11 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use app::{
+    parse_key_handshake_url,
     CallbackError, IncomingPaymentRequest, Mnemonic, Nsec, PortalApp, RelayStatus, RelayStatusListener,
     RelayUrl, SinglePaymentRequest,
 };
+use portal::protocol::model::auth::AuthResponseStatus;
 use app::nwc::MakeInvoiceResponse;
 use axum::{
     extract::State,
@@ -231,6 +233,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/invoice-request/reply", post(api_invoice_request_reply))
         .route("/api/invoice-request/reject", post(api_invoice_request_reject))
         .route("/api/invoice-requests/recent", get(api_invoice_requests_recent))
+        .route("/api/handshake", post(api_handshake))
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
         .with_state(state);
 
@@ -660,4 +663,56 @@ async fn api_invoice_requests_recent(
 ) -> Json<Vec<InvoiceRequestLogEntry>> {
     let recent = state.recent_invoice_requests.read().await.clone();
     Json(recent)
+}
+
+#[derive(serde::Deserialize)]
+struct HandshakeBody {
+    url: String,
+}
+
+async fn api_handshake(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<HandshakeBody>,
+) -> Result<StatusCode, ApiError> {
+    let app = {
+        let guard = state.app.read().await;
+        guard.as_ref().ok_or_else(|| Err::internal("App not initialized"))?.clone()
+    };
+
+    let url = parse_key_handshake_url(&body.url)
+        .map_err(|e| Err::bad_request(format!("Invalid handshake URL: {}", e)))?;
+
+    // Step 1: send our pubkey to the platform.
+    app.send_key_handshake(url).await
+        .map_err(|e| Err::internal(format!("Handshake send failed: {}", e)))?;
+
+    // Step 2: wait for the auth challenge the platform sends back (up to 15s).
+    let challenge = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        app.next_auth_challenge(),
+    )
+    .await
+    .map_err(|_| Err::internal("Timed out waiting for auth challenge from platform"))?
+    .map_err(|e| Err::internal(format!("Auth challenge error: {}", e)))?;
+
+    // Step 3: approve the login.
+    let session_token = format!(
+        "demo-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+    );
+    app.reply_auth_challenge(
+        challenge,
+        AuthResponseStatus::Approved {
+            granted_permissions: vec![],
+            session_token,
+        },
+    )
+    .await
+    .map_err(|e| Err::internal(format!("Auth reply failed: {}", e)))?;
+
+    log::info!("Key handshake approved.");
+    Ok(StatusCode::NO_CONTENT)
 }
