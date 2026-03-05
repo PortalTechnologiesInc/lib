@@ -99,6 +99,14 @@
       </div>
     </section>
 
+    <section id="handshake-section" style="display:none;">
+      <h2 style="font-size:1rem; margin:0 0 0.75rem;">Approve login</h2>
+      <label for="handshake-url">Key handshake URL</label>
+      <textarea id="handshake-url" placeholder="portal-handshake://..."></textarea>
+      <button type="button" id="btn-handshake">Approve</button>
+      <p id="handshake-status" class="status" style="margin-top:0.5rem;"></p>
+    </section>
+
     <section id="payment-section" style="display:none;">
       <h2 style="font-size:1rem; margin:0 0 0.5rem;">Payment request</h2>
       <p class="status">Waiting for a single payment request…</p>
@@ -155,6 +163,10 @@
     const paymentActions = document.getElementById('payment-actions');
     const btnAccept = document.getElementById('btn-accept');
     const btnReject = document.getElementById('btn-reject');
+    const handshakeSection = document.getElementById('handshake-section');
+    const handshakeUrl = document.getElementById('handshake-url');
+    const btnHandshake = document.getElementById('btn-handshake');
+    const handshakeStatus = document.getElementById('handshake-status');
     const invoiceRequestSection = document.getElementById('invoice-request-section');
     const invoiceRequestPending = document.getElementById('invoice-request-pending');
     const invoiceRequestPendingCard = document.getElementById('invoice-request-pending-card');
@@ -183,6 +195,7 @@
             walletBalance.style.display = 'none';
           }
           walletPubkeyWrap.style.display = 'block';
+          handshakeSection.style.display = 'block';
           paymentSection.style.display = 'block';
           invoiceRequestSection.style.display = 'block';
           pollPaymentRequest();
@@ -376,6 +389,25 @@
       btnAccept.disabled = false;
       btnReject.disabled = false;
     }
+
+    btnHandshake.addEventListener('click', async function () {
+      const url = handshakeUrl.value.trim();
+      if (!url) { handshakeStatus.textContent = 'Paste a handshake URL first.'; return; }
+      btnHandshake.disabled = true;
+      handshakeStatus.textContent = 'Approving…';
+      try {
+        await json('/api/handshake', { method: 'POST', body: JSON.stringify({ url }) });
+        handshakeStatus.textContent = '✓ Login approved.';
+        handshakeStatus.style.color = 'var(--success)';
+        handshakeUrl.value = '';
+        log('Handshake approved.');
+      } catch (e) {
+        handshakeStatus.textContent = 'Error: ' + e.message;
+        handshakeStatus.style.color = 'var(--danger)';
+        log('Handshake error: ' + e.message);
+      }
+      btnHandshake.disabled = false;
+    });
 
     refreshStatus();
   </script>
