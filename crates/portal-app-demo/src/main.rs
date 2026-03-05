@@ -1,7 +1,7 @@
-//! portal-app-demo: minimal demo for protocol testing.
+//! portal-app-demo: multi-session demo for protocol testing.
 //!
-//! Single app instance from config at ~/.portal-app-demo/config.toml.
-//! Breez data is stored under ~/.portal-app-demo/breez.
+//! Sessions are created via POST /api/session with key material.
+//! Each session runs an actor task that handles payment/invoice requests.
 //!
 //! Usage: `cargo run -p portal-app-demo` then open http://127.0.0.1:3030
 
@@ -9,104 +9,120 @@ mod config;
 mod constants;
 mod error;
 
+use std::collections::HashMap;
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use app::{
-    parse_key_handshake_url,
-    CallbackError, IncomingPaymentRequest, Mnemonic, Nsec, PortalApp, RelayStatus, RelayStatusListener,
-    RelayUrl, SinglePaymentRequest,
+    parse_key_handshake_url, CallbackError, IncomingPaymentRequest, Mnemonic, Nsec, PortalApp,
+    RelayStatus, RelayStatusListener, RelayUrl, SinglePaymentRequest,
 };
-use portal::protocol::model::auth::AuthResponseStatus;
 use app::nwc::MakeInvoiceResponse;
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
-    response::Html,
+    response::{Html, sse::{Event, KeepAlive, Sse}},
     routing::{get, post},
     Json, Router,
 };
 use error::ApiError;
-use error::ApiError as Err;
+use futures::StreamExt;
+use portal::protocol::model::auth::AuthResponseStatus;
+use portal::protocol::model::bindings::PublicKey;
 use portal::protocol::model::payment::{
     Currency, ExchangeRate, InvoiceRequestContentWithKey, PaymentResponseContent, PaymentStatus,
 };
-use portal_wallet::PortalWallet;
+use portal_wallet::{NwcWallet, PortalWallet};
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
+use tokio::time::Instant;
+use tokio_stream::wrappers::BroadcastStream;
 use tower_http::cors::{Any, CorsLayer};
 
-// -----------------------------------------------------------------------------
-// State
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// AppConfig
+// ---------------------------------------------------------------------------
 
-/// One entry in the recent invoice-requests log (auto-accepted).
-#[derive(Clone, Serialize)]
-struct InvoiceRequestLogEntry {
-    request_id: String,
-    amount_formatted: String,
-    currency: String,
-    is_fiat: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    equivalent_sats: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<String>,
-    at_secs: u64,
-    status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
-    /// Bolt11 invoice (ln...) when status is accepted.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    invoice: Option<String>,
+#[derive(Clone)]
+struct AppConfig {
+    listen_port: u16,
+    default_relays: Vec<String>,
+    max_sessions: usize,
+    session_ttl_secs: u64,
 }
 
-const MAX_RECENT_INVOICE_REQUESTS: usize = 100;
+// ---------------------------------------------------------------------------
+// GlobalState
+// ---------------------------------------------------------------------------
 
-struct AppState {
-    app: RwLock<Option<Arc<PortalApp>>>,
-    pubkey: RwLock<Option<String>>,
-    pubkey_hex: RwLock<Option<String>>,
-    payment_wallet: RwLock<Option<Arc<dyn PortalWallet>>>,
-    pending_request: RwLock<Option<SinglePaymentRequest>>,
-    pending_invoice_request: RwLock<Option<InvoiceRequestContentWithKey>>,
-    recent_invoice_requests: RwLock<Vec<InvoiceRequestLogEntry>>,
-    config_path: String,
+struct GlobalState {
+    sessions: RwLock<HashMap<PublicKey, mpsc::Sender<ActorCmd>>>,
+    config: AppConfig,
 }
 
-// -----------------------------------------------------------------------------
-// Request/response types
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Actor commands
+// ---------------------------------------------------------------------------
 
-#[derive(Serialize)]
-struct StatusResponse {
-    ready: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pubkey: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pubkey_hex: Option<String>,
+enum ActorCmd {
+    Status { reply: oneshot::Sender<StatusDto> },
+    Subscribe { reply: oneshot::Sender<broadcast::Receiver<SseEvent>> },
+    GetPayment { reply: oneshot::Sender<Option<PaymentRequestDto>> },
+    AcceptPayment { reply: oneshot::Sender<Result<(), String>> },
+    RejectPayment { reason: Option<String>, reply: oneshot::Sender<Result<(), String>> },
+    GetInvoice { reply: oneshot::Sender<Option<InvoiceRequestDto>> },
+    ReplyInvoice { invoice: Option<String>, reply: oneshot::Sender<Result<(), String>> },
+    RejectInvoice { reply: oneshot::Sender<()> },
+    RecentInvoices { reply: oneshot::Sender<Vec<InvoiceRequestLogEntry>> },
+    Handshake { url: String, reply: oneshot::Sender<Result<(), String>> },
+    Ping,
+}
+
+// ---------------------------------------------------------------------------
+// SSE events
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Clone)]
+#[serde(tag = "type")]
+enum SseEvent {
+    PaymentRequest(PaymentRequestDto),
+    InvoiceRequest(InvoiceRequestDto),
+    InvoiceResult {
+        request_id: String,
+        status: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        invoice: Option<String>,
+    },
+    Error { message: String },
+}
+
+// ---------------------------------------------------------------------------
+// DTOs
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Clone)]
+struct StatusDto {
+    pubkey: String,
+    pubkey_hex: String,
     payment_wallet_configured: bool,
-    /// Balance in msat (when payment wallet is configured).
     #[serde(skip_serializing_if = "Option::is_none")]
     balance_msat: Option<u64>,
-    /// Config file path (e.g. ~/.portal-app-demo/config.toml).
-    config_path: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct PaymentRequestDto {
     request_id: String,
     event_id: String,
-    /// Raw amount (msat for Lightning, or smallest fiat unit e.g. cents for USD).
     amount: u64,
-    /// Human-readable amount and currency, e.g. "10.50 USD" or "100,000 msat (100 sats)".
     amount_formatted: String,
-    /// True when currency is fiat (e.g. USD).
     is_fiat: bool,
     currency: String,
-    /// When fiat, optional exchange rate (rate + source) for display.
     #[serde(skip_serializing_if = "Option::is_none")]
     exchange_rate: Option<ExchangeRateDto>,
-    /// When fiat and exchange_rate present, approximate equivalent in sats (for display).
     #[serde(skip_serializing_if = "Option::is_none")]
     equivalent_sats: Option<u64>,
     description: Option<String>,
@@ -116,18 +132,13 @@ struct PaymentRequestDto {
     invoice: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct ExchangeRateDto {
     pub rate: f64,
     pub source: String,
 }
 
-#[derive(serde::Deserialize)]
-struct RejectBody {
-    reason: Option<String>,
-}
-
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct InvoiceRequestDto {
     request_id: String,
     amount: u64,
@@ -143,15 +154,62 @@ struct InvoiceRequestDto {
     expires_at_secs: u64,
 }
 
-#[derive(Deserialize)]
-struct InvoiceReplyBody {
-    invoice: String,
-    payment_hash: Option<String>,
+#[derive(Clone, Serialize)]
+struct InvoiceRequestLogEntry {
+    request_id: String,
+    amount_formatted: String,
+    currency: String,
+    is_fiat: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    equivalent_sats: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    at_secs: u64,
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    invoice: Option<String>,
 }
 
-// -----------------------------------------------------------------------------
-// Relay status listener (no-op for demo)
-// -----------------------------------------------------------------------------
+const MAX_RECENT_INVOICE_REQUESTS: usize = 100;
+
+// ---------------------------------------------------------------------------
+// Request/response for POST /api/session
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct CreateSessionRequest {
+    nsec: Option<String>,
+    mnemonic: Option<String>,
+    relays: Vec<String>,
+    nwc: Option<String>,
+}
+
+#[derive(Serialize)]
+struct CreateSessionResponse {
+    pubkey: String,
+    pubkey_hex: String,
+}
+
+#[derive(Deserialize)]
+struct RejectBody {
+    reason: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct InvoiceReplyBody {
+    invoice: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct HandshakeBody {
+    url: String,
+}
+
+// ---------------------------------------------------------------------------
+// Relay status listener (no-op)
+// ---------------------------------------------------------------------------
 
 struct NoOpRelayStatusListener;
 
@@ -166,338 +224,28 @@ impl RelayStatusListener for NoOpRelayStatusListener {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Entrypoint: load config, create single app instance
-// -----------------------------------------------------------------------------
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-
-    let settings = config::Settings::load()?;
-    settings.validate()?;
-
-    let config_path = constants::portal_app_demo_dir()?
-        .join("config.toml")
-        .display()
-        .to_string();
-    log::info!("Config: {}", config_path);
-
-    let keypair = build_keypair_from_config(&settings)?;
-    let relays = settings.nostr.relays.clone();
-    let listener = Arc::new(NoOpRelayStatusListener);
-    let app = PortalApp::new(keypair.clone(), relays, listener)
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-    let pubkey_str = portal::nostr::nips::nip19::ToBech32::to_bech32(&*keypair.public_key())
-        .unwrap_or_else(|_| app::key_to_hex(keypair.public_key()));
-    let pubkey_hex_str = app::key_to_hex(keypair.public_key());
-    let payment_wallet = settings.build_payment_wallet().await?;
-
-    let state = Arc::new(AppState {
-        app: RwLock::new(Some(Arc::clone(&app))),
-        pubkey: RwLock::new(Some(pubkey_str.clone())),
-        pubkey_hex: RwLock::new(Some(pubkey_hex_str)),
-        payment_wallet: RwLock::new(payment_wallet),
-        pending_request: RwLock::new(None),
-        pending_invoice_request: RwLock::new(None),
-        recent_invoice_requests: RwLock::new(Vec::new()),
-        config_path: config_path.clone(),
-    });
-
-    let app_listen = Arc::clone(&app);
-    tokio::spawn(async move {
-        let _ = app_listen.listen().await;
-    });
-    let state_payment = Arc::clone(&state);
-    let app_payment = Arc::clone(&app);
-    tokio::spawn(async move {
-        payment_request_loop(app_payment, state_payment).await;
-    });
-    let state_invoice = Arc::clone(&state);
-    let app_invoice = Arc::clone(&app);
-    tokio::spawn(async move {
-        invoice_request_loop(app_invoice, state_invoice).await;
-    });
-
-    log::info!("Wallet ready. Pubkey: {}", pubkey_str);
-
-    let router = Router::new()
-        .route("/", get(serve_index))
-        .route("/api/status", get(api_status))
-        .route("/api/payment-request", get(api_payment_request))
-        .route("/api/payment-request/accept", post(api_accept))
-        .route("/api/payment-request/reject", post(api_reject))
-        .route("/api/invoice-request", get(api_invoice_request))
-        .route("/api/invoice-request/reply", post(api_invoice_request_reply))
-        .route("/api/invoice-request/reject", post(api_invoice_request_reject))
-        .route("/api/invoice-requests/recent", get(api_invoice_requests_recent))
-        .route("/api/handshake", post(api_handshake))
-        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
-        .with_state(state);
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], settings.info.listen_port));
-    log::info!("portal-app-demo listening on http://{}/", addr);
-    axum::Server::bind(&addr)
-        .serve(router.into_make_service())
-        .await?;
-    Ok(())
-}
-
-fn build_keypair_from_config(settings: &config::Settings) -> anyhow::Result<Arc<app::Keypair>> {
-    if let Some(ref words) = settings.identity.mnemonic {
-        let words = words.trim();
-        if !words.is_empty() {
-            let mnemonic = Mnemonic::new(words).map_err(|e| anyhow::anyhow!("Invalid mnemonic: {:?}", e))?;
-            let kp = mnemonic.get_keypair().map_err(|e| anyhow::anyhow!("Keypair: {:?}", e))?;
-            return Ok(Arc::new(kp));
-        }
-    }
-    if let Some(ref nsec) = settings.identity.nsec {
-        let nsec = nsec.trim();
-        if !nsec.is_empty() {
-            let n = Nsec::new(nsec).map_err(|e| anyhow::anyhow!("Invalid nsec: {:?}", e))?;
-            return Ok(Arc::new(n.get_keypair()));
-        }
-    }
-    anyhow::bail!("Set identity.mnemonic or identity.nsec in config")
-}
-
-// -----------------------------------------------------------------------------
-// Handlers
-// -----------------------------------------------------------------------------
-
-async fn serve_index() -> Html<&'static str> {
-    Html(include_str!("index.html"))
-}
-
-async fn api_status(State(state): State<Arc<AppState>>) -> Json<StatusResponse> {
-    let pubkey = state.pubkey.read().await.clone();
-    let pubkey_hex = state.pubkey_hex.read().await.clone();
-    let payment_wallet = state.payment_wallet.read().await.clone();
-    let payment_wallet_configured = payment_wallet.is_some();
-    let balance_msat = match payment_wallet.as_ref() {
-        Some(w) => w.get_balance().await.ok(),
-        None => None,
-    };
-    Json(StatusResponse {
-        ready: pubkey.is_some(),
-        pubkey,
-        pubkey_hex,
-        payment_wallet_configured,
-        balance_msat,
-        config_path: state.config_path.clone(),
-    })
-}
-
-async fn payment_request_loop(app: Arc<PortalApp>, state: Arc<AppState>) {
-    loop {
-        match app.next_payment_request().await {
-            Ok(IncomingPaymentRequest::Single(request)) => {
-                log::info!("Received single payment request: {:?}", request);
-                *state.pending_request.write().await = Some(request);
-            }
-            Ok(IncomingPaymentRequest::Recurring(_)) => {
-                log::debug!("Demo ignores recurring payment requests");
-            }
-            Err(e) => {
-                log::error!("payment_request_loop error: {:?}", e);
-                break;
-            }
-        }
-    }
-}
-
-async fn invoice_request_loop(app: Arc<PortalApp>, state: Arc<AppState>) {
-    loop {
-        match app.next_invoice_request().await {
-            Ok(request) => {
-                log::info!("Received invoice request: {:?}", request);
-                // Deduplicate: router may deliver the same event to multiple subscriptions
-                {
-                    let recent = state.recent_invoice_requests.read().await;
-                    let request_id = request.inner.request_id.as_str();
-                    let now_secs = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
-                    if recent.iter().any(|e| e.request_id == request_id && now_secs.saturating_sub(e.at_secs) < 30) {
-                        log::debug!("Skipping duplicate invoice request: {}", request_id);
-                        continue;
-                    }
-                }
-                // Store so manual Accept still works if auto-accept fails
-                *state.pending_invoice_request.write().await = Some(request.clone());
-                let dto = invoice_request_to_dto(&request);
-                let at_secs = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
-
-                let payment_wallet = state.payment_wallet.read().await.clone();
-                let amount_msat = invoice_request_amount_msat(&request);
-
-                let (status, error, invoice_opt) = match (payment_wallet.as_ref(), amount_msat) {
-                    (Some(wallet), Some(msat)) => {
-                        if msat == 0 {
-                            ("failed", Some("Amount is zero".into()), None)
-                        } else {
-                            match wallet
-                                .make_invoice(msat, request.inner.description.clone())
-                                .await
-                            {
-                                Ok(invoice) => {
-                                    if let Err(e) = app
-                                        .reply_invoice_request(
-                                            request.clone(),
-                                            MakeInvoiceResponse {
-                                                invoice: invoice.clone(),
-                                                payment_hash: None,
-                                            },
-                                        )
-                                        .await
-                                    {
-                                        log::warn!("Invoice reply failed: {}", e);
-                                        ("failed", Some(format!("Reply failed: {}", e)), None)
-                                    } else {
-                                        log::info!("Invoice request auto-accepted, invoice created");
-                                        *state.pending_invoice_request.write().await = None;
-                                        ("accepted", None, Some(invoice))
-                                    }
-                                }
-                                Err(e) => {
-                                    log::warn!("make_invoice failed: {}", e);
-                                    ("failed", Some(e.to_string()), None)
-                                }
-                            }
-                        }
-                    }
-                    (None, _) => {
-                        log::warn!("Invoice request not replied: no payment wallet configured");
-                        ("failed", Some("No payment wallet configured".into()), None)
-                    }
-                    (_, None) => {
-                        log::warn!("Invoice request not replied: fiat has no exchange rate");
-                        ("failed", Some("Fiat request has no exchange rate".into()), None)
-                    }
-                };
-
-                let entry = InvoiceRequestLogEntry {
-                    request_id: dto.request_id,
-                    amount_formatted: dto.amount_formatted,
-                    currency: dto.currency,
-                    is_fiat: dto.is_fiat,
-                    equivalent_sats: dto.equivalent_sats,
-                    description: dto.description,
-                    at_secs,
-                    status: status.to_string(),
-                    error,
-                    invoice: invoice_opt,
-                };
-                let mut recent = state.recent_invoice_requests.write().await;
-                recent.insert(0, entry);
-                if recent.len() > MAX_RECENT_INVOICE_REQUESTS {
-                    recent.truncate(MAX_RECENT_INVOICE_REQUESTS);
-                }
-            }
-            Err(e) => {
-                log::error!("invoice_request_loop error: {:?}", e);
-                break;
-            }
-        }
-    }
-}
-
-fn invoice_request_to_dto(r: &InvoiceRequestContentWithKey) -> InvoiceRequestDto {
-    let c = &r.inner;
-    let amount = c.amount;
-    let (currency, amount_formatted, is_fiat, exchange_rate, equivalent_sats) = match &c.currency {
-        Currency::Millisats => {
-            let sats = amount / 1000;
-            (
-                String::from("msat"),
-                format!("{} msat ({} sats)", amount, sats),
-                false,
-                None,
-                None,
-            )
-        }
-        Currency::Fiat(code) => {
-            let major = amount as f64 / 100.0;
-            let formatted = format!("{:.2} {}", major, code);
-            let (exchange_rate_dto, equivalent_sats) = match &c.current_exchange_rate {
-                Some(ExchangeRate { rate, source, .. }) => {
-                    // rate = fiat per BTC (same as portal_rates), so sats = (fiat_amount / rate) * 100e6
-                    let eq_sats = ((major / *rate) * 100_000_000.0) as u64;
-                    (
-                        Some(ExchangeRateDto {
-                            rate: *rate,
-                            source: source.clone(),
-                        }),
-                        Some(eq_sats),
-                    )
-                }
-                None => (None, None),
-            };
-            (code.clone(), formatted, true, exchange_rate_dto, equivalent_sats)
-        }
-    };
-    InvoiceRequestDto {
-        request_id: c.request_id.clone(),
-        amount,
-        amount_formatted,
-        is_fiat,
-        currency,
-        exchange_rate,
-        equivalent_sats,
-        description: c.description.clone(),
-        recipient: r.recipient.to_string(),
-        expires_at_secs: c.expires_at.as_u64(),
-    }
-}
-
-/// Compute amount in msat for wallet.make_invoice. Returns None if fiat and no exchange rate.
-/// For fiat, rate is "fiat per BTC" (same as portal_rates), so msat = (fiat_amount / rate) * 100e9.
-fn invoice_request_amount_msat(r: &InvoiceRequestContentWithKey) -> Option<u64> {
-    let c = &r.inner;
-    match &c.currency {
-        Currency::Millisats => Some(c.amount),
-        Currency::Fiat(_) => {
-            let major = c.amount as f64 / 100.0;
-            c.current_exchange_rate.as_ref().map(|er| ((major / er.rate) * 100_000_000_000.0) as u64)
-        }
-    }
-}
+// ---------------------------------------------------------------------------
+// DTO helpers
+// ---------------------------------------------------------------------------
 
 fn single_request_to_dto(r: &SinglePaymentRequest) -> PaymentRequestDto {
-    use portal::protocol::model::payment::{Currency, ExchangeRate};
     let amount = r.content.amount;
     let (currency, amount_formatted, is_fiat, exchange_rate, equivalent_sats) = match &r.content.currency {
         Currency::Millisats => {
             let sats = amount / 1000;
-            let formatted = format!("{} msat ({} sats)", amount, sats);
-            (String::from("msat"), formatted, false, None, None)
+            (String::from("msat"), format!("{} msat ({} sats)", amount, sats), false, None, None)
         }
         Currency::Fiat(code) => {
-            // Fiat amount is typically in smallest unit (e.g. cents for USD): 1050 = 10.50 USD
             let major = amount as f64 / 100.0;
             let formatted = format!("{:.2} {}", major, code);
-            let (exchange_rate_dto, equivalent_sats) = match &r.content.current_exchange_rate {
+            let (er, eq) = match &r.content.current_exchange_rate {
                 Some(ExchangeRate { rate, source, .. }) => {
-                    // rate = fiat per BTC (same as portal_rates), so sats = (fiat_amount / rate) * 100e6
                     let eq_sats = ((major / *rate) * 100_000_000.0) as u64;
-                    (
-                        Some(ExchangeRateDto {
-                            rate: *rate,
-                            source: source.clone(),
-                        }),
-                        Some(eq_sats),
-                    )
+                    (Some(ExchangeRateDto { rate: *rate, source: source.clone() }), Some(eq_sats))
                 }
                 None => (None, None),
             };
-            (code.clone(), formatted, true, exchange_rate_dto, equivalent_sats)
+            (code.clone(), formatted, true, er, eq)
         }
     };
     PaymentRequestDto {
@@ -517,185 +265,380 @@ fn single_request_to_dto(r: &SinglePaymentRequest) -> PaymentRequestDto {
     }
 }
 
-async fn api_payment_request(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<Option<PaymentRequestDto>>, ApiError> {
-    let guard = state.pending_request.read().await;
-    Ok(Json(guard.as_ref().map(single_request_to_dto)))
+fn invoice_request_to_dto(r: &InvoiceRequestContentWithKey) -> InvoiceRequestDto {
+    let c = &r.inner;
+    let amount = c.amount;
+    let (currency, amount_formatted, is_fiat, exchange_rate, equivalent_sats) = match &c.currency {
+        Currency::Millisats => {
+            let sats = amount / 1000;
+            (String::from("msat"), format!("{} msat ({} sats)", amount, sats), false, None, None)
+        }
+        Currency::Fiat(code) => {
+            let major = amount as f64 / 100.0;
+            let formatted = format!("{:.2} {}", major, code);
+            let (er, eq) = match &c.current_exchange_rate {
+                Some(ExchangeRate { rate, source, .. }) => {
+                    let eq_sats = ((major / *rate) * 100_000_000.0) as u64;
+                    (Some(ExchangeRateDto { rate: *rate, source: source.clone() }), Some(eq_sats))
+                }
+                None => (None, None),
+            };
+            (code.clone(), formatted, true, er, eq)
+        }
+    };
+    InvoiceRequestDto {
+        request_id: c.request_id.clone(),
+        amount,
+        amount_formatted,
+        is_fiat,
+        currency,
+        exchange_rate,
+        equivalent_sats,
+        description: c.description.clone(),
+        recipient: r.recipient.to_string(),
+        expires_at_secs: c.expires_at.as_u64(),
+    }
 }
 
-async fn api_accept(State(state): State<Arc<AppState>>) -> Result<StatusCode, ApiError> {
-    let app_guard = state.app.read().await;
-    let app = app_guard.as_ref().ok_or_else(|| Err::bad_request("App not ready"))?;
-    let request = state.pending_request.write().await.take().ok_or_else(|| Err::not_found("No pending payment request"))?;
-    let payment_wallet = state.payment_wallet.read().await.clone();
+fn invoice_request_amount_msat(r: &InvoiceRequestContentWithKey) -> Option<u64> {
+    let c = &r.inner;
+    match &c.currency {
+        Currency::Millisats => Some(c.amount),
+        Currency::Fiat(_) => {
+            let major = c.amount as f64 / 100.0;
+            c.current_exchange_rate.as_ref().map(|er| ((major / er.rate) * 100_000_000_000.0) as u64)
+        }
+    }
+}
 
-    let request_id = request.content.request_id.clone();
-    let invoice = request.content.invoice.clone();
+// ---------------------------------------------------------------------------
+// Actor
+// ---------------------------------------------------------------------------
 
-    let approved = PaymentResponseContent {
-        request_id: request_id.clone(),
-        status: PaymentStatus::Approved,
-    };
-    app.reply_single_payment_request(request.clone(), approved)
-        .await
-        .map_err(|e| Err::internal(e.to_string()))?;
+async fn run_actor(
+    pubkey: PublicKey,
+    mut rx: mpsc::Receiver<ActorCmd>,
+    app: Arc<PortalApp>,
+    wallet: Option<Arc<dyn PortalWallet>>,
+    global: Arc<GlobalState>,
+) {
+    let mut pending_payment: Option<SinglePaymentRequest> = None;
+    let mut pending_invoice: Option<InvoiceRequestContentWithKey> = None;
+    let mut recent_invoices: Vec<InvoiceRequestLogEntry> = vec![];
+    let (sse_tx, _) = broadcast::channel::<SseEvent>(64);
+    let ttl = Duration::from_secs(global.config.session_ttl_secs);
+    let mut deadline = Instant::now() + ttl;
 
-    let status = if let Some(pw) = payment_wallet {
-        match pw.pay_invoice(invoice).await {
-            Ok((preimage, _)) => PaymentResponseContent {
-                request_id: request_id.clone(),
-                status: PaymentStatus::Success {
-                    preimage: Some(preimage),
-                },
-            },
-            Err(e) => {
-                log::error!("Payment failed: {}", e);
-                PaymentResponseContent {
-                    request_id: request_id.clone(),
-                    status: PaymentStatus::Failed {
-                        reason: Some(e.to_string()),
-                    },
+    // Start listening on the app
+    let app_listen = Arc::clone(&app);
+    tokio::spawn(async move {
+        let _ = app_listen.listen().await;
+    });
+
+    loop {
+        tokio::select! {
+            _ = tokio::time::sleep_until(deadline) => {
+                log::info!("Session expired for {}", app::key_to_hex(pubkey));
+                break;
+            }
+            result = app.next_payment_request() => {
+                match result {
+                    Ok(IncomingPaymentRequest::Single(request)) => {
+                        log::info!("Payment request received");
+                        let dto = single_request_to_dto(&request);
+                        let _ = sse_tx.send(SseEvent::PaymentRequest(dto));
+                        pending_payment = Some(request);
+                    }
+                    Ok(IncomingPaymentRequest::Recurring(_)) => {
+                        log::debug!("Ignoring recurring payment request");
+                    }
+                    Err(e) => {
+                        log::error!("next_payment_request error: {:?}", e);
+                        let _ = sse_tx.send(SseEvent::Error { message: format!("Payment listener error: {}", e) });
+                        break;
+                    }
                 }
             }
+            result = app.next_invoice_request() => {
+                match result {
+                    Ok(request) => {
+                        log::info!("Invoice request received");
+                        // Deduplicate
+                        let request_id = request.inner.request_id.as_str();
+                        let now_secs = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs();
+                        if recent_invoices.iter().any(|e| e.request_id == request_id && now_secs.saturating_sub(e.at_secs) < 30) {
+                            log::debug!("Skipping duplicate invoice request: {}", request_id);
+                            continue;
+                        }
+
+                        let dto = invoice_request_to_dto(&request);
+                        let _ = sse_tx.send(SseEvent::InvoiceRequest(dto.clone()));
+
+                        let amount_msat = invoice_request_amount_msat(&request);
+
+                        // Auto-accept if wallet is configured
+                        let (status, error, invoice_opt) = match (wallet.as_ref(), amount_msat) {
+                            (Some(w), Some(msat)) if msat > 0 => {
+                                match w.make_invoice(msat, request.inner.description.clone()).await {
+                                    Ok(invoice) => {
+                                        match app.reply_invoice_request(
+                                            request.clone(),
+                                            MakeInvoiceResponse { invoice: invoice.clone(), payment_hash: None },
+                                        ).await {
+                                            Ok(_) => {
+                                                log::info!("Invoice request auto-accepted");
+                                                ("accepted", None, Some(invoice))
+                                            }
+                                            Err(e) => {
+                                                log::warn!("Invoice reply failed: {}", e);
+                                                pending_invoice = Some(request);
+                                                ("failed", Some(format!("Reply failed: {}", e)), None)
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::warn!("make_invoice failed: {}", e);
+                                        pending_invoice = Some(request);
+                                        ("failed", Some(e.to_string()), None)
+                                    }
+                                }
+                            }
+                            _ => {
+                                // No wallet or zero amount or no exchange rate — store pending
+                                pending_invoice = Some(request);
+                                continue; // Don't log yet, wait for manual action
+                            }
+                        };
+
+                        let entry = InvoiceRequestLogEntry {
+                            request_id: dto.request_id.clone(),
+                            amount_formatted: dto.amount_formatted.clone(),
+                            currency: dto.currency.clone(),
+                            is_fiat: dto.is_fiat,
+                            equivalent_sats: dto.equivalent_sats,
+                            description: dto.description.clone(),
+                            at_secs: now_secs,
+                            status: status.to_string(),
+                            error: error.clone(),
+                            invoice: invoice_opt.clone(),
+                        };
+
+                        let _ = sse_tx.send(SseEvent::InvoiceResult {
+                            request_id: dto.request_id.clone(),
+                            status: status.to_string(),
+                            error,
+                            invoice: invoice_opt,
+                        });
+
+                        recent_invoices.insert(0, entry);
+                        if recent_invoices.len() > MAX_RECENT_INVOICE_REQUESTS {
+                            recent_invoices.truncate(MAX_RECENT_INVOICE_REQUESTS);
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("next_invoice_request error: {:?}", e);
+                        let _ = sse_tx.send(SseEvent::Error { message: format!("Invoice listener error: {}", e) });
+                        break;
+                    }
+                }
+            }
+            Some(cmd) = rx.recv() => {
+                deadline = Instant::now() + ttl;
+                match cmd {
+                    ActorCmd::Ping => {}
+                    ActorCmd::Status { reply } => {
+                        let pubkey_bech32 = portal::nostr::nips::nip19::ToBech32::to_bech32(&*pubkey)
+                            .unwrap_or_else(|_| app::key_to_hex(pubkey));
+                        let balance = match wallet.as_ref() {
+                            Some(w) => w.get_balance().await.ok(),
+                            None => None,
+                        };
+                        let _ = reply.send(StatusDto {
+                            pubkey: pubkey_bech32,
+                            pubkey_hex: app::key_to_hex(pubkey),
+                            payment_wallet_configured: wallet.is_some(),
+                            balance_msat: balance,
+                        });
+                    }
+                    ActorCmd::Subscribe { reply } => {
+                        let _ = reply.send(sse_tx.subscribe());
+                    }
+                    ActorCmd::GetPayment { reply } => {
+                        let _ = reply.send(pending_payment.as_ref().map(single_request_to_dto));
+                    }
+                    ActorCmd::AcceptPayment { reply } => {
+                        let Some(request) = pending_payment.take() else {
+                            let _ = reply.send(Err("No pending payment request".into()));
+                            continue;
+                        };
+                        let request_id = request.content.request_id.clone();
+                        let invoice = request.content.invoice.clone();
+
+                        let approved = PaymentResponseContent {
+                            request_id: request_id.clone(),
+                            status: PaymentStatus::Approved,
+                        };
+                        if let Err(e) = app.reply_single_payment_request(request.clone(), approved).await {
+                            let _ = reply.send(Err(format!("Approve failed: {}", e)));
+                            pending_payment = Some(request);
+                            continue;
+                        }
+
+                        let final_status = if let Some(ref pw) = wallet {
+                            match pw.pay_invoice(invoice).await {
+                                Ok((preimage, _)) => PaymentResponseContent {
+                                    request_id: request_id.clone(),
+                                    status: PaymentStatus::Success { preimage: Some(preimage) },
+                                },
+                                Err(e) => {
+                                    log::error!("Payment failed: {}", e);
+                                    PaymentResponseContent {
+                                        request_id: request_id.clone(),
+                                        status: PaymentStatus::Failed { reason: Some(e.to_string()) },
+                                    }
+                                }
+                            }
+                        } else {
+                            PaymentResponseContent {
+                                request_id,
+                                status: PaymentStatus::Success {
+                                    preimage: Some("demo-preimage-for-protocol-testing".to_string()),
+                                },
+                            }
+                        };
+
+                        if let Err(e) = app.reply_single_payment_request(request, final_status).await {
+                            let _ = reply.send(Err(format!("Final reply failed: {}", e)));
+                        } else {
+                            let _ = reply.send(Ok(()));
+                        }
+                    }
+                    ActorCmd::RejectPayment { reason, reply } => {
+                        let Some(request) = pending_payment.take() else {
+                            let _ = reply.send(Err("No pending payment request".into()));
+                            continue;
+                        };
+                        let content = PaymentResponseContent {
+                            request_id: request.content.request_id.clone(),
+                            status: PaymentStatus::Rejected { reason },
+                        };
+                        match app.reply_single_payment_request(request, content).await {
+                            Ok(_) => { let _ = reply.send(Ok(())); }
+                            Err(e) => { let _ = reply.send(Err(e.to_string())); }
+                        }
+                    }
+                    ActorCmd::GetInvoice { reply } => {
+                        let _ = reply.send(pending_invoice.as_ref().map(invoice_request_to_dto));
+                    }
+                    ActorCmd::ReplyInvoice { invoice, reply } => {
+                        let Some(request) = pending_invoice.take() else {
+                            let _ = reply.send(Err("No pending invoice request".into()));
+                            continue;
+                        };
+                        let inv = match invoice {
+                            Some(inv) if !inv.trim().is_empty() => inv.trim().to_string(),
+                            _ => {
+                                // Create via wallet
+                                let Some(ref w) = wallet else {
+                                    let _ = reply.send(Err("No wallet configured; provide invoice".into()));
+                                    pending_invoice = Some(request);
+                                    continue;
+                                };
+                                let Some(msat) = invoice_request_amount_msat(&request).filter(|&m| m > 0) else {
+                                    let _ = reply.send(Err("Cannot create invoice: no exchange rate or zero amount".into()));
+                                    pending_invoice = Some(request);
+                                    continue;
+                                };
+                                match w.make_invoice(msat, request.inner.description.clone()).await {
+                                    Ok(inv) => inv,
+                                    Err(e) => {
+                                        let _ = reply.send(Err(e.to_string()));
+                                        pending_invoice = Some(request);
+                                        continue;
+                                    }
+                                }
+                            }
+                        };
+                        match app.reply_invoice_request(
+                            request.clone(),
+                            MakeInvoiceResponse { invoice: inv.clone(), payment_hash: None },
+                        ).await {
+                            Ok(_) => {
+                                let dto = invoice_request_to_dto(&request);
+                                let now_secs = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs();
+                                let entry = InvoiceRequestLogEntry {
+                                    request_id: dto.request_id.clone(),
+                                    amount_formatted: dto.amount_formatted,
+                                    currency: dto.currency,
+                                    is_fiat: dto.is_fiat,
+                                    equivalent_sats: dto.equivalent_sats,
+                                    description: dto.description,
+                                    at_secs: now_secs,
+                                    status: "accepted".into(),
+                                    error: None,
+                                    invoice: Some(inv.clone()),
+                                };
+                                let _ = sse_tx.send(SseEvent::InvoiceResult {
+                                    request_id: dto.request_id,
+                                    status: "accepted".into(),
+                                    error: None,
+                                    invoice: Some(inv),
+                                });
+                                recent_invoices.insert(0, entry);
+                                if recent_invoices.len() > MAX_RECENT_INVOICE_REQUESTS {
+                                    recent_invoices.truncate(MAX_RECENT_INVOICE_REQUESTS);
+                                }
+                                let _ = reply.send(Ok(()));
+                            }
+                            Err(e) => {
+                                pending_invoice = Some(request);
+                                let _ = reply.send(Err(e.to_string()));
+                            }
+                        }
+                    }
+                    ActorCmd::RejectInvoice { reply } => {
+                        let _ = pending_invoice.take();
+                        let _ = reply.send(());
+                    }
+                    ActorCmd::RecentInvoices { reply } => {
+                        let _ = reply.send(recent_invoices.clone());
+                    }
+                    ActorCmd::Handshake { url, reply } => {
+                        let result = run_handshake(&app, &url).await;
+                        let _ = reply.send(result);
+                    }
+                }
+            }
+            else => break,
         }
-    } else {
-        PaymentResponseContent {
-            request_id,
-            status: PaymentStatus::Success {
-                preimage: Some("demo-preimage-for-protocol-testing".to_string()),
-            },
-        }
-    };
+    }
 
-    app.reply_single_payment_request(request, status)
-        .await
-        .map_err(|e| Err::internal(e.to_string()))?;
-
-    log::info!("Payment request accepted");
-    Ok(StatusCode::OK)
+    // Cleanup
+    global.sessions.write().await.remove(&pubkey);
+    log::info!("Actor shut down for {}", app::key_to_hex(pubkey));
 }
 
-async fn api_reject(
-    State(state): State<Arc<AppState>>,
-    Json(body): Json<RejectBody>,
-) -> Result<StatusCode, ApiError> {
-    let app_guard = state.app.read().await;
-    let app = app_guard.as_ref().ok_or_else(|| Err::bad_request("App not ready"))?;
-    let request = state.pending_request.write().await.take().ok_or_else(|| Err::not_found("No pending payment request"))?;
+async fn run_handshake(app: &PortalApp, url: &str) -> Result<(), String> {
+    let parsed = parse_key_handshake_url(url)
+        .map_err(|e| format!("Invalid handshake URL: {}", e))?;
 
-    let content = PaymentResponseContent {
-        request_id: request.content.request_id.clone(),
-        status: PaymentStatus::Rejected {
-            reason: body.reason,
-        },
-    };
-    app.reply_single_payment_request(request, content)
-        .await
-        .map_err(|e| Err::internal(e.to_string()))?;
+    app.send_key_handshake(parsed).await
+        .map_err(|e| format!("Handshake send failed: {}", e))?;
 
-    log::info!("Payment request rejected");
-    Ok(StatusCode::OK)
-}
-
-async fn api_invoice_request(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<Option<InvoiceRequestDto>>, ApiError> {
-    let guard = state.pending_invoice_request.read().await;
-    Ok(Json(guard.as_ref().map(invoice_request_to_dto)))
-}
-
-async fn api_invoice_request_reply(
-    State(state): State<Arc<AppState>>,
-    Json(body): Json<InvoiceReplyBody>,
-) -> Result<StatusCode, ApiError> {
-    let app_guard = state.app.read().await;
-    let app = app_guard.as_ref().ok_or_else(|| Err::bad_request("App not ready"))?;
-    let request = state
-        .pending_invoice_request
-        .write()
-        .await
-        .take()
-        .ok_or_else(|| Err::not_found("No pending invoice request"))?;
-
-    let invoice = body.invoice.trim();
-    let (invoice, payment_hash) = if !invoice.is_empty() {
-        (invoice.to_string(), body.payment_hash)
-    } else {
-        // Create invoice via wallet (msat or fiat with exchange rate)
-        let payment_wallet = state.payment_wallet.read().await.clone();
-        let wallet = payment_wallet.as_ref().ok_or_else(|| Err::bad_request("No payment wallet configured; provide invoice in body"))?;
-        let amount_msat = invoice_request_amount_msat(&request)
-            .filter(|&m| m > 0)
-            .ok_or_else(|| Err::bad_request("Cannot create invoice: fiat has no exchange rate or amount is zero"))?;
-        let inv = wallet
-            .make_invoice(amount_msat, request.inner.description.clone())
-            .await
-            .map_err(|e| Err::internal(e.to_string()))?;
-        (inv, None)
-    };
-
-    app.reply_invoice_request(
-        request,
-        MakeInvoiceResponse {
-            invoice,
-            payment_hash,
-        },
-    )
-    .await
-    .map_err(|e| Err::internal(e.to_string()))?;
-
-    log::info!("Invoice request replied");
-    Ok(StatusCode::OK)
-}
-
-/// Reject: clear the pending invoice request **without sending any reply**.
-/// The requester will receive no invoice and will time out waiting for one.
-/// This is intentional for demo purposes — a real implementation might send an explicit error.
-async fn api_invoice_request_reject(State(state): State<Arc<AppState>>) -> Result<StatusCode, ApiError> {
-    let _ = state.pending_invoice_request.write().await.take();
-    log::info!("Invoice request rejected (no reply sent)");
-    Ok(StatusCode::OK)
-}
-
-async fn api_invoice_requests_recent(
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<InvoiceRequestLogEntry>> {
-    let recent = state.recent_invoice_requests.read().await.clone();
-    Json(recent)
-}
-
-#[derive(serde::Deserialize)]
-struct HandshakeBody {
-    url: String,
-}
-
-async fn api_handshake(
-    State(state): State<Arc<AppState>>,
-    Json(body): Json<HandshakeBody>,
-) -> Result<StatusCode, ApiError> {
-    let app = {
-        let guard = state.app.read().await;
-        guard.as_ref().ok_or_else(|| Err::internal("App not initialized"))?.clone()
-    };
-
-    let url = parse_key_handshake_url(&body.url)
-        .map_err(|e| Err::bad_request(format!("Invalid handshake URL: {}", e)))?;
-
-    // Step 1: send our pubkey to the platform.
-    app.send_key_handshake(url).await
-        .map_err(|e| Err::internal(format!("Handshake send failed: {}", e)))?;
-
-    // Step 2: wait for the auth challenge the platform sends back (up to 15s).
     let challenge = tokio::time::timeout(
-        std::time::Duration::from_secs(15),
+        Duration::from_secs(15),
         app.next_auth_challenge(),
     )
     .await
-    .map_err(|_| Err::internal("Timed out waiting for auth challenge from platform"))?
-    .map_err(|e| Err::internal(format!("Auth challenge error: {}", e)))?;
+    .map_err(|_| "Timed out waiting for auth challenge".to_string())?
+    .map_err(|e| format!("Auth challenge error: {}", e))?;
 
-    // Step 3: approve the login.
     let session_token = format!(
         "demo-{}",
         std::time::SystemTime::now()
@@ -711,8 +654,303 @@ async fn api_handshake(
         },
     )
     .await
-    .map_err(|e| Err::internal(format!("Auth reply failed: {}", e)))?;
+    .map_err(|e| format!("Auth reply failed: {}", e))?;
 
-    log::info!("Key handshake approved.");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Helper: send command to actor
+// ---------------------------------------------------------------------------
+
+async fn send_cmd<T>(
+    global: &GlobalState,
+    pubkey_hex: &str,
+    make_cmd: impl FnOnce(oneshot::Sender<T>) -> ActorCmd,
+) -> Result<T, ApiError> {
+    let nostr_pk = portal::nostr::PublicKey::from_hex(pubkey_hex)
+        .map_err(|_| ApiError::bad_request("Invalid pubkey"))?;
+    let pubkey = PublicKey(nostr_pk);
+    let sessions = global.sessions.read().await;
+    let tx = sessions
+        .get(&pubkey)
+        .ok_or_else(|| ApiError::not_found("Session not found or expired"))?
+        .clone();
+    drop(sessions);
+    let (reply_tx, reply_rx) = oneshot::channel();
+    tx.send(make_cmd(reply_tx))
+        .await
+        .map_err(|_| ApiError::internal("Actor not running"))?;
+    reply_rx
+        .await
+        .map_err(|_| ApiError::internal("Actor dropped reply"))
+}
+
+// ---------------------------------------------------------------------------
+// Entrypoint
+// ---------------------------------------------------------------------------
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    let settings = config::Settings::load()?;
+
+    let global = Arc::new(GlobalState {
+        sessions: RwLock::new(HashMap::new()),
+        config: AppConfig {
+            listen_port: settings.info.listen_port,
+            default_relays: settings.nostr.default_relays.clone(),
+            max_sessions: settings.session.max_sessions,
+            session_ttl_secs: settings.session.ttl_secs,
+        },
+    });
+
+    let router = Router::new()
+        .route("/", get(serve_index))
+        .route("/api/config", get(api_config))
+        .route("/api/session", post(api_create_session))
+        .route("/api/session/ping/:pubkey_hex", post(api_ping))
+        .route("/api/events/:pubkey_hex", get(api_events))
+        .route("/api/status/:pubkey_hex", get(api_status))
+        .route("/api/handshake/:pubkey_hex", post(api_handshake))
+        .route("/api/payment-request/:pubkey_hex", get(api_payment_request))
+        .route("/api/payment-request/:pubkey_hex/accept", post(api_accept))
+        .route("/api/payment-request/:pubkey_hex/reject", post(api_reject))
+        .route("/api/invoice-request/:pubkey_hex", get(api_invoice_request))
+        .route("/api/invoice-request/:pubkey_hex/reply", post(api_invoice_reply))
+        .route("/api/invoice-request/:pubkey_hex/reject", post(api_invoice_reject))
+        .route("/api/invoice-requests/recent/:pubkey_hex", get(api_recent_invoices))
+        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
+        .with_state(global.clone());
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], global.config.listen_port));
+    log::info!("portal-app-demo listening on http://{}/", addr);
+    axum::Server::bind(&addr)
+        .serve(router.into_make_service())
+        .await?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
+
+async fn serve_index() -> Html<&'static str> {
+    Html(include_str!("index.html"))
+}
+
+#[derive(Serialize)]
+struct ConfigResponse {
+    default_relays: Vec<String>,
+}
+
+async fn api_config(State(global): State<Arc<GlobalState>>) -> Json<ConfigResponse> {
+    Json(ConfigResponse {
+        default_relays: global.config.default_relays.clone(),
+    })
+}
+
+async fn api_create_session(
+    State(global): State<Arc<GlobalState>>,
+    Json(body): Json<CreateSessionRequest>,
+) -> Result<Json<CreateSessionResponse>, ApiError> {
+    // Validate relays
+    for r in &body.relays {
+        if !r.starts_with("wss://") && !r.starts_with("ws://") {
+            return Err(ApiError::bad_request(format!("Invalid relay URL: {}", r)));
+        }
+    }
+    if body.relays.is_empty() {
+        return Err(ApiError::bad_request("At least one relay is required"));
+    }
+
+    // Build keypair
+    let keypair = if let Some(ref nsec) = body.nsec {
+        let nsec = nsec.trim();
+        if nsec.is_empty() {
+            return Err(ApiError::bad_request("nsec is empty"));
+        }
+        let n = Nsec::new(nsec).map_err(|e| ApiError::bad_request(format!("Invalid nsec: {:?}", e)))?;
+        Arc::new(n.get_keypair())
+    } else if let Some(ref words) = body.mnemonic {
+        let words = words.trim();
+        if words.is_empty() {
+            return Err(ApiError::bad_request("mnemonic is empty"));
+        }
+        let m = Mnemonic::new(words).map_err(|e| ApiError::bad_request(format!("Invalid mnemonic: {:?}", e)))?;
+        Arc::new(m.get_keypair().map_err(|e| ApiError::bad_request(format!("Keypair from mnemonic: {:?}", e)))?)
+    } else {
+        return Err(ApiError::bad_request("Provide nsec or mnemonic"));
+    };
+
+    let pubkey = keypair.public_key();
+    let pubkey_bech32 = portal::nostr::nips::nip19::ToBech32::to_bech32(&*pubkey)
+        .unwrap_or_else(|_| app::key_to_hex(pubkey));
+    let pubkey_hex = app::key_to_hex(pubkey);
+
+    // Check existing session
+    {
+        let sessions = global.sessions.read().await;
+        if let Some(tx) = sessions.get(&pubkey) {
+            // Send ping to keep alive, return existing
+            let _ = tx.send(ActorCmd::Ping).await;
+            return Ok(Json(CreateSessionResponse {
+                pubkey: pubkey_bech32,
+                pubkey_hex,
+            }));
+        }
+        if sessions.len() >= global.config.max_sessions {
+            return Err(ApiError::too_many_requests("Max sessions reached"));
+        }
+    }
+
+    // Create app
+    let listener = Arc::new(NoOpRelayStatusListener);
+    let app = PortalApp::new(keypair, body.relays, listener)
+        .await
+        .map_err(|e| ApiError::internal(format!("PortalApp init: {}", e)))?;
+
+    // Build wallet
+    let wallet: Option<Arc<dyn PortalWallet>> = match body.nwc {
+        Some(ref nwc_str) if !nwc_str.trim().is_empty() => {
+            let w = NwcWallet::new(nwc_str.trim().to_string())
+                .map_err(|e| ApiError::bad_request(format!("Invalid NWC: {}", e)))?;
+            Some(Arc::new(w))
+        }
+        _ => None,
+    };
+
+    // Spawn actor
+    let (tx, rx) = mpsc::channel(32);
+    let g = Arc::clone(&global);
+    tokio::spawn(run_actor(pubkey, rx, app, wallet, g));
+
+    global.sessions.write().await.insert(pubkey, tx);
+
+    Ok(Json(CreateSessionResponse {
+        pubkey: pubkey_bech32,
+        pubkey_hex,
+    }))
+}
+
+async fn api_ping(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let nostr_pk = portal::nostr::PublicKey::from_hex(&pubkey_hex)
+        .map_err(|_| ApiError::bad_request("Invalid pubkey"))?;
+    let pubkey = PublicKey(nostr_pk);
+    let sessions = global.sessions.read().await;
+    let tx = sessions
+        .get(&pubkey)
+        .ok_or_else(|| ApiError::not_found("Session not found"))?
+        .clone();
+    drop(sessions);
+    tx.send(ActorCmd::Ping)
+        .await
+        .map_err(|_| ApiError::internal("Actor not running"))?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn api_events(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+) -> Result<Sse<impl futures::Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    let rx = send_cmd(&global, &pubkey_hex, |r| ActorCmd::Subscribe { reply: r }).await?;
+    let stream = BroadcastStream::new(rx)
+        .filter_map(|r| async move { r.ok() })
+        .map(|evt| Ok(Event::default().data(serde_json::to_string(&evt).unwrap())));
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
+}
+
+async fn api_status(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+) -> Result<Json<StatusDto>, ApiError> {
+    let status = send_cmd(&global, &pubkey_hex, |r| ActorCmd::Status { reply: r }).await?;
+    Ok(Json(status))
+}
+
+async fn api_handshake(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+    Json(body): Json<HandshakeBody>,
+) -> Result<StatusCode, ApiError> {
+    let result = send_cmd(&global, &pubkey_hex, |r| ActorCmd::Handshake {
+        url: body.url,
+        reply: r,
+    })
+    .await?;
+    result.map_err(|e| ApiError::internal(e))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn api_payment_request(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+) -> Result<Json<Option<PaymentRequestDto>>, ApiError> {
+    let dto = send_cmd(&global, &pubkey_hex, |r| ActorCmd::GetPayment { reply: r }).await?;
+    Ok(Json(dto))
+}
+
+async fn api_accept(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let result = send_cmd(&global, &pubkey_hex, |r| ActorCmd::AcceptPayment { reply: r }).await?;
+    result.map_err(|e| ApiError::internal(e))?;
+    Ok(StatusCode::OK)
+}
+
+async fn api_reject(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+    Json(body): Json<RejectBody>,
+) -> Result<StatusCode, ApiError> {
+    let result = send_cmd(&global, &pubkey_hex, |r| ActorCmd::RejectPayment {
+        reason: body.reason,
+        reply: r,
+    })
+    .await?;
+    result.map_err(|e| ApiError::internal(e))?;
+    Ok(StatusCode::OK)
+}
+
+async fn api_invoice_request(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+) -> Result<Json<Option<InvoiceRequestDto>>, ApiError> {
+    let dto = send_cmd(&global, &pubkey_hex, |r| ActorCmd::GetInvoice { reply: r }).await?;
+    Ok(Json(dto))
+}
+
+async fn api_invoice_reply(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+    Json(body): Json<InvoiceReplyBody>,
+) -> Result<StatusCode, ApiError> {
+    let result = send_cmd(&global, &pubkey_hex, |r| ActorCmd::ReplyInvoice {
+        invoice: body.invoice,
+        reply: r,
+    })
+    .await?;
+    result.map_err(|e| ApiError::internal(e))?;
+    Ok(StatusCode::OK)
+}
+
+async fn api_invoice_reject(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    send_cmd(&global, &pubkey_hex, |r| ActorCmd::RejectInvoice { reply: r }).await?;
+    Ok(StatusCode::OK)
+}
+
+async fn api_recent_invoices(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+) -> Result<Json<Vec<InvoiceRequestLogEntry>>, ApiError> {
+    let list = send_cmd(&global, &pubkey_hex, |r| ActorCmd::RecentInvoices { reply: r }).await?;
+    Ok(Json(list))
 }

@@ -8,7 +8,6 @@ use axum::{
 use serde::Serialize;
 use thiserror::Error;
 
-/// API error returned to the client.
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("Bad request: {0}")]
@@ -16,6 +15,9 @@ pub enum ApiError {
 
     #[error("Not found: {0}")]
     NotFound(String),
+
+    #[error("Too many requests: {0}")]
+    TooManyRequests(String),
 
     #[error("Internal error: {0}")]
     Internal(String),
@@ -30,6 +32,10 @@ impl ApiError {
         Self::NotFound(msg.into())
     }
 
+    pub fn too_many_requests(msg: impl Into<String>) -> Self {
+        Self::TooManyRequests(msg.into())
+    }
+
     pub fn internal(msg: impl Into<String>) -> Self {
         Self::Internal(msg.into())
     }
@@ -38,6 +44,7 @@ impl ApiError {
         match self {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

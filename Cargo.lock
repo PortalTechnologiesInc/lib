@@ -3855,6 +3855,7 @@ dependencies = [
  "config",
  "dirs",
  "env_logger",
+ "futures",
  "log",
  "portal",
  "portal-wallet",
@@ -3862,6 +3863,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
  "tower-http 0.4.4",
 ]
 
@@ -5369,6 +5371,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
