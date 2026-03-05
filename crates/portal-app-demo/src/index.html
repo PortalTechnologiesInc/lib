@@ -4,95 +4,266 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portal App Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0f0f12; --surface: #1a1a1f; --border: #2a2a32;
-      --text: #e8e8ed; --muted: #8888a0; --accent: #6366f1;
-      --accent-hover: #818cf8; --success: #22c55e; --danger: #ef4444;
+      --bg: #121110;
+      --surface: #1a1816;
+      --surface-hover: #22201d;
+      --border: #2c2926;
+      --border-focus: #8b7355;
+      --text: #e6e2dc;
+      --muted: #7d7871;
+      --accent: #a67c52;
+      --accent-hover: #b89068;
+      --success: #5a8f6a;
+      --danger: #c45c5c;
+      --step: #3d3935;
+      --warn-bg: rgba(166, 124, 82, 0.12);
+      --warn-border: rgba(166, 124, 82, 0.4);
     }
     * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; min-height: 100vh; padding: 2rem; line-height: 1.5; }
-    .container { max-width: 520px; margin: 0 auto; }
-    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem; }
-    h2 { font-size: 1rem; margin: 0 0 0.75rem; }
-    .sub { color: var(--muted); font-size: 0.875rem; margin-bottom: 1.5rem; }
-    section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
-    label { display: block; font-size: 0.8125rem; color: var(--muted); margin-bottom: 0.35rem; }
-    input, textarea, select { width: 100%; padding: 0.6rem 0.75rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.875rem; margin-bottom: 0.5rem; }
-    textarea { min-height: 60px; resize: vertical; }
-    button { cursor: pointer; font-weight: 500; border: none; background: var(--accent); color: white; padding: 0.6rem 1rem; border-radius: 8px; font-size: 0.875rem; }
+    body {
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      min-height: 100vh;
+      padding: 1.5rem;
+      line-height: 1.55;
+      font-size: 15px;
+    }
+    .container { max-width: 560px; margin: 0 auto; }
+    h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 0.2rem; letter-spacing: -0.02em; color: var(--text); }
+    h2 {
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin: 0 0 0.65rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.4rem;
+      height: 1.4rem;
+      border-radius: 50%;
+      background: var(--step);
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.35rem;
+      margin-bottom: 1rem;
+    }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.35rem; }
+    input, textarea, select {
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+      transition: border-color 0.2s;
+    }
+    input:focus, textarea:focus { outline: none; border-color: var(--border-focus); }
+    textarea { min-height: 72px; resize: vertical; }
+    button {
+      cursor: pointer;
+      font-weight: 500;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      transition: background 0.2s, opacity 0.2s;
+    }
     button:hover { background: var(--accent-hover); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     button.danger { background: var(--danger); }
-    button.danger:hover { background: #dc2626; }
-    button.small { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
-    .warn { background: #44300a; border: 1px solid #665520; color: #fbbf24; padding: 0.6rem 0.75rem; border-radius: 8px; font-size: 0.8rem; margin-bottom: 1rem; }
+    button.danger:hover { background: #a84a4a; }
+    button.small { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
+    button.secondary {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+    button.secondary:hover { background: var(--border); }
+    .warn {
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      color: var(--accent);
+      padding: 0.65rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
     .mono { font-family: ui-monospace, monospace; font-size: 0.8rem; word-break: break-all; }
-    .status { font-size: 0.8125rem; color: var(--muted); margin-top: 0.5rem; }
+    .status { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
     .relay-list { list-style: none; padding: 0; margin: 0 0 0.5rem; }
-    .relay-list li { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
-    .relay-list li input { flex: 1; margin: 0; }
-    .relay-list li button { padding: 0.2rem 0.5rem; font-size: 0.75rem; background: var(--danger); }
-    .payment-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 0.75rem 0; }
-    .payment-card dl { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.75rem; margin: 0; font-size: 0.8rem; }
+    .relay-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+    .relay-row input { flex: 1; margin: 0; }
+    .relay-rm {
+      flex-shrink: 0;
+      width: 2rem;
+      height: 2rem;
+      padding: 0 !important;
+      font-size: 1rem !important;
+      line-height: 1;
+      background: var(--surface-hover) !important;
+      color: var(--muted);
+      border-radius: 6px;
+    }
+    .relay-rm:hover { background: var(--danger) !important; color: #fff; }
+    .relay-hint { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; }
+    .payment-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem 1rem; margin: 0.6rem 0; }
+    .payment-card dl { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.75rem; margin: 0; font-size: 0.8rem; }
     .payment-card dt { color: var(--muted); }
     .payment-card dd { margin: 0; word-break: break-all; }
-    .actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
-    .actions button { flex: 1; }
-    .invoice-row { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; margin: 0.35rem 0; }
-    .invoice-row dl { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.6rem; font-size: 0.75rem; margin: 0; }
+    .actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; }
+    .actions button { flex: 1; min-width: 100px; }
+    .invoice-row { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; margin: 0.35rem 0; }
+    .invoice-row dl { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.6rem; font-size: 0.75rem; margin: 0; }
     .invoice-row dt { color: var(--muted); margin: 0; }
     .invoice-row dd { margin: 0; word-break: break-all; }
     .copy-btn { cursor: pointer; background: none; border: none; color: var(--accent); font-size: 0.75rem; padding: 0; margin-left: 0.3rem; }
-    .radio-group { display: flex; gap: 1rem; margin-bottom: 0.5rem; }
-    .radio-group label { display: flex; align-items: center; gap: 0.3rem; color: var(--text); cursor: pointer; }
-    #log { font-size: 0.75rem; color: var(--muted); max-height: 120px; overflow-y: auto; margin-top: 1rem; white-space: pre-wrap; }
+    .key-mode-options { display: flex; flex-direction: column; gap: 0.45rem; }
+    .key-mode-option {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.7rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .key-mode-option:hover { background: var(--surface-hover); border-color: var(--muted); }
+    .key-mode-option:has(input:checked) { border-color: var(--accent); background: rgba(166, 124, 82, 0.1); }
+    .key-mode-option input { width: auto; margin: 0; accent-color: var(--accent); }
+    .key-mode-option span { font-weight: 500; color: var(--text); }
+    .key-mode-option small { display: block; font-size: 0.75rem; color: var(--muted); margin-top: 0.1rem; font-weight: 400; }
+    .key-input-wrap { margin-top: 0.65rem; padding-top: 0.65rem; border-top: 1px solid var(--border); }
+    #log { font-size: 0.75rem; color: var(--muted); max-height: 100px; overflow-y: auto; margin-top: 1rem; white-space: pre-wrap; }
     .hidden { display: none !important; }
+    #btn-continue { width: 100%; padding: 0.75rem; font-size: 1rem; margin-top: 0.2rem; }
+    #wizard-error { min-height: 1.25rem; margin-top: 0.5rem; }
+
+    /* Profile card */
+    .profile-card { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 0; }
+    .profile-avatar {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      background: var(--step);
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .profile-avatar.placeholder { background: var(--border); }
+    .profile-info { flex: 1; min-width: 0; }
+    .profile-name { font-weight: 600; font-size: 1rem; margin: 0 0 0.15rem; }
+    .profile-nip05 { font-size: 0.8rem; color: var(--muted); margin: 0; }
+    .profile-actions { margin-top: 0.5rem; }
+    .nip05-lookup-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; }
+    .nip05-lookup-row input { flex: 1; margin: 0; }
+    .nip05-result { margin-top: 0.75rem; padding: 0.75rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); font-size: 0.82rem; }
+    .nip05-result .mono { font-size: 0.75rem; }
   </style>
 </head>
 <body>
 <div class="container">
   <h1>Portal App Demo</h1>
-  <p class="sub">Multi-session protocol testing wallet</p>
+  <p class="sub">Multi-session protocol testing · not for production use</p>
 
   <!-- WIZARD -->
   <div id="wizard">
-    <div class="warn">⚠️ Testing tool — do not use your main Portal key</div>
+    <div class="warn">⚠️ Testing only — do not use your main Portal key or real funds.</div>
+
     <section>
-      <h2>Identity</h2>
-      <div class="radio-group">
-        <label><input type="radio" name="key-mode" value="generate" checked> Generate new key</label>
-        <label><input type="radio" name="key-mode" value="nsec"> Import nsec</label>
-        <label><input type="radio" name="key-mode" value="mnemonic"> Import mnemonic</label>
+      <h2><span class="step-num">1</span> Identity</h2>
+      <div class="key-mode-options">
+        <label class="key-mode-option">
+          <input type="radio" name="key-mode" value="generate" checked>
+          <div><span>Generate new key</span><small>Create a new key for this session</small></div>
+        </label>
+        <label class="key-mode-option">
+          <input type="radio" name="key-mode" value="nsec">
+          <div><span>Import nsec</span><small>Paste your secret key (nsec1...)</small></div>
+        </label>
+        <label class="key-mode-option">
+          <input type="radio" name="key-mode" value="mnemonic">
+          <div><span>Import mnemonic</span><small>Paste your 12 or 24 word backup phrase</small></div>
+        </label>
       </div>
-      <div id="nsec-input" class="hidden">
-        <label for="nsec">nsec</label>
-        <input type="text" id="nsec" placeholder="nsec1...">
+      <div id="nsec-input" class="hidden key-input-wrap">
+        <label for="nsec">Secret key (nsec)</label>
+        <input type="password" id="nsec" placeholder="nsec1..." autocomplete="off">
       </div>
-      <div id="mnemonic-input" class="hidden">
-        <label for="mnemonic">Mnemonic (12 words)</label>
-        <textarea id="mnemonic" placeholder="word1 word2 ... word12"></textarea>
+      <div id="mnemonic-input" class="hidden key-input-wrap">
+        <label for="mnemonic">Mnemonic phrase</label>
+        <textarea id="mnemonic" placeholder="word1 word2 word3 ..." autocomplete="off" rows="3"></textarea>
       </div>
     </section>
 
     <section>
-      <h2>Relays</h2>
+      <h2><span class="step-num">2</span> Relays</h2>
+      <p class="relay-hint">Default relays are loaded below. Add more or edit as needed.</p>
       <ul class="relay-list" id="relay-list"></ul>
       <button type="button" class="small" id="btn-add-relay">+ Add relay</button>
     </section>
 
     <section>
-      <h2>Lightning Wallet (optional)</h2>
-      <label for="nwc">NWC connection string — leave empty for demo mode</label>
-      <input type="text" id="nwc" placeholder="nostr+walletconnect://...">
+      <h2><span class="step-num">3</span> Lightning wallet (optional)</h2>
+      <label for="nwc">NWC connection string — leave empty for demo without payments</label>
+      <input type="text" id="nwc" placeholder="nostr+walletconnect://..." autocomplete="off">
     </section>
 
-    <button type="button" id="btn-continue" style="width:100%;">Continue</button>
+    <button type="button" id="btn-continue">Continue</button>
     <p id="wizard-error" class="status" style="color:var(--danger);"></p>
   </div>
 
   <!-- DASHBOARD -->
   <div id="dashboard" class="hidden">
+    <section>
+      <h2>Your profile</h2>
+      <div id="profile-area">
+        <div class="profile-card" id="profile-card">
+          <div class="profile-avatar placeholder" id="profile-avatar"></div>
+          <div class="profile-info">
+            <p class="profile-name" id="profile-name">—</p>
+            <p class="profile-nip05 mono" id="profile-nip05"></p>
+            <div class="profile-actions">
+              <button type="button" class="small secondary" id="btn-load-profile">Load from relays</button>
+            </div>
+          </div>
+        </div>
+        <p id="profile-status" class="status"></p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Look up NIP-05</h2>
+      <label for="nip05-input">Enter identifier (e.g. user@domain.com)</label>
+      <div class="nip05-lookup-row">
+        <input type="text" id="nip05-input" placeholder="alice@getportal.cc" autocomplete="off">
+        <button type="button" class="small" id="btn-nip05-lookup">Look up</button>
+      </div>
+      <div id="nip05-result" class="nip05-result hidden"></div>
+      <p id="nip05-status" class="status"></p>
+    </section>
+
     <section>
       <h2>Session</h2>
       <label>npub</label>
@@ -136,7 +307,8 @@
 </div>
 
 <script type="module">
-import { generateSecretKey, getPublicKey, nsecEncode } from 'https://esm.sh/nostr-tools@2'
+import { generateSecretKey, getPublicKey } from 'https://esm.sh/nostr-tools@2'
+import { nsecEncode } from 'https://esm.sh/nostr-tools@2/nip19'
 
 const $ = s => document.querySelector(s)
 const $$ = s => document.querySelectorAll(s)
@@ -147,28 +319,60 @@ function log(msg) {
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
 
 // --- Relay list management ---
+const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://relay.nostr.band']
 let relays = []
+
 async function loadDefaultRelays() {
   try {
     const r = await fetch('/api/config')
+    if (!r.ok) throw new Error('Config failed')
     const c = await r.json()
-    relays = c.default_relays || ['wss://relay.damus.io', 'wss://relay.nostr.band']
-  } catch { relays = ['wss://relay.damus.io', 'wss://relay.nostr.band'] }
+    const fromApi = c.default_relays
+    relays = Array.isArray(fromApi) && fromApi.length > 0 ? fromApi : [...DEFAULT_RELAYS]
+  } catch {
+    relays = [...DEFAULT_RELAYS]
+  }
   renderRelays()
 }
+
 function renderRelays() {
   const ul = $('#relay-list')
-  ul.innerHTML = relays.map((r, i) => `<li><input value="${esc(r)}" data-i="${i}"><button type="button" data-rm="${i}">×</button></li>`).join('')
-  ul.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => { relays[+inp.dataset.i] = inp.value.trim() }))
-  ul.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => { relays.splice(+btn.dataset.rm, 1); renderRelays() }))
+  if (!ul) return
+  ul.innerHTML = relays.map((r, i) => `<li class="relay-row"><input value="${esc(r)}" data-i="${i}" placeholder="wss://..."><button type="button" class="relay-rm" data-rm="${i}" title="Remove">×</button></li>`).join('')
+  ul.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', () => { relays[+inp.dataset.i] = inp.value.trim() })
+    inp.addEventListener('change', () => { relays[+inp.dataset.i] = inp.value.trim() })
+  })
+  ul.querySelectorAll('button.relay-rm').forEach(btn => btn.addEventListener('click', () => {
+    relays.splice(+btn.dataset.rm, 1)
+    renderRelays()
+  }))
 }
-$('#btn-add-relay').addEventListener('click', () => { relays.push('wss://'); renderRelays() })
 
-// --- Key mode toggle ---
-$$('input[name="key-mode"]').forEach(r => r.addEventListener('change', () => {
-  $('#nsec-input').classList.toggle('hidden', r.value !== 'nsec' || !r.checked)
-  $('#mnemonic-input').classList.toggle('hidden', r.value !== 'mnemonic' || !r.checked)
-}))
+function addRelay() {
+  relays.push('wss://')
+  renderRelays()
+}
+
+const btnAddRelay = $('#btn-add-relay')
+if (btnAddRelay) btnAddRelay.addEventListener('click', addRelay)
+
+// --- Key mode toggle: show/hide nsec or mnemonic based on selected radio ---
+function syncKeyModePanels() {
+  const checked = document.querySelector('input[name="key-mode"]:checked')
+  if (!checked) return
+  const mode = checked.value
+  const nsecEl = $('#nsec-input')
+  const mnemonicEl = $('#mnemonic-input')
+  if (nsecEl) nsecEl.classList.toggle('hidden', mode !== 'nsec')
+  if (mnemonicEl) mnemonicEl.classList.toggle('hidden', mode !== 'mnemonic')
+  const errEl = $('#wizard-error')
+  if (errEl) errEl.textContent = ''
+}
+
+$$('input[name="key-mode"]').forEach(radio => {
+  radio.addEventListener('change', syncKeyModePanels)
+})
 
 // --- Continue ---
 $('#btn-continue').addEventListener('click', async () => {
@@ -186,8 +390,14 @@ $('#btn-continue').addEventListener('click', async () => {
     if (!mnemonic) { $('#wizard-error').textContent = 'Enter a mnemonic'; return }
   }
 
-  const validRelays = relays.filter(r => r.startsWith('wss://') || r.startsWith('ws://'))
-  if (validRelays.length === 0) { $('#wizard-error').textContent = 'Add at least one relay'; return }
+  const validRelays = relays.filter(r => {
+    const t = (r || '').trim()
+    return (t.startsWith('wss://') || t.startsWith('ws://')) && t.length > 10
+  })
+  if (validRelays.length === 0) {
+    $('#wizard-error').textContent = 'Add at least one relay with a valid URL (e.g. wss://relay.damus.io)'
+    return
+  }
 
   const nwc = $('#nwc').value.trim() || null
 
@@ -356,6 +566,94 @@ $('#btn-handshake').addEventListener('click', async () => {
   $('#btn-handshake').disabled = false
 })
 
+// --- Profile (from relays) ---
+async function loadProfile() {
+  const hex = localStorage.getItem('portal-pubkey')
+  if (!hex) return
+  const statusEl = $('#profile-status')
+  const nameEl = $('#profile-name')
+  const nip05El = $('#profile-nip05')
+  const avatarEl = $('#profile-avatar')
+  statusEl.textContent = 'Loading…'
+  statusEl.style.color = 'var(--muted)'
+  try {
+    const r = await fetch(`/api/profile/${hex}`)
+    const text = await r.text()
+    if (!r.ok) {
+      let msg = text
+      try { const j = JSON.parse(text); if (j.error) msg = j.error } catch {}
+      throw new Error(msg)
+    }
+    const profile = JSON.parse(text)
+    statusEl.textContent = ''
+    if (!profile) {
+      nameEl.textContent = '—'
+      nip05El.textContent = ''
+      nip05El.classList.add('hidden')
+      avatarEl.style.background = 'var(--border)'
+      avatarEl.style.backgroundImage = ''
+      return
+    }
+    const name = profile.display_name || profile.name || '—'
+    nameEl.textContent = name
+    if (profile.nip05) {
+      nip05El.textContent = profile.nip05
+      nip05El.classList.remove('hidden')
+    } else {
+      nip05El.textContent = ''
+      nip05El.classList.add('hidden')
+    }
+    if (profile.picture) {
+      avatarEl.style.backgroundImage = `url(${esc(profile.picture)})`
+      avatarEl.style.backgroundSize = 'cover'
+    } else {
+      avatarEl.style.backgroundImage = ''
+      avatarEl.style.background = 'var(--border)'
+    }
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message
+    statusEl.style.color = 'var(--danger)'
+  }
+}
+
+$('#btn-load-profile').addEventListener('click', () => loadProfile())
+
+// --- NIP-05 lookup ---
+$('#btn-nip05-lookup').addEventListener('click', async () => {
+  const input = $('#nip05-input')
+  const resultEl = $('#nip05-result')
+  const statusEl = $('#nip05-status')
+  const nip05 = (input.value || '').trim()
+  if (!nip05) {
+    statusEl.textContent = 'Enter a NIP-05 identifier'
+    statusEl.style.color = 'var(--danger)'
+    return
+  }
+  statusEl.textContent = 'Looking up…'
+  statusEl.style.color = 'var(--muted)'
+  resultEl.classList.add('hidden')
+  try {
+    const r = await fetch(`/api/nip05-lookup?nip05=${encodeURIComponent(nip05)}`)
+    if (!r.ok) {
+      const t = await r.text()
+      let msg = t
+      try { const j = JSON.parse(t); if (j.error) msg = j.error } catch {}
+      throw new Error(msg)
+    }
+    const data = await r.json()
+    statusEl.textContent = ''
+    const pubkey = (data.public_key || data.pubkey || data.pk || '').toString()
+    const relays = data.relays || []
+    let html = `<p><strong>NIP-05</strong> ${esc(nip05)}</p><p><strong>Public key</strong><br><span class="mono">${esc(pubkey)}</span></p>`
+    if (relays.length) html += `<p><strong>Relays</strong><br><span class="mono">${esc(relays.join(', '))}</span></p>`
+    resultEl.innerHTML = html
+    resultEl.classList.remove('hidden')
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message
+    statusEl.style.color = 'var(--danger)'
+  }
+})
+
 // --- Reset ---
 $('#btn-reset').addEventListener('click', () => {
   if (!confirm('Reset identity? This will clear your session.')) return
@@ -402,8 +700,9 @@ async function init() {
     } catch (e) { log('Reconnect failed: ' + e.message) }
   }
 
-  // Show wizard
+  // Show wizard: load default relays and sync key-mode panels
   await loadDefaultRelays()
+  syncKeyModePanels()
 }
 
 init()

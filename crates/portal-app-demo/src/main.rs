@@ -21,7 +21,7 @@ use app::{
 };
 use app::nwc::MakeInvoiceResponse;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{Html, sse::{Event, KeepAlive, Sse}},
     routing::{get, post},
@@ -29,8 +29,10 @@ use axum::{
 };
 use error::ApiError;
 use futures::StreamExt;
+use portal::conversation::profile::Profile;
 use portal::protocol::model::auth::AuthResponseStatus;
 use portal::protocol::model::bindings::PublicKey;
+use portal::utils::fetch_nip05_profile;
 use portal::protocol::model::payment::{
     Currency, ExchangeRate, InvoiceRequestContentWithKey, PaymentResponseContent, PaymentStatus,
 };
@@ -77,6 +79,7 @@ enum ActorCmd {
     RejectInvoice { reply: oneshot::Sender<()> },
     RecentInvoices { reply: oneshot::Sender<Vec<InvoiceRequestLogEntry>> },
     Handshake { url: String, reply: oneshot::Sender<Result<(), String>> },
+    FetchProfile { reply: oneshot::Sender<Result<Option<ProfileDto>, String>> },
     Ping,
 }
 
@@ -111,6 +114,29 @@ struct StatusDto {
     payment_wallet_configured: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     balance_msat: Option<u64>,
+}
+
+#[derive(Serialize, Clone)]
+struct ProfileDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    picture: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nip05: Option<String>,
+}
+
+impl From<Profile> for ProfileDto {
+    fn from(p: Profile) -> Self {
+        ProfileDto {
+            name: p.name,
+            display_name: p.display_name,
+            picture: p.picture,
+            nip05: p.nip05,
+        }
+    }
 }
 
 #[derive(Serialize, Clone)]
@@ -613,6 +639,14 @@ async fn run_actor(
                         let result = run_handshake(&app, &url).await;
                         let _ = reply.send(result);
                     }
+                    ActorCmd::FetchProfile { reply } => {
+                        let result = app
+                            .fetch_profile(pubkey)
+                            .await
+                            .map(|p| p.map(ProfileDto::from))
+                            .map_err(|e| e.to_string());
+                        let _ = reply.send(result);
+                    }
                 }
             }
             else => break,
@@ -713,6 +747,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/session/ping/:pubkey_hex", post(api_ping))
         .route("/api/events/:pubkey_hex", get(api_events))
         .route("/api/status/:pubkey_hex", get(api_status))
+        .route("/api/profile/:pubkey_hex", get(api_profile))
+        .route("/api/nip05-lookup", get(api_nip05_lookup))
         .route("/api/handshake/:pubkey_hex", post(api_handshake))
         .route("/api/payment-request/:pubkey_hex", get(api_payment_request))
         .route("/api/payment-request/:pubkey_hex/accept", post(api_accept))
@@ -870,6 +906,33 @@ async fn api_status(
 ) -> Result<Json<StatusDto>, ApiError> {
     let status = send_cmd(&global, &pubkey_hex, |r| ActorCmd::Status { reply: r }).await?;
     Ok(Json(status))
+}
+
+#[derive(Deserialize)]
+struct Nip05LookupQuery {
+    nip05: String,
+}
+
+async fn api_profile(
+    State(global): State<Arc<GlobalState>>,
+    Path(pubkey_hex): Path<String>,
+) -> Result<Json<Option<ProfileDto>>, ApiError> {
+    let result = send_cmd(&global, &pubkey_hex, |r| ActorCmd::FetchProfile { reply: r }).await?;
+    let profile_opt = result.map_err(ApiError::internal)?;
+    Ok(Json(profile_opt))
+}
+
+async fn api_nip05_lookup(
+    Query(q): Query<Nip05LookupQuery>,
+) -> Result<Json<portal::nostr::nips::nip05::Nip05Profile>, ApiError> {
+    let nip05 = q.nip05.trim();
+    if nip05.is_empty() {
+        return Err(ApiError::bad_request("Missing nip05 query parameter"));
+    }
+    let profile = fetch_nip05_profile(nip05)
+        .await
+        .map_err(|e| ApiError::internal(format!("NIP-05 lookup failed: {}", e)))?;
+    Ok(Json(profile))
 }
 
 async fn api_handshake(
