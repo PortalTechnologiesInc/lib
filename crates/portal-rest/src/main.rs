@@ -15,7 +15,7 @@ use portal_sdk::PortalSDK;
 use serde::Serialize;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
-use tracing::info;
+use tracing::{info, warn, error};
 
 mod command;
 mod config;
@@ -156,8 +156,21 @@ async fn main() -> anyhow::Result<()> {
 
     let listen_port = config.info.listen_port;
 
-    // Create event store (for polling + webhooks)
-    let event_store = events::EventStore::new(config.webhook.clone());
+    // Resolve database path (relative paths are relative to ~/.portal-rest/)
+    let db_path = if std::path::Path::new(&config.database.path).is_relative() {
+        let rest_dir = constants::portal_rest_dir()?;
+        std::fs::create_dir_all(&rest_dir)?;
+        rest_dir
+            .join(&config.database.path)
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid database path"))?
+            .to_string()
+    } else {
+        config.database.path.clone()
+    };
+
+    // Create event store with SQLite persistence
+    let event_store = events::EventStore::new(&db_path, config.webhook.clone())?;
 
     // Create app state
     let state = AppState {
@@ -167,6 +180,203 @@ async fn main() -> anyhow::Result<()> {
         market_api: portal_rates::MarketAPI::new().expect("Failed to create market API"),
         events: event_store,
     };
+
+    // ---- Startup recovery: resume in-flight streams ----
+    {
+        let in_flight = state.events.get_in_flight_streams().await;
+        if !in_flight.is_empty() {
+            info!("Recovering {} in-flight stream(s) from database", in_flight.len());
+        }
+        for stream in in_flight {
+            match stream.stream_type.as_str() {
+                "single_payment" => {
+                    if let Some(events::StreamMetadata::SinglePayment { invoice, expires_at_secs }) =
+                        stream.metadata
+                    {
+                        if let Some(wallet) = state.wallet.clone() {
+                            let events_store = state.events.clone();
+                            let sid = stream.stream_id.clone();
+                            info!("Recovering single_payment stream {sid}");
+
+                            tokio::spawn(async move {
+                                let now_secs = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs();
+                                let expired = now_secs > expires_at_secs;
+
+                                if expired {
+                                    // Check if it was paid before expiry
+                                    match wallet.is_invoice_paid(invoice).await {
+                                        Ok((true, preimage)) => {
+                                            events_store
+                                                .push(
+                                                    &sid,
+                                                    response::NotificationData::PaymentStatusUpdate {
+                                                        status: response::InvoiceStatus::Paid {
+                                                            preimage,
+                                                        },
+                                                    },
+                                                )
+                                                .await;
+                                        }
+                                        _ => {
+                                            events_store
+                                                .push(
+                                                    &sid,
+                                                    response::NotificationData::PaymentStatusUpdate {
+                                                        status: response::InvoiceStatus::Timeout,
+                                                    },
+                                                )
+                                                .await;
+                                        }
+                                    }
+                                } else {
+                                    // Still pending — restart monitoring loop
+                                    loop {
+                                        let now_secs = std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_secs();
+                                        if now_secs > expires_at_secs {
+                                            events_store
+                                                .push(
+                                                    &sid,
+                                                    response::NotificationData::PaymentStatusUpdate {
+                                                        status: response::InvoiceStatus::Timeout,
+                                                    },
+                                                )
+                                                .await;
+                                            break;
+                                        }
+                                        match wallet.is_invoice_paid(invoice.clone()).await {
+                                            Ok((true, preimage)) => {
+                                                events_store
+                                                    .push(
+                                                        &sid,
+                                                        response::NotificationData::PaymentStatusUpdate {
+                                                            status: response::InvoiceStatus::Paid {
+                                                                preimage,
+                                                            },
+                                                        },
+                                                    )
+                                                    .await;
+                                                break;
+                                            }
+                                            Ok((false, _)) => {
+                                                tokio::time::sleep(
+                                                    tokio::time::Duration::from_millis(1000),
+                                                )
+                                                .await;
+                                            }
+                                            Err(e) => {
+                                                error!("Recovery: failed to check invoice for {sid}: {e}");
+                                                events_store
+                                                    .push(
+                                                        &sid,
+                                                        response::NotificationData::PaymentStatusUpdate {
+                                                            status: response::InvoiceStatus::Error {
+                                                                reason: e.to_string(),
+                                                            },
+                                                        },
+                                                    )
+                                                    .await;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        } else {
+                            warn!("Cannot recover single_payment stream {} — no wallet configured", stream.stream_id);
+                            state
+                                .events
+                                .update_stream_status(
+                                    &stream.stream_id,
+                                    events::StreamStatus::Failed,
+                                )
+                                .await;
+                        }
+                    } else {
+                        warn!("Cannot recover single_payment stream {} — missing metadata", stream.stream_id);
+                        state
+                            .events
+                            .update_stream_status(
+                                &stream.stream_id,
+                                events::StreamStatus::Failed,
+                            )
+                            .await;
+                    }
+                }
+                "key_handshake" => {
+                    // Key handshake streams cannot be resumed after restart — the notification
+                    // stream from the SDK is ephemeral. Mark as failed.
+                    warn!(
+                        "Cannot recover key_handshake stream {} — marking as failed",
+                        stream.stream_id
+                    );
+                    state
+                        .events
+                        .update_stream_status(
+                            &stream.stream_id,
+                            events::StreamStatus::Failed,
+                        )
+                        .await;
+                }
+                "recurring_payment_close" => {
+                    // Re-subscribe to the closed recurring payment listener
+                    info!("Recovering recurring_payment_close stream {}", stream.stream_id);
+                    match state.sdk.listen_closed_recurring_payment().await {
+                        Ok(notification_stream) => {
+                            let events_store = state.events.clone();
+                            let sid = stream.stream_id.clone();
+                            tokio::spawn(async move {
+                                let mut stream = notification_stream;
+                                while let Some(Ok(event)) = stream.next().await {
+                                    events_store
+                                        .push(
+                                            &sid,
+                                            response::NotificationData::ClosedRecurringPayment {
+                                                reason: event.content.reason,
+                                                subscription_id: event
+                                                    .content
+                                                    .subscription_id,
+                                                main_key: event.main_key.to_string(),
+                                                recipient: event.recipient.to_string(),
+                                            },
+                                        )
+                                        .await;
+                                }
+                            });
+                        }
+                        Err(e) => {
+                            error!(
+                                "Failed to recover recurring_payment_close stream {}: {e}",
+                                stream.stream_id
+                            );
+                            state
+                                .events
+                                .update_stream_status(
+                                    &stream.stream_id,
+                                    events::StreamStatus::Failed,
+                                )
+                                .await;
+                        }
+                    }
+                }
+                other => {
+                    warn!("Unknown stream type '{other}' for stream {} — marking as failed", stream.stream_id);
+                    state
+                        .events
+                        .update_stream_status(
+                            &stream.stream_id,
+                            events::StreamStatus::Failed,
+                        )
+                        .await;
+                }
+            }
+        }
+    }
 
     // Public routes (no auth): health and version for Docker/orchestrators and support.
     let public = Router::new()

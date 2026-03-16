@@ -4,7 +4,7 @@ use portal::conversation::profile::Profile;
 use portal::protocol::model::auth::AuthResponseStatus;
 use portal::protocol::model::payment::{CashuResponseStatus, RecurringPaymentResponseContent};
 use portal::protocol::model::Timestamp;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Generic API response wrapper used for all REST endpoints.
 #[derive(Debug, Serialize)]
@@ -153,7 +153,7 @@ pub struct VersionResponse {
 
 // ---- Event / notification types (stored for polling, sent via webhook) ----
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamEvent {
     /// Monotonically increasing index within this stream.
     pub index: u64,
@@ -163,7 +163,7 @@ pub struct StreamEvent {
     pub data: NotificationData,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum NotificationData {
     KeyHandshake {
@@ -181,7 +181,7 @@ pub enum NotificationData {
     },
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum InvoiceStatus {
     Paid { preimage: Option<String> },

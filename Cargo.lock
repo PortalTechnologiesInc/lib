@@ -3928,6 +3928,7 @@ dependencies = [
  "portal-wallet",
  "rand 0.8.5",
  "reqwest",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2",

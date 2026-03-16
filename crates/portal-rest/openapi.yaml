@@ -11,6 +11,16 @@ info:
     Some operations (key handshake, payments) are asynchronous. They return a `stream_id` immediately.
     Poll `GET /events/{stream_id}?after={index}` to retrieve events as they arrive.
 
+    ## Persistence
+    Stream IDs and their events are persisted to a SQLite database and survive server restarts.
+    On startup, in-flight streams are automatically recovered:
+    - **Single payments**: the server checks invoice status and resumes monitoring if still pending.
+    - **Recurring payment listeners**: re-subscribed to the notification stream.
+    - **Key handshakes**: marked as failed (ephemeral notification streams cannot be resumed).
+
+    The database path is configurable via `[database] path` in config or `DATABASE_PATH` env var
+    (default: `portal-rest.db` under `~/.portal-rest/`).
+
     ## Webhooks
     If `webhook_url` is configured, server-initiated events are also POSTed to that URL.
     The `X-Portal-Signature` header contains an HMAC-SHA256 hex digest of the body,

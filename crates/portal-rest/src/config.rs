@@ -12,6 +12,8 @@ pub struct Settings {
     pub wallet: WalletSettings,
     #[serde(default)]
     pub webhook: WebhookSettings,
+    #[serde(default)]
+    pub database: DatabaseSettings,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -42,6 +44,19 @@ pub struct WalletSettings {
 pub struct WebhookSettings {
     pub url: Option<String>,
     pub secret: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct DatabaseSettings {
+    pub path: String,
+}
+
+impl Default for DatabaseSettings {
+    fn default() -> Self {
+        Self {
+            path: "portal-rest.db".to_string(),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -92,7 +107,7 @@ impl Settings {
             std::fs::write(&config_file, include_str!("../example.config.toml"))?;
         }
 
-        let settings: Settings = Config::builder()
+        let mut settings: Settings = Config::builder()
             // Load from TOML file
             .add_source(File::from(config_file))
             // Override with env vars prefixed with PORTAL_
@@ -108,6 +123,11 @@ impl Settings {
             )
             .build()?
             .try_deserialize()?;
+
+        // Allow DATABASE_PATH env var to override database.path
+        if let Ok(db_path) = std::env::var("DATABASE_PATH") {
+            settings.database.path = db_path;
+        }
 
         Ok(settings)
     }

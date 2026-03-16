@@ -40,6 +40,12 @@ ln_backend = "none"
 # mnemonic = "your-breez-mnemonic"
 
 
+[database]
+## Path to the SQLite database file. Relative paths are resolved under ~/.portal-rest/.
+## Can also be set via DATABASE_PATH env var.
+path = "portal-rest.db"
+
+
 [webhook]
 ## Optional webhook URL. When set, server-initiated events (key handshake completions,
 ## payment status updates, closed recurring payments) will be POSTed to this URL as JSON.

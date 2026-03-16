@@ -29,6 +29,7 @@ use tracing::{debug, error, warn};
 use uuid::Uuid;
 
 use crate::command::*;
+use crate::events::StreamMetadata;
 use crate::response::*;
 use crate::AppState;
 
@@ -142,7 +143,13 @@ pub async fn new_key_handshake_url(
         .map_err(|e| internal_error(format!("Failed to create key handshake URL: {e}")))?;
 
     let stream_id = Uuid::new_v4().to_string();
-    state.events.create_stream(&stream_id);
+    let metadata = StreamMetadata::KeyHandshake {
+        url: url.to_string(),
+    };
+    state
+        .events
+        .create_stream(&stream_id, "key_handshake", Some(&metadata))
+        .await;
 
     // Spawn background task to collect notifications
     let events = state.events.clone();
@@ -296,7 +303,14 @@ pub async fn request_single_payment(
         .map_err(|e| internal_error(format!("Failed to request single payment: {e}")))?;
 
     let stream_id = Uuid::new_v4().to_string();
-    state.events.create_stream(&stream_id);
+    let metadata = StreamMetadata::SinglePayment {
+        invoice: invoice.clone(),
+        expires_at_secs: expires_at.as_u64(),
+    };
+    state
+        .events
+        .create_stream(&stream_id, "single_payment", Some(&metadata))
+        .await;
 
     let events = state.events.clone();
     let sid = stream_id.clone();
@@ -406,7 +420,10 @@ pub async fn request_payment_raw(
         .map_err(|e| internal_error(format!("Failed to request payment: {e}")))?;
 
     let stream_id = Uuid::new_v4().to_string();
-    state.events.create_stream(&stream_id);
+    state
+        .events
+        .create_stream(&stream_id, "raw_payment", None)
+        .await;
 
     let events = state.events.clone();
     let sid = stream_id.clone();
@@ -503,7 +520,10 @@ pub async fn listen_closed_recurring_payment(
         .map_err(|e| internal_error(format!("Failed to create listener: {e}")))?;
 
     let stream_id = Uuid::new_v4().to_string();
-    state.events.create_stream(&stream_id);
+    state
+        .events
+        .create_stream(&stream_id, "recurring_payment_close", Some(&StreamMetadata::RecurringPaymentClose))
+        .await;
 
     let events = state.events.clone();
     let sid = stream_id.clone();
@@ -842,11 +862,11 @@ pub async fn get_events(
     Path(stream_id): Path<String>,
     Query(query): Query<EventsQuery>,
 ) -> ApiResult<EventsResponse> {
-    if !state.events.exists(&stream_id) {
+    if !state.events.exists(&stream_id).await {
         return Err(not_found(format!("Stream '{stream_id}' not found")));
     }
 
-    let events = state.events.get(&stream_id, query.after);
+    let events = state.events.get(&stream_id, query.after).await;
 
     Ok(ok(EventsResponse { stream_id, events }))
 }
