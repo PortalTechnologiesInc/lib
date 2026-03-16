@@ -78,11 +78,6 @@ pub struct CloseRecurringPaymentResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ListenClosedRecurringPaymentResponse {
-    pub stream_id: String,
-}
-
-#[derive(Debug, Serialize)]
 pub struct InvoicePaymentResponse {
     pub invoice: String,
     pub payment_hash: Option<String>,

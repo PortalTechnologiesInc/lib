@@ -323,47 +323,6 @@ async fn main() -> anyhow::Result<()> {
                         )
                         .await;
                 }
-                "recurring_payment_close" => {
-                    // Re-subscribe to the closed recurring payment listener
-                    info!("Recovering recurring_payment_close stream {}", stream.stream_id);
-                    match state.sdk.listen_closed_recurring_payment().await {
-                        Ok(notification_stream) => {
-                            let events_store = state.events.clone();
-                            let sid = stream.stream_id.clone();
-                            tokio::spawn(async move {
-                                let mut stream = notification_stream;
-                                while let Some(Ok(event)) = stream.next().await {
-                                    events_store
-                                        .push(
-                                            &sid,
-                                            response::NotificationData::ClosedRecurringPayment {
-                                                reason: event.content.reason,
-                                                subscription_id: event
-                                                    .content
-                                                    .subscription_id,
-                                                main_key: event.main_key.to_string(),
-                                                recipient: event.recipient.to_string(),
-                                            },
-                                        )
-                                        .await;
-                                }
-                            });
-                        }
-                        Err(e) => {
-                            error!(
-                                "Failed to recover recurring_payment_close stream {}: {e}",
-                                stream.stream_id
-                            );
-                            state
-                                .events
-                                .update_stream_status(
-                                    &stream.stream_id,
-                                    events::StreamStatus::Failed,
-                                )
-                                .await;
-                        }
-                    }
-                }
                 other => {
                     warn!("Unknown stream type '{other}' for stream {} — marking as failed", stream.stream_id);
                     state
@@ -374,6 +333,41 @@ async fn main() -> anyhow::Result<()> {
                         )
                         .await;
                 }
+            }
+        }
+    }
+
+    // Always start the recurring payment close listener at startup
+    {
+        let stream_id = "recurring-payment-close";
+        state
+            .events
+            .create_stream(stream_id, "recurring_payment_close", None)
+            .await;
+        match state.sdk.listen_closed_recurring_payment().await {
+            Ok(notification_stream) => {
+                info!("Started recurring payment close listener (stream {stream_id})");
+                let events_store = state.events.clone();
+                let sid = stream_id.to_string();
+                tokio::spawn(async move {
+                    let mut stream = notification_stream;
+                    while let Some(Ok(event)) = stream.next().await {
+                        events_store
+                            .push(
+                                &sid,
+                                response::NotificationData::ClosedRecurringPayment {
+                                    reason: event.content.reason,
+                                    subscription_id: event.content.subscription_id,
+                                    main_key: event.main_key.to_string(),
+                                    recipient: event.recipient.to_string(),
+                                },
+                            )
+                            .await;
+                    }
+                });
+            }
+            Err(e) => {
+                error!("Failed to start recurring payment close listener: {e}");
             }
         }
     }
@@ -393,7 +387,6 @@ async fn main() -> anyhow::Result<()> {
         .route("/payments/raw", post(handlers::request_payment_raw))
         .route("/payments/recurring", post(handlers::request_recurring_payment))
         .route("/payments/recurring/close", post(handlers::close_recurring_payment))
-        .route("/payments/recurring/listen", post(handlers::listen_closed_recurring_payment))
         // Profiles
         .route("/profile/:main_key", get(handlers::fetch_profile))
         .route("/profile", put(handlers::set_profile))

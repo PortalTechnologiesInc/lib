@@ -509,47 +509,6 @@ pub async fn close_recurring_payment(
     }))
 }
 
-// POST /payments/recurring/listen
-pub async fn listen_closed_recurring_payment(
-    State(state): State<AppState>,
-) -> ApiResult<ListenClosedRecurringPaymentResponse> {
-    let notification_stream = state
-        .sdk
-        .listen_closed_recurring_payment()
-        .await
-        .map_err(|e| internal_error(format!("Failed to create listener: {e}")))?;
-
-    let stream_id = Uuid::new_v4().to_string();
-    state
-        .events
-        .create_stream(&stream_id, "recurring_payment_close", Some(&StreamMetadata::RecurringPaymentClose))
-        .await;
-
-    let events = state.events.clone();
-    let sid = stream_id.clone();
-
-    tokio::spawn(async move {
-        let mut stream = notification_stream;
-        while let Some(Ok(event)) = stream.next().await {
-            debug!("Got close recurring payment event: {:?}", event);
-            events
-                .push(
-                    &sid,
-                    NotificationData::ClosedRecurringPayment {
-                        reason: event.content.reason,
-                        subscription_id: event.content.subscription_id,
-                        main_key: event.main_key.to_string(),
-                        recipient: event.recipient.to_string(),
-                    },
-                )
-                .await;
-        }
-        debug!("Closed recurring payment stream ended for {sid}");
-    });
-
-    Ok(created(ListenClosedRecurringPaymentResponse { stream_id }))
-}
-
 // POST /invoices/request
 pub async fn request_invoice(
     State(state): State<AppState>,
