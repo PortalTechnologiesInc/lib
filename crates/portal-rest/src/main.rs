@@ -7,7 +7,7 @@ use axum::{
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
     Json, Router,
 };
 use portal::protocol::LocalKeypair;
@@ -372,6 +372,20 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    // Apply profile from config if any fields are set
+    if state.settings.profile.is_set() {
+        let profile = portal::conversation::profile::Profile {
+            name: state.settings.profile.name.clone(),
+            display_name: state.settings.profile.display_name.clone(),
+            picture: state.settings.profile.picture.clone(),
+            nip05: state.settings.profile.nip05.clone(),
+        };
+        match state.sdk.set_profile(profile).await {
+            Ok(_) => info!("Profile set from config"),
+            Err(e) => error!("Failed to set profile from config: {e}"),
+        }
+    }
+
     // Public routes (no auth): health and version for Docker/orchestrators and support.
     let public = Router::new()
         .route("/health", get(handlers::health_check))
@@ -389,7 +403,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/payments/recurring/close", post(handlers::close_recurring_payment))
         // Profiles
         .route("/profile/:main_key", get(handlers::fetch_profile))
-        .route("/profile", put(handlers::set_profile))
+
         // Invoices
         .route("/invoices/request", post(handlers::request_invoice))
         .route("/invoices/pay", post(handlers::pay_invoice))

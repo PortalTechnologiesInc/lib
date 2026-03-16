@@ -1,4 +1,3 @@
-use portal::conversation::profile::Profile;
 use portal::protocol::model::payment::{
     Currency, RecurrenceInfo, SinglePaymentRequestContent,
 };
@@ -38,11 +37,6 @@ pub struct RequestPaymentRawRequest {
     pub main_key: String,
     pub subkeys: Vec<String>,
     pub payment_request: SinglePaymentRequestContent,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SetProfileRequest {
-    pub profile: Profile,
 }
 
 #[derive(Debug, Deserialize)]

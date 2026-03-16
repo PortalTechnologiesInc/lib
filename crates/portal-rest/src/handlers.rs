@@ -474,22 +474,6 @@ pub async fn fetch_profile(
     Ok(ok(ProfileResponse { profile }))
 }
 
-// PUT /profile
-pub async fn set_profile(
-    State(state): State<AppState>,
-    Json(req): Json<SetProfileRequest>,
-) -> ApiResult<ProfileResponse> {
-    state
-        .sdk
-        .set_profile(req.profile.clone())
-        .await
-        .map_err(|e| internal_error(format!("Failed to set profile: {e}")))?;
-
-    Ok(ok(ProfileResponse {
-        profile: Some(req.profile),
-    }))
-}
-
 // POST /payments/recurring/close
 pub async fn close_recurring_payment(
     State(state): State<AppState>,

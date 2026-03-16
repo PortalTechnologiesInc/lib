@@ -14,6 +14,26 @@ pub struct Settings {
     pub webhook: WebhookSettings,
     #[serde(default)]
     pub database: DatabaseSettings,
+    #[serde(default)]
+    pub profile: ProfileSettings,
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+pub struct ProfileSettings {
+    pub name: Option<String>,
+    pub display_name: Option<String>,
+    pub picture: Option<String>,
+    pub nip05: Option<String>,
+}
+
+impl ProfileSettings {
+    /// Returns true if any field is set.
+    pub fn is_set(&self) -> bool {
+        self.name.is_some()
+            || self.display_name.is_some()
+            || self.picture.is_some()
+            || self.nip05.is_some()
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]

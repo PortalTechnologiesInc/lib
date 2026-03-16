@@ -46,6 +46,16 @@ ln_backend = "none"
 path = "portal-rest.db"
 
 
+## Optional Nostr profile metadata. Set any combination of fields to publish
+## your profile on the Nostr network at startup. Omit the section or leave
+## fields commented out to skip.
+# [profile]
+# name = "my-service"
+# display_name = "My Service"
+# picture = "https://example.com/avatar.png"
+# nip05 = "service@example.com"
+
+
 [webhook]
 ## Optional webhook URL. When set, server-initiated events (key handshake completions,
 ## payment status updates, closed recurring payments) will be POSTed to this URL as JSON.
