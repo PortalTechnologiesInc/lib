@@ -1,10 +1,12 @@
-export { PortalSDK } from './client';
+export { PortalClient } from './client';
 export { PortalSDKError, PortalSDKErrorCode } from './errors';
+export { verifyWebhookSignature, constructWebhookEvent } from './webhook';
 export {
   // Config
   ClientConfig,
   ApiResponse,
   PollOptions,
+  AsyncOperation,
 
   // Currency & Timestamp
   Currency,
@@ -14,6 +16,7 @@ export {
   // Key Handshake
   KeyHandshakeRequest,
   KeyHandshakeUrlResponse,
+  KeyHandshakeResult,
 
   // Auth
   AuthenticateKeyRequest,

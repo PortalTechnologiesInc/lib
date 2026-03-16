@@ -1,6 +1,6 @@
 # Portal TypeScript SDK
 
-Official **TypeScript/JavaScript client** for the Portal REST API: authenticate users, process payments, manage profiles, issue JWTs, and more.
+Official **server-side TypeScript/Node.js client** for the Portal REST API: authenticate users, process payments, manage profiles, issue JWTs, and more.
 
 **Full documentation:** [https://portaltechnologiesinc.github.io/lib/](https://portaltechnologiesinc.github.io/lib/)
 
@@ -14,140 +14,199 @@ npm install portal-sdk
 
 ## Requirements
 
-- Node.js 18+ (uses native `fetch`)
-- Works in modern browsers (no polyfills needed)
-- No WebSocket dependency — pure REST + polling
+- **Node.js 18+** (server-side only — uses native `fetch` and `crypto`)
+- No browser support (this is a server SDK)
 
 ## Quick start
 
 ```typescript
-import { PortalSDK } from 'portal-sdk';
+import { createServer } from 'http';
+import { PortalClient } from 'portal-sdk';
 
-const client = new PortalSDK({
-  baseUrl: process.env.PORTAL_URL ?? 'http://localhost:3000',
+const portal = new PortalClient({
+  baseUrl: 'http://localhost:3000',
   authToken: process.env.PORTAL_AUTH_TOKEN!,
+  webhookSecret: process.env.PORTAL_WEBHOOK_SECRET!,
 });
 
-// Key handshake flow
-const { url, stream_id } = await client.newKeyHandshakeUrl();
-console.log('Share this URL with your user:', url);
-
-// Poll until handshake completes
-const result = await client.pollUntilDone(stream_id, (event) => {
-  console.log('Event:', event.type);
+// Mount the webhook handler in your HTTP server
+const server = createServer((req, res) => {
+  if (req.method === 'POST' && req.url === '/portal/webhook') {
+    return portal.webhookHandler()(req, res);
+  }
+  res.writeHead(404);
+  res.end();
 });
-console.log('User authenticated:', result);
-```
+server.listen(4000);
 
-## API Overview
+// Key handshake — resolved via webhook
+const handshake = await portal.newKeyHandshakeUrl();
+console.log('URL:', handshake.url);
 
-### Configuration
+const { main_key } = await handshake.done; // ← resolves when webhook fires
+console.log('User authenticated:', main_key);
 
-```typescript
-const client = new PortalSDK({
-  baseUrl: 'http://localhost:3000', // Portal REST API base URL
-  authToken: 'your-bearer-token',  // Optional, can set later with setAuthToken()
-  debug: false,                     // Enable console debug logging
-});
-```
-
-### Async Operations & Polling
-
-Some operations (key handshake, payments) are asynchronous. They return a `stream_id` immediately. Use `pollUntilDone()` to wait for completion:
-
-```typescript
-// Start a payment
-const { stream_id } = await client.requestSinglePayment(mainKey, [], {
+// Payment — resolved via webhook
+const payment = await portal.requestSinglePayment(main_key, [], {
   amount: 1000,
   currency: 'Millisats',
-  description: 'Test payment',
+  description: 'Test',
 });
 
-// Poll for status updates
-const finalEvent = await client.pollUntilDone(stream_id, (event) => {
-  console.log('Status update:', event);
-}, {
-  intervalMs: 1000,  // Poll every 1s (default)
-  timeoutMs: 300000, // 5 minute timeout (optional)
+// Track intermediate status changes
+portal.onEvent(payment.streamId, (event) => {
+  console.log('Status:', event);
+});
+
+const result = await payment.done; // ← resolves on terminal event
+console.log('Payment result:', result);
+```
+
+### With Express
+
+```typescript
+import express from 'express';
+import { PortalClient } from 'portal-sdk';
+
+const app = express();
+const portal = new PortalClient({ baseUrl, authToken, webhookSecret });
+
+// Important: do NOT use express.json() on the webhook route.
+// The handler reads the raw body for signature verification.
+app.post('/portal/webhook', portal.webhookHandler());
+
+// Parse JSON for other routes
+app.use(express.json());
+
+app.post('/pay', async (req, res) => {
+  const payment = await portal.requestSinglePayment(/* ... */);
+  const result = await payment.done;
+  res.json(result);
+});
+
+app.listen(4000);
+```
+
+## Architecture
+
+### Webhook-first async operations
+
+Async operations (key handshake, payments) return an `AsyncOperation`:
+
+```typescript
+interface AsyncOperation<T> {
+  streamId: string;   // Available immediately
+  done: Promise<T>;   // Resolves when terminal webhook fires
+}
+```
+
+The `done` promise is resolved by the webhook handler when portal-rest POSTs the terminal event.
+
+### Event listeners
+
+Use `onEvent()` for intermediate events (e.g. `user_approved` before `paid`):
+
+```typescript
+portal.onEvent(streamId, (event) => {
+  console.log(event.type, event);
 });
 ```
 
-### Available Methods
+Returns an unsubscribe function.
+
+### Polling fallback
+
+If webhooks aren't available, use `poll()`:
+
+```typescript
+const result = await portal.poll(streamId, {
+  intervalMs: 1000,
+  timeoutMs: 60000,
+  onEvent: (event) => console.log(event),
+});
+```
+
+### Cleanup
+
+Cancel a pending stream (rejects its `done` promise):
+
+```typescript
+portal.destroy(streamId, 'Cancelled by user');
+```
+
+## Webhook signature verification
+
+The SDK verifies signatures automatically in `webhookHandler()`. For manual verification:
+
+```typescript
+import { verifyWebhookSignature, constructWebhookEvent } from 'portal-sdk';
+
+// Verify only
+verifyWebhookSignature(rawBody, signature, secret); // throws on failure
+
+// Verify + parse
+const event = constructWebhookEvent(rawBody, signature, secret);
+```
+
+## API Reference
+
+### Async operations (return `AsyncOperation`)
+
+| Method | Description |
+|--------|-------------|
+| `newKeyHandshakeUrl()` | Create key handshake URL |
+| `requestSinglePayment()` | Request single payment |
+| `requestPaymentRaw()` | Request payment with raw content |
+
+### Synchronous operations
 
 | Method | Description |
 |--------|-------------|
 | `health()` | Health check |
-| `version()` | Server version info |
-| `newKeyHandshakeUrl()` | Create key handshake URL (returns stream_id) |
+| `version()` | Server version |
 | `authenticateKey()` | Authenticate a key (NIP-46) |
-| `requestSinglePayment()` | Request single payment (returns stream_id) |
-| `requestPaymentRaw()` | Request payment with raw content (returns stream_id) |
 | `requestRecurringPayment()` | Request recurring payment |
-| `closeRecurringPayment()` | Close a recurring payment |
-| `listenClosedRecurringPayment()` | Listen for closed recurring payments (returns stream_id) |
-| `fetchProfile()` | Fetch user profile |
-| `setProfile()` | Set user profile |
+| `closeRecurringPayment()` | Close recurring payment |
+| `listenClosedRecurringPayment()` | Listen for closed recurring payments |
+| `fetchProfile()` / `setProfile()` | Profile management |
 | `requestInvoice()` | Request invoice from recipient |
-| `payInvoice()` | Pay a BOLT11 invoice |
-| `issueJwt()` | Issue a JWT |
-| `verifyJwt()` | Verify a JWT |
-| `requestCashu()` | Request Cashu tokens |
-| `sendCashuDirect()` | Send Cashu tokens directly |
-| `mintCashu()` | Mint Cashu tokens |
-| `burnCashu()` | Burn (receive) Cashu tokens |
-| `addRelay()` | Add a relay |
-| `removeRelay()` | Remove a relay |
-| `calculateNextOccurrence()` | Calculate next calendar occurrence |
-| `fetchNip05Profile()` | Fetch NIP-05 profile |
-| `getWalletInfo()` | Get wallet info |
-| `getEvents()` | Fetch events for a stream |
-| `pollUntilDone()` | Poll until terminal event |
+| `payInvoice()` | Pay BOLT11 invoice |
+| `issueJwt()` / `verifyJwt()` | JWT operations |
+| `requestCashu()` / `sendCashuDirect()` | Cashu token operations |
+| `mintCashu()` / `burnCashu()` | Cashu mint/burn |
+| `addRelay()` / `removeRelay()` | Relay management |
+| `calculateNextOccurrence()` | Calendar operations |
+| `fetchNip05Profile()` | NIP-05 lookup |
+| `getWalletInfo()` | Wallet info |
+| `getEvents()` | Low-level event fetch |
 
-### Webhooks
+### Stream management
 
-The server can be configured with a `webhook_url` to POST events as they happen. The SDK exports `WebhookPayload` type for typing your webhook handler:
+| Method | Description |
+|--------|-------------|
+| `webhookHandler()` | Returns HTTP handler for webhook route |
+| `onEvent(streamId, cb)` | Subscribe to all events on a stream |
+| `poll(streamId, opts)` | Polling fallback |
+| `destroy(streamId)` | Cancel a pending stream |
+| `pendingCount` | Number of active pending streams |
 
-```typescript
-import { WebhookPayload } from 'portal-sdk';
-import crypto from 'crypto';
-
-// In your webhook handler (Express, etc.)
-app.post('/webhook', (req, res) => {
-  const payload: WebhookPayload = req.body;
-  
-  // Verify HMAC signature if webhook_secret is configured
-  const signature = req.headers['x-portal-signature'] as string;
-  const expected = crypto
-    .createHmac('sha256', process.env.WEBHOOK_SECRET!)
-    .update(JSON.stringify(req.body))
-    .digest('hex');
-  
-  if (signature !== expected) {
-    return res.status(401).send('Invalid signature');
-  }
-
-  console.log('Webhook event:', payload.type, 'Stream:', payload.stream_id);
-  res.sendStatus(200);
-});
-```
-
-### Error Handling
+## Error handling
 
 ```typescript
 import { PortalSDKError } from 'portal-sdk';
 
 try {
-  await client.requestSinglePayment(/* ... */);
+  await portal.requestSinglePayment(/* ... */);
 } catch (err) {
   if (err instanceof PortalSDKError) {
-    console.error('Code:', err.code);       // 'API_ERROR', 'HTTP_ERROR', etc.
-    console.error('Status:', err.statusCode); // HTTP status code
-    console.error('Message:', err.message);
+    console.error(err.code);       // 'API_ERROR', 'HTTP_ERROR', etc.
+    console.error(err.statusCode);  // HTTP status code
+    console.error(err.message);
   }
 }
 ```
 
-Error codes: `HTTP_ERROR`, `API_ERROR`, `POLL_TIMEOUT`, `PARSE_ERROR`, `NETWORK_ERROR`.
+Error codes: `HTTP_ERROR`, `API_ERROR`, `POLL_TIMEOUT`, `PARSE_ERROR`, `NETWORK_ERROR`, `SIGNATURE_INVALID`.
 
 ---
 

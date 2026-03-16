@@ -6,7 +6,8 @@ export type PortalSDKErrorCode =
   | 'API_ERROR'
   | 'POLL_TIMEOUT'
   | 'PARSE_ERROR'
-  | 'NETWORK_ERROR';
+  | 'NETWORK_ERROR'
+  | 'SIGNATURE_INVALID';
 
 /**
  * SDK error with optional code and context for production handling.

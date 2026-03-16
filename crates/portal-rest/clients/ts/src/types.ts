@@ -47,11 +47,13 @@ export class Timestamp {
 // ---- Client configuration ----
 
 export interface ClientConfig {
-  /** Base URL of the Portal REST API (e.g. http://localhost:3000) */
+  /** Base URL of the Portal REST API (e.g. http://localhost:3000). */
   baseUrl: string;
   /** Bearer token for authentication. */
   authToken?: string;
-  /** Enable debug logging to console. Default false */
+  /** Shared secret for verifying X-Portal-Signature HMAC-SHA256 webhook signatures. */
+  webhookSecret?: string;
+  /** Enable debug logging to console. Default false. */
   debug?: boolean;
 }
 
@@ -63,13 +65,31 @@ export interface ApiResponse<T = unknown> {
   error?: string;
 }
 
-// ---- Polling options ----
+// ---- Polling options (fallback) ----
 
 export interface PollOptions {
   /** Polling interval in milliseconds. Default 1000. */
   intervalMs?: number;
   /** Maximum time to poll before giving up, in milliseconds. Default: no timeout. */
   timeoutMs?: number;
+  /** Called for each event received while polling. */
+  onEvent?: (event: StreamEvent) => void;
+}
+
+// ---- Async operation result ----
+
+/**
+ * Returned by async operations (key handshake, payments).
+ * `streamId` is available immediately; `done` resolves when the terminal webhook arrives.
+ */
+export interface AsyncOperation<T = StreamEvent> {
+  /** The stream ID for this operation (available immediately after the HTTP call). */
+  streamId: string;
+  /**
+   * Resolves with the terminal event when the webhook fires.
+   * If webhooks are not configured, use `client.poll(streamId)` instead.
+   */
+  done: Promise<T>;
 }
 
 // ---- Key Handshake ----
@@ -82,6 +102,11 @@ export interface KeyHandshakeRequest {
 export interface KeyHandshakeUrlResponse {
   url: string;
   stream_id: string;
+}
+
+export interface KeyHandshakeResult {
+  main_key: string;
+  preferred_relays: string[];
 }
 
 // ---- Auth ----
