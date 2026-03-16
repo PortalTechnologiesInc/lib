@@ -1,33 +1,84 @@
 export { PortalSDK } from './client';
 export { PortalSDKError, PortalSDKErrorCode } from './errors';
 export {
+  // Config
+  ClientConfig,
+  ApiResponse,
+  PollOptions,
+
+  // Currency & Timestamp
   Currency,
   PaymentCurrency,
   Timestamp,
+
+  // Key Handshake
+  KeyHandshakeRequest,
+  KeyHandshakeUrlResponse,
+
+  // Auth
+  AuthenticateKeyRequest,
+  AuthResponseStatus,
+  AuthResponseData,
+  AuthKeyResponse,
+
+  // Payments
   RecurrenceInfo,
-  RecurringPaymentRequestContent,
   SinglePaymentRequestContent,
+  SinglePaymentResponse,
+  RecurringPaymentRequestContent,
   RecurringPaymentStatusContent,
   RecurringPaymentStatus,
   RecurringPaymentStatusConfirmed,
   RecurringPaymentStatusRejected,
   RecurringPaymentResponseContent,
-  AuthResponseData,
-  Profile,
-  Nip05Profile,
-  RequestInvoiceParams,
   InvoicePaymentRequestContent,
-  InvoiceResponseContent,
+  CloseRecurringPaymentRequest,
   InvoiceStatus,
-  CloseRecurringPaymentNotification,
+
+  // Profile
+  Profile,
+  SetProfileRequest,
+
+  // Invoice
+  RequestInvoiceParams,
+  InvoicePaymentResponse,
+  PayInvoiceRequest,
+  PayInvoiceResponse,
+
+  // JWT
+  IssueJwtRequest,
+  IssueJwtResponse,
+  VerifyJwtRequest,
+  VerifyJwtResponse,
+
+  // Cashu
+  RequestCashuRequest,
+  SendCashuDirectRequest,
+  MintCashuRequest,
+  BurnCashuRequest,
   CashuResponseStatus,
-  EventCallbacks,
-  ClientConfig,
-  Event,
-  PaymentRequest,
-  KeyHandshakeUrlResponse,
-  Command,
-  ResponseData,
-  Response,
+
+  // Relays
+  RelayRequest,
+
+  // Calendar
+  CalculateNextOccurrenceRequest,
+
+  // NIP-05
+  Nip05Profile,
+
+  // Wallet
+  WalletInfoResponse,
+
+  // Version
+  VersionResponse,
+
+  // Events / Polling
+  StreamEvent,
+  EventsResponse,
   NotificationData,
-} from './types'; 
+  CloseRecurringPaymentNotification,
+
+  // Webhook
+  WebhookPayload,
+} from './types';
