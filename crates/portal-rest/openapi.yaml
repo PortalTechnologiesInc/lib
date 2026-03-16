@@ -1,0 +1,900 @@
+openapi: "3.0.3"
+info:
+  title: Portal REST API
+  description: |
+    RESTful API for the Portal protocol. Replaces the previous WebSocket-based interface.
+
+    ## Authentication
+    All endpoints (except `/health` and `/version`) require a Bearer token in the `Authorization` header.
+
+    ## Async Operations & Polling
+    Some operations (key handshake, payments) are asynchronous. They return a `stream_id` immediately.
+    Poll `GET /events/{stream_id}?after={index}` to retrieve events as they arrive.
+
+    ## Webhooks
+    If `webhook_url` is configured, server-initiated events are also POSTed to that URL.
+    The `X-Portal-Signature` header contains an HMAC-SHA256 hex digest of the body,
+    computed with the `webhook_secret`.
+  version: "0.4.0"
+  contact:
+    name: Portal Technologies Inc.
+    url: https://getportal.cc
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+        error:
+          type: string
+
+    KeyHandshakeRequest:
+      type: object
+      properties:
+        static_token:
+          type: string
+          nullable: true
+        no_request:
+          type: boolean
+          nullable: true
+
+    KeyHandshakeUrlResponse:
+      type: object
+      properties:
+        url:
+          type: string
+        stream_id:
+          type: string
+          description: Use this ID to poll events via GET /events/{stream_id}
+
+    AuthenticateKeyRequest:
+      type: object
+      required: [main_key, subkeys]
+      properties:
+        main_key:
+          type: string
+          description: Hex-encoded public key
+        subkeys:
+          type: array
+          items:
+            type: string
+          description: Array of hex-encoded subkey public keys
+
+    AuthKeyResponse:
+      type: object
+      properties:
+        event:
+          type: object
+          properties:
+            user_key:
+              type: string
+            recipient:
+              type: string
+            challenge:
+              type: string
+            status:
+              type: object
+
+    SinglePaymentRequest:
+      type: object
+      required: [main_key, subkeys, payment_request]
+      properties:
+        main_key:
+          type: string
+        subkeys:
+          type: array
+          items:
+            type: string
+        payment_request:
+          type: object
+          required: [description, amount, currency]
+          properties:
+            description:
+              type: string
+            amount:
+              type: integer
+              format: uint64
+            currency:
+              type: object
+              description: '"Millisats" or {"Fiat": "EUR"}'
+            auth_token:
+              type: string
+              nullable: true
+            subscription_id:
+              type: string
+              nullable: true
+            request_id:
+              type: string
+              nullable: true
+
+    SinglePaymentResponse:
+      type: object
+      properties:
+        stream_id:
+          type: string
+          description: Poll GET /events/{stream_id} for payment status updates
+
+    RecurringPaymentRequest:
+      type: object
+      required: [main_key, subkeys, payment_request]
+      properties:
+        main_key:
+          type: string
+        subkeys:
+          type: array
+          items:
+            type: string
+        payment_request:
+          type: object
+          required: [amount, currency, recurrence, expires_at]
+          properties:
+            description:
+              type: string
+              nullable: true
+            amount:
+              type: integer
+              format: uint64
+            currency:
+              type: object
+            auth_token:
+              type: string
+              nullable: true
+            recurrence:
+              type: object
+            expires_at:
+              type: integer
+              format: uint64
+
+    CloseRecurringPaymentRequest:
+      type: object
+      required: [main_key, subkeys, subscription_id]
+      properties:
+        main_key:
+          type: string
+        subkeys:
+          type: array
+          items:
+            type: string
+        subscription_id:
+          type: string
+
+    RequestInvoiceRequest:
+      type: object
+      required: [recipient_key, subkeys, content]
+      properties:
+        recipient_key:
+          type: string
+        subkeys:
+          type: array
+          items:
+            type: string
+        content:
+          type: object
+          required: [amount, currency, expires_at]
+          properties:
+            amount:
+              type: integer
+              format: uint64
+            currency:
+              type: object
+            expires_at:
+              type: integer
+              format: uint64
+            description:
+              type: string
+              nullable: true
+            refund_invoice:
+              type: string
+              nullable: true
+            request_id:
+              type: string
+              nullable: true
+
+    InvoicePaymentResponse:
+      type: object
+      properties:
+        invoice:
+          type: string
+        payment_hash:
+          type: string
+          nullable: true
+
+    PayInvoiceRequest:
+      type: object
+      required: [invoice]
+      properties:
+        invoice:
+          type: string
+          description: BOLT11 invoice string
+
+    PayInvoiceResponse:
+      type: object
+      properties:
+        preimage:
+          type: string
+        fees_paid_msat:
+          type: integer
+          format: uint64
+
+    IssueJwtRequest:
+      type: object
+      required: [target_key, duration_hours]
+      properties:
+        target_key:
+          type: string
+        duration_hours:
+          type: integer
+          format: int64
+
+    IssueJwtResponse:
+      type: object
+      properties:
+        token:
+          type: string
+
+    VerifyJwtRequest:
+      type: object
+      required: [pubkey, token]
+      properties:
+        pubkey:
+          type: string
+        token:
+          type: string
+
+    VerifyJwtResponse:
+      type: object
+      properties:
+        target_key:
+          type: string
+
+    RequestCashuRequest:
+      type: object
+      required: [recipient_key, subkeys, mint_url, unit, amount]
+      properties:
+        recipient_key:
+          type: string
+        subkeys:
+          type: array
+          items:
+            type: string
+        mint_url:
+          type: string
+        unit:
+          type: string
+        amount:
+          type: integer
+          format: uint64
+
+    MintCashuRequest:
+      type: object
+      required: [mint_url, unit, amount]
+      properties:
+        mint_url:
+          type: string
+        unit:
+          type: string
+        static_auth_token:
+          type: string
+          nullable: true
+        amount:
+          type: integer
+          format: uint64
+        description:
+          type: string
+          nullable: true
+
+    BurnCashuRequest:
+      type: object
+      required: [mint_url, unit, token]
+      properties:
+        mint_url:
+          type: string
+        unit:
+          type: string
+        static_auth_token:
+          type: string
+          nullable: true
+        token:
+          type: string
+
+    SendCashuDirectRequest:
+      type: object
+      required: [main_key, subkeys, token]
+      properties:
+        main_key:
+          type: string
+        subkeys:
+          type: array
+          items:
+            type: string
+        token:
+          type: string
+
+    RelayRequest:
+      type: object
+      required: [relay]
+      properties:
+        relay:
+          type: string
+          description: WebSocket relay URL
+
+    CalculateNextOccurrenceRequest:
+      type: object
+      required: [calendar, from]
+      properties:
+        calendar:
+          type: string
+        from:
+          type: integer
+          format: uint64
+
+    SetProfileRequest:
+      type: object
+      required: [profile]
+      properties:
+        profile:
+          type: object
+
+    WalletInfoResponse:
+      type: object
+      properties:
+        wallet_type:
+          type: string
+          enum: [none, nwc, breez]
+        balance_msat:
+          type: integer
+          format: uint64
+
+    EventsResponse:
+      type: object
+      properties:
+        stream_id:
+          type: string
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/StreamEvent'
+
+    StreamEvent:
+      type: object
+      properties:
+        index:
+          type: integer
+          format: uint64
+        timestamp:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum: [key_handshake, payment_status_update, closed_recurring_payment]
+      additionalProperties: true
+      description: |
+        Event data varies by type:
+        - key_handshake: { main_key, preferred_relays }
+        - payment_status_update: { status: { status, preimage?, reason? } }
+        - closed_recurring_payment: { reason, subscription_id, recipient, main_key }
+
+    WebhookPayload:
+      type: object
+      description: |
+        Webhook POST body. Same shape as StreamEvent but wrapped with stream_id.
+        Signed with HMAC-SHA256 if webhook_secret is configured.
+      properties:
+        stream_id:
+          type: string
+        type:
+          type: string
+      additionalProperties: true
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /version:
+    get:
+      summary: Version info
+      security: []
+      responses:
+        "200":
+          description: Version and git commit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                  git_commit:
+                    type: string
+
+  /key-handshake:
+    post:
+      summary: Create a new key handshake URL
+      description: |
+        Returns a URL for the user to scan/open for key handshake.
+        Poll GET /events/{stream_id} for handshake completion notifications.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyHandshakeRequest'
+      responses:
+        "201":
+          description: Key handshake URL created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/KeyHandshakeUrlResponse'
+
+  /authenticate-key:
+    post:
+      summary: Authenticate a key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthenticateKeyRequest'
+      responses:
+        "200":
+          description: Authentication result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/AuthKeyResponse'
+
+  /payments/single:
+    post:
+      summary: Request a single payment
+      description: |
+        Initiates a single payment request. Returns a stream_id for polling payment status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SinglePaymentRequest'
+      responses:
+        "201":
+          description: Payment initiated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/SinglePaymentResponse'
+
+  /payments/raw:
+    post:
+      summary: Request a payment with raw SinglePaymentRequestContent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [main_key, subkeys, payment_request]
+              properties:
+                main_key:
+                  type: string
+                subkeys:
+                  type: array
+                  items:
+                    type: string
+                payment_request:
+                  type: object
+                  description: Raw SinglePaymentRequestContent
+      responses:
+        "201":
+          description: Payment initiated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/SinglePaymentResponse'
+
+  /payments/recurring:
+    post:
+      summary: Request a recurring payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringPaymentRequest'
+      responses:
+        "200":
+          description: Recurring payment status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /payments/recurring/close:
+    post:
+      summary: Close a recurring payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseRecurringPaymentRequest'
+      responses:
+        "200":
+          description: Recurring payment closed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /payments/recurring/listen:
+    post:
+      summary: Start listening for closed recurring payment events
+      description: Returns a stream_id to poll for closed recurring payment notifications.
+      responses:
+        "201":
+          description: Listener created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          stream_id:
+                            type: string
+
+  /profile/{main_key}:
+    get:
+      summary: Fetch a profile by public key
+      parameters:
+        - in: path
+          name: main_key
+          required: true
+          schema:
+            type: string
+          description: Hex-encoded public key
+      responses:
+        "200":
+          description: Profile data
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /profile:
+    put:
+      summary: Set the profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetProfileRequest'
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /invoices/request:
+    post:
+      summary: Request an invoice from a recipient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestInvoiceRequest'
+      responses:
+        "200":
+          description: Invoice received
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/InvoicePaymentResponse'
+
+  /invoices/pay:
+    post:
+      summary: Pay a BOLT11 invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayInvoiceRequest'
+      responses:
+        "200":
+          description: Invoice paid
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/PayInvoiceResponse'
+
+  /jwt/issue:
+    post:
+      summary: Issue a JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueJwtRequest'
+      responses:
+        "200":
+          description: JWT issued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/IssueJwtResponse'
+
+  /jwt/verify:
+    post:
+      summary: Verify a JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyJwtRequest'
+      responses:
+        "200":
+          description: JWT verified
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/VerifyJwtResponse'
+
+  /cashu/request:
+    post:
+      summary: Request Cashu tokens from a recipient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestCashuRequest'
+      responses:
+        "200":
+          description: Cashu response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /cashu/send-direct:
+    post:
+      summary: Send Cashu tokens directly
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendCashuDirectRequest'
+      responses:
+        "200":
+          description: Cashu direct sent
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /cashu/mint:
+    post:
+      summary: Mint Cashu tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MintCashuRequest'
+      responses:
+        "200":
+          description: Cashu token minted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /cashu/burn:
+    post:
+      summary: Burn (receive) Cashu tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BurnCashuRequest'
+      responses:
+        "200":
+          description: Cashu token burned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /relays:
+    post:
+      summary: Add a relay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelayRequest'
+      responses:
+        "200":
+          description: Relay added
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+    delete:
+      summary: Remove a relay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelayRequest'
+      responses:
+        "200":
+          description: Relay removed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /calendar/next-occurrence:
+    post:
+      summary: Calculate next calendar occurrence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalculateNextOccurrenceRequest'
+      responses:
+        "200":
+          description: Next occurrence
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /nip05/{nip05}:
+    get:
+      summary: Fetch NIP-05 profile
+      parameters:
+        - in: path
+          name: nip05
+          required: true
+          schema:
+            type: string
+          description: NIP-05 identifier (e.g. user@domain.com)
+      responses:
+        "200":
+          description: NIP-05 profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /wallet/info:
+    get:
+      summary: Get wallet info
+      responses:
+        "200":
+          description: Wallet info
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/WalletInfoResponse'
+
+  /events/{stream_id}:
+    get:
+      summary: Poll events for an async operation
+      description: |
+        Returns events for a given stream. Use `after` query parameter to get only
+        new events since a given index. Clients should poll this endpoint periodically
+        to check for updates on async operations (key handshakes, payments, etc.).
+      parameters:
+        - in: path
+          name: stream_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: after
+          schema:
+            type: integer
+            format: uint64
+          description: Only return events with index greater than this value
+      responses:
+        "200":
+          description: Events list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/EventsResponse'
+        "404":
+          description: Stream not found

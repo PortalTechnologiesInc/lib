@@ -10,6 +10,8 @@ pub struct Settings {
     pub nostr: NostrSettings,
     pub auth: AuthSettings,
     pub wallet: WalletSettings,
+    #[serde(default)]
+    pub webhook: WebhookSettings,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -34,6 +36,12 @@ pub struct WalletSettings {
     pub ln_backend: LnBackend,
     pub nwc: Option<NwcSettings>,
     pub breez: Option<BreezSettings>,
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+pub struct WebhookSettings {
+    pub url: Option<String>,
+    pub secret: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

@@ -3,11 +3,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use axum::{
-    extract::{State, WebSocketUpgrade},
+    extract::State,
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::get,
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use portal::protocol::LocalKeypair;
@@ -20,8 +20,10 @@ use tracing::info;
 mod command;
 mod config;
 mod constants;
+mod events;
+mod handlers;
 mod response;
-mod ws;
+mod webhook;
 
 // Re-export the portal types that we need
 pub use portal::nostr::key::PublicKey;
@@ -66,11 +68,12 @@ impl From<ApiError> for (StatusCode, Json<ErrorResponse>) {
 }
 
 #[derive(Clone)]
-struct AppState {
+pub struct AppState {
     sdk: Arc<PortalSDK>,
     settings: config::Settings,
     wallet: Option<Arc<dyn PortalWallet>>,
     market_api: Arc<portal_rates::MarketAPI>,
+    events: events::EventStore,
 }
 
 #[derive(Serialize)]
@@ -83,12 +86,6 @@ async fn auth_middleware<B>(
     req: Request<B>,
     next: Next<B>,
 ) -> std::result::Result<Response, (StatusCode, Json<ErrorResponse>)> {
-    // Skip authentication for WebSocket upgrade requests
-    // WebSockets will handle their own authentication via the initial message
-    if req.headers().contains_key("upgrade") {
-        return Ok(next.run(req).await);
-    }
-
     let auth_header = req
         .headers()
         .get("Authorization")
@@ -108,30 +105,6 @@ async fn auth_middleware<B>(
     }
 
     Ok(next.run(req).await)
-}
-
-async fn health_check() -> &'static str {
-    "OK"
-}
-
-#[derive(Serialize)]
-struct VersionResponse {
-    version: &'static str,
-    git_commit: &'static str,
-}
-
-async fn version() -> Json<VersionResponse> {
-    Json(VersionResponse {
-        version: APP_VERSION,
-        git_commit: GIT_COMMIT,
-    })
-}
-
-async fn handle_ws_upgrade(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl axum::response::IntoResponse {
-    ws.on_upgrade(move |socket| ws::handle_socket(socket, state))
 }
 
 #[tokio::main]
@@ -154,6 +127,7 @@ async fn main() -> anyhow::Result<()> {
         listen_port = config.info.listen_port,
         wallet = format!("{:?}", config.wallet.ln_backend).to_lowercase(),
         relays = config.nostr.relays.join(","),
+        webhook_url = config.webhook.url.as_deref().unwrap_or("(none)"),
         "Config loaded",
     );
 
@@ -163,7 +137,6 @@ async fn main() -> anyhow::Result<()> {
     let keys = portal::nostr::key::Keys::from_str(&config.nostr.private_key)?;
 
     // Initialize keypair from environment
-    // LocalKeypair doesn't have from_hex, need to use the correct initialization method
     let keypair = LocalKeypair::new(
         keys,
         config
@@ -178,11 +151,13 @@ async fn main() -> anyhow::Result<()> {
     // Initialize SDK
     let sdk = PortalSDK::new(keypair, config.nostr.relays.clone()).await?;
 
-    // Initialize the wallet, based on the env variables set
-
+    // Initialize the wallet
     let wallet = config.build_wallet().await?;
 
     let listen_port = config.info.listen_port;
+
+    // Create event store (for polling + webhooks)
+    let event_store = events::EventStore::new(config.webhook.clone());
 
     // Create app state
     let state = AppState {
@@ -190,15 +165,50 @@ async fn main() -> anyhow::Result<()> {
         settings: config,
         wallet,
         market_api: portal_rates::MarketAPI::new().expect("Failed to create market API"),
+        events: event_store,
     };
 
     // Public routes (no auth): health and version for Docker/orchestrators and support.
     let public = Router::new()
-        .route("/health", get(health_check))
-        .route("/version", get(version));
+        .route("/health", get(handlers::health_check))
+        .route("/version", get(handlers::version));
 
-    let ws = Router::new()
-        .route("/ws", get(handle_ws_upgrade))
+    // Authenticated REST API routes
+    let api = Router::new()
+        // Key handshake & auth
+        .route("/key-handshake", post(handlers::new_key_handshake_url))
+        .route("/authenticate-key", post(handlers::authenticate_key))
+        // Payments
+        .route("/payments/single", post(handlers::request_single_payment))
+        .route("/payments/raw", post(handlers::request_payment_raw))
+        .route("/payments/recurring", post(handlers::request_recurring_payment))
+        .route("/payments/recurring/close", post(handlers::close_recurring_payment))
+        .route("/payments/recurring/listen", post(handlers::listen_closed_recurring_payment))
+        // Profiles
+        .route("/profile/:main_key", get(handlers::fetch_profile))
+        .route("/profile", put(handlers::set_profile))
+        // Invoices
+        .route("/invoices/request", post(handlers::request_invoice))
+        .route("/invoices/pay", post(handlers::pay_invoice))
+        // JWT
+        .route("/jwt/issue", post(handlers::issue_jwt))
+        .route("/jwt/verify", post(handlers::verify_jwt))
+        // Cashu
+        .route("/cashu/request", post(handlers::request_cashu))
+        .route("/cashu/send-direct", post(handlers::send_cashu_direct))
+        .route("/cashu/mint", post(handlers::mint_cashu))
+        .route("/cashu/burn", post(handlers::burn_cashu))
+        // Relays
+        .route("/relays", post(handlers::add_relay))
+        .route("/relays", delete(handlers::remove_relay))
+        // Calendar
+        .route("/calendar/next-occurrence", post(handlers::calculate_next_occurrence))
+        // NIP-05
+        .route("/nip05/:nip05", get(handlers::fetch_nip05_profile))
+        // Wallet
+        .route("/wallet/info", get(handlers::get_wallet_info))
+        // Event polling
+        .route("/events/:stream_id", get(handlers::get_events))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
@@ -206,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .merge(public)
-        .merge(ws)
+        .merge(api)
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
