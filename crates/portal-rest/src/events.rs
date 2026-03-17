@@ -126,7 +126,8 @@ impl EventStore {
         let db = self.db.lock().await;
         if let Err(e) = db.execute(
             "INSERT INTO streams (stream_id, stream_type, status, created_at, updated_at, metadata)
-             VALUES (?1, ?2, 'in_flight', ?3, ?3, ?4)",
+             VALUES (?1, ?2, 'in_flight', ?3, ?3, ?4)
+             ON CONFLICT(stream_id) DO UPDATE SET updated_at = ?3, status = 'in_flight'",
             rusqlite::params![stream_id, stream_type, now, meta_json],
         ) {
             error!("Failed to create stream {stream_id}: {e}");
@@ -184,8 +185,9 @@ impl EventStore {
         let settings = self.webhook_settings.clone();
         let sid = stream_id.to_string();
         let data_clone = data;
+        let ts = timestamp.clone();
         tokio::spawn(async move {
-            webhook::deliver(&settings, &sid, &data_clone).await;
+            webhook::deliver(&settings, &sid, &data_clone, index, &ts).await;
         });
 
         index
@@ -327,6 +329,11 @@ impl EventStore {
                 | InvoiceStatus::UserRejected { .. } => Some(StreamStatus::Failed),
                 InvoiceStatus::UserApproved => None,
             },
+            NotificationData::AuthenticateKey { .. } => Some(StreamStatus::Completed),
+            NotificationData::InvoiceResponse { .. } => Some(StreamStatus::Completed),
+            NotificationData::CashuResponse { .. } => Some(StreamStatus::Completed),
+            NotificationData::RecurringPaymentResponse { .. } => Some(StreamStatus::Completed),
+            NotificationData::Error { .. } => Some(StreamStatus::Failed),
             // Key handshake and recurring close events don't have a terminal state
             // they just keep streaming until the connection ends
             _ => None,

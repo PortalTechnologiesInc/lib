@@ -16,6 +16,8 @@ pub async fn deliver(
     settings: &WebhookSettings,
     stream_id: &str,
     data: &NotificationData,
+    index: u64,
+    timestamp: &str,
 ) {
     let url = match &settings.url {
         Some(u) if !u.is_empty() => u.clone(),
@@ -25,11 +27,13 @@ pub async fn deliver(
     #[derive(serde::Serialize)]
     struct Envelope<'a> {
         stream_id: &'a str,
+        index: u64,
+        timestamp: &'a str,
         #[serde(flatten)]
         data: &'a NotificationData,
     }
 
-    let envelope = Envelope { stream_id, data };
+    let envelope = Envelope { stream_id, data, index, timestamp };
     let body = match serde_json::to_string(&envelope) {
         Ok(b) => b,
         Err(e) => {

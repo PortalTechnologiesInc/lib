@@ -428,6 +428,7 @@ pub async fn request_single_payment(
                                 };
                             }
                             count += 1;
+                            #[cfg(debug_assertions)]
                             if std::env::var("FAKE_PAYMENTS").is_ok() && count > 3 {
                                 break NotificationData::PaymentStatusUpdate {
                                     status: InvoiceStatus::Paid { preimage: None },

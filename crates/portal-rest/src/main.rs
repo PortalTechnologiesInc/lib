@@ -312,7 +312,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
                 "key_handshake" | "authenticate_key" | "recurring_payment"
-                | "invoice_request" | "cashu_request" => {
+                | "invoice_request" | "cashu_request" | "raw_payment" => {
                     // These streams rely on ephemeral SDK conversation state and
                     // cannot be resumed after restart. Mark as failed.
                     warn!(

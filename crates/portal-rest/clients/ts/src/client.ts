@@ -188,10 +188,6 @@ export class PortalClient {
     return this.request<T>('POST', path, body ?? {});
   }
 
-  private put<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>('PUT', path, body);
-  }
-
   private del<T>(path: string, body: unknown): Promise<T> {
     return this.request<T>('DELETE', path, body);
   }
@@ -404,7 +400,7 @@ export class PortalClient {
     return this.get<VersionResponse>('/version');
   }
 
-  /** Get server info (public key). No auth required. */
+  /** Get server info (public key). Requires authentication. */
   public async info(): Promise<InfoResponse> {
     return this.get<InfoResponse>('/info');
   }
@@ -505,10 +501,10 @@ export class PortalClient {
       subkeys,
       payment_request: paymentRequest,
     });
-    const done = this.registerStream(resp.stream_id).then((event) => ({
-      request_id: event.request_id as string,
-      status: event.status as RecurringPaymentStatus,
-    }));
+    const done = this.registerStream(resp.stream_id).then((event) => {
+      const status = event.status as RecurringPaymentResponseContent;
+      return status;
+    });
     return { streamId: resp.stream_id, done };
   }
 

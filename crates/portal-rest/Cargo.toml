@@ -28,10 +28,8 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
-base64 = { workspace = true }
 
 console-subscriber = { workspace = true, optional = true }
-dashmap = { workspace = true }
 rusqlite = { workspace = true }
 
 chrono = { workspace = true }

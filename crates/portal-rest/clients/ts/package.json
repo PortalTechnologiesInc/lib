@@ -49,13 +49,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/PortalTechnologies/lib.git",
+    "url": "https://github.com/PortalTechnologiesInc/lib.git",
     "directory": "crates/portal-rest/clients/ts"
   },
   "bugs": {
-    "url": "https://github.com/PortalTechnologies/lib/issues"
+    "url": "https://github.com/PortalTechnologiesInc/lib/issues"
   },
-  "homepage": "https://github.com/PortalTechnologies/lib/tree/master/crates/portal-rest/clients/ts",
+  "homepage": "https://github.com/PortalTechnologiesInc/lib/tree/master/crates/portal-rest/clients/ts",
   "engines": {
     "node": ">=18.0.0"
   },
