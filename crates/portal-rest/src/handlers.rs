@@ -124,8 +124,8 @@ pub async fn health_check() -> &'static str {
     "OK"
 }
 
-pub async fn version() -> Json<VersionResponse> {
-    Json(VersionResponse {
+pub async fn version() -> (StatusCode, Json<ApiResponse<VersionResponse>>) {
+    ok(VersionResponse {
         version: crate::APP_VERSION,
         git_commit: crate::GIT_COMMIT,
     })

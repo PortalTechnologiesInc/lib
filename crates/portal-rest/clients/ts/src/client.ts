@@ -153,9 +153,9 @@ export class PortalClient {
       return (await res.text()) as unknown as T;
     }
 
-    let json: unknown;
+    let json: ApiResponse<T>;
     try {
-      json = await res.json();
+      json = await res.json() as ApiResponse<T>;
     } catch {
       throw new PortalSDKError(
         `Failed to parse JSON response (HTTP ${res.status})`,
@@ -167,32 +167,16 @@ export class PortalClient {
 
     this.debug('response', json);
 
-    // Handle both envelope ({ success, data }) and raw JSON responses.
-    // Public endpoints like /version return raw JSON without the ApiResponse wrapper.
-    const envelope = json as ApiResponse<T>;
-    if (typeof envelope === 'object' && envelope !== null && 'success' in envelope) {
-      if (!res.ok || !envelope.success) {
-        throw new PortalSDKError(
-          envelope.error ?? `HTTP ${res.status}`,
-          'API_ERROR',
-          json,
-          res.status
-        );
-      }
-      return envelope.data as T;
-    }
-
-    // Raw (non-envelope) response — just check HTTP status
-    if (!res.ok) {
+    if (!res.ok || !json.success) {
       throw new PortalSDKError(
-        `HTTP ${res.status}`,
+        json.error ?? `HTTP ${res.status}`,
         'API_ERROR',
         json,
         res.status
       );
     }
 
-    return json as T;
+    return json.data as T;
   }
 
   private get<T>(path: string): Promise<T> {
