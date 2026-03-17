@@ -89,7 +89,7 @@ async function main() {
     console.log('\n=== JWT ===');
     const token = await portal.issueJwt(main_key, 1);
     console.log('JWT:', token.substring(0, 40) + '...');
-    const claims = await portal.verifyJwt(main_key, token);
+    const claims = await portal.verifyJwt(serverInfo.public_key, token);
     console.log('Verified target_key:', claims.target_key);
 
     console.log('\n=== Relay Management ===');
