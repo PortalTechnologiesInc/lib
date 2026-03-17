@@ -12,6 +12,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### [0.4.0] - 2026-03-17
+
+#### Changed
+- **WebSocket → REST**: All endpoints are now standard HTTP (POST/GET/PUT/DELETE); WebSocket API removed
+- Async operations (key handshake, payments, invoices, cashu) now return `stream_id` immediately; events are delivered via webhooks or polling (`GET /events/:stream_id`)
+- `GET /version` response now wrapped in standard `ApiResponse` envelope
+- Profile is now set via `[profile]` config / env vars at startup; `SetProfile` command removed
+- `FAKE_PAYMENTS` feature gated behind `#[cfg(debug_assertions)]`
+
+#### Added
+- **Webhook delivery**: HMAC-SHA256 signed POST to configured URL on every stream event
+- **SQLite event persistence**: Events stored with startup recovery for in-flight streams
+- `GET /info`: New authenticated endpoint returning server public key
+- **TypeScript SDK**: `autoPollingIntervalMs` config option starts a background scheduler that resolves `done` promises automatically; `poll(op)` now typed — takes `AsyncOperation<T>`, returns `T`
+- **Java SDK** (`portal-java-sdk`): Full rewrite from WebSocket to REST; `PortalClient` with `PortalClientConfig` supporting manual polling, auto-polling, and webhooks; all async methods return typed `AsyncOperation<T>`
+
+#### Removed
+- WebSocket API (`/ws` endpoint)
+- `SetProfile` / `ListenClosedRecurringPayment` commands
+
+---
+
 ### [0.3.0] - 2026-02-26
 
 #### Changed
