@@ -14,7 +14,7 @@ Users interact through the Portal mobile app using their Nostr identity. You run
 ## How it works
 
 ```
-Your backend  ←—WebSocket—→  sdk-daemon  ←—Nostr relays—→  Portal app (user's phone)
+Your backend  ←—REST API—→  sdk-daemon  ←—Nostr relays—→  Portal app (user's phone)
 ```
 
 1. Your backend asks sdk-daemon for a handshake URL → show it as a QR code
@@ -31,7 +31,7 @@ Your backend  ←—WebSocket—→  sdk-daemon  ←—Nostr relays—→  Porta
 docker run -d -p 3000:3000 \
   -e PORTAL__AUTH__AUTH_TOKEN=your-secret-token \
   -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
-  getportal/sdk-daemon:0.3.0
+  getportal/sdk-daemon:0.4.0
 ```
 
 **2. Install the SDK**
@@ -40,24 +40,58 @@ docker run -d -p 3000:3000 \
 npm install portal-sdk          # TypeScript / JavaScript
 ```
 
-```groovy
-// Java (Gradle) — via JitPack
-implementation 'com.github.PortalTechnologiesInc:java-sdk:0.3.0'
+```kotlin
+// Java/Kotlin (Gradle) — via JitPack
+implementation("com.github.PortalTechnologiesInc:java-sdk:0.4.0")
 ```
 
 **3. Connect and authenticate a user**
 
 ```typescript
-import { PortalSDK } from 'portal-sdk';
+import { PortalClient } from 'portal-sdk';
 
-const client = new PortalSDK({ serverUrl: 'ws://localhost:3000/ws' });
-await client.connect();
-await client.authenticate('your-secret-token');
-
-const url = await client.newKeyHandshakeUrl((userKey) => {
-  console.log('User authenticated:', userKey);
+// Auto-polling: background interval resolves done automatically
+const client = new PortalClient({
+  baseUrl: 'http://localhost:3000',
+  authToken: 'your-secret-token',
+  autoPollingIntervalMs: 500,
 });
-// Show `url` as a QR code to the user
+
+const handshake = await client.newKeyHandshakeUrl();
+// Show handshake.url as a QR code to the user
+
+const { main_key } = await handshake.done; // resolves when user scans
+console.log('User authenticated:', main_key);
+```
+
+---
+
+## Async operations
+
+All async methods return `AsyncOperation<T>` with a `streamId` (available immediately)
+and a `done` promise/future that resolves with the typed result when the operation completes.
+
+Three ways to receive results — choose based on your environment:
+
+| Mode | How | Best for |
+|------|-----|----------|
+| **Manual polling** | call `poll(op)` / `pollUntilComplete(op, opts)` | scripts, CLIs, simple servers |
+| **Auto-polling** | set `autoPollingIntervalMs` in config | servers without inbound HTTP |
+| **Webhooks** | mount `webhookHandler()` / call `deliverWebhookPayload()` | production servers |
+
+```typescript
+// Manual polling
+const op = await client.requestSinglePayment(mainKey, [], content);
+const result = await client.poll(op, { timeoutMs: 60_000 });
+
+// Auto-polling (background timer)
+const op = await client.requestSinglePayment(mainKey, [], content);
+const result = await op.done;
+
+// Webhooks
+app.post('/portal/webhook', client.webhookHandler());
+const op = await client.requestSinglePayment(mainKey, [], content);
+const result = await op.done;
 ```
 
 ---
@@ -66,9 +100,9 @@ const url = await client.newKeyHandshakeUrl((userKey) => {
 
 | SDK | Version | Install |
 |-----|---------|---------|
-| TypeScript / JavaScript | `0.3.0` | `npm install portal-sdk` |
-| Java | `0.3.0` | [JitPack](https://jitpack.io/#PortalTechnologiesInc/java-sdk) |
-| Docker image | `0.3.0` | `docker pull getportal/sdk-daemon:0.3.0` |
+| TypeScript / JavaScript | `0.4.0` | `npm install portal-sdk` |
+| Java | `0.4.0` | [JitPack](https://jitpack.io/#PortalTechnologiesInc/java-sdk) |
+| Docker image | `0.4.0` | `docker pull getportal/sdk-daemon:0.4.0` |
 
 The SDK `major.minor` version must match the daemon. Patch versions are independent. See [Versioning & Compatibility](https://portaltechnologiesinc.github.io/lib/getting-started/versioning.html).
 
@@ -88,7 +122,7 @@ The SDK `major.minor` version must match the daemon. Patch versions are independ
 
 | Package | Description |
 |---------|-------------|
-| `portal-rest` | SDK Daemon — HTTP + WebSocket API server |
+| `portal-rest` | SDK Daemon — REST API server |
 | `portal` | Core Nostr protocol and conversation logic |
 | `portal-app` | App runtime and wallet integration |
 | `portal-wallet` | Wallet backends (NWC, Breez) |
