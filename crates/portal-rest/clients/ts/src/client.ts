@@ -25,6 +25,7 @@ import {
   WalletInfoResponse,
   VersionResponse,
   InfoResponse,
+  Nip05WellKnownResponse,
   Nip05Profile,
   StreamEvent,
   EventsResponse,
@@ -403,6 +404,15 @@ export class PortalClient {
   /** Get server info (public key). Requires authentication. */
   public async info(): Promise<InfoResponse> {
     return this.get<InfoResponse>('/info');
+  }
+
+  /**
+   * Get the content for `~/.well-known/nostr.json` (NIP-05 verification).
+   * Uses the server's public key, configured relays, and profile name.
+   * Requires authentication.
+   */
+  public async wellKnownNostrJson(): Promise<Nip05WellKnownResponse> {
+    return this.get<Nip05WellKnownResponse>('/well-known/nostr.json');
   }
 
   // ---- Key Handshake ----

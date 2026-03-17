@@ -134,6 +134,14 @@ pub struct InfoResponse {
     pub public_key: String,
 }
 
+/// NIP-05 `.well-known/nostr.json` content.
+#[derive(Debug, Serialize)]
+pub struct Nip05WellKnownResponse {
+    pub names: std::collections::HashMap<String, String>,
+    #[serde(skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub relays: std::collections::HashMap<String, Vec<String>>,
+}
+
 // ---- Event / notification types (stored for polling, sent via webhook) ----
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

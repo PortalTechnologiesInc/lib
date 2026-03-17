@@ -398,6 +398,7 @@ async fn main() -> anyhow::Result<()> {
     // Authenticated REST API routes
     let api = Router::new()
         .route("/info", get(handlers::info))
+        .route("/well-known/nostr.json", get(handlers::well_known_nostr_json))
         // Key handshake & auth
         .route("/key-handshake", post(handlers::new_key_handshake_url))
         .route("/authenticate-key", post(handlers::authenticate_key))

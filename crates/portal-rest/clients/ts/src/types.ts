@@ -349,6 +349,11 @@ export interface InfoResponse {
   public_key: string;
 }
 
+export interface Nip05WellKnownResponse {
+  names: Record<string, string>;
+  relays?: Record<string, string[]>;
+}
+
 // ---- Events / Streaming ----
 
 export interface StreamEvent {

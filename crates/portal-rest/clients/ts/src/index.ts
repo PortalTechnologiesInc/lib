@@ -75,6 +75,7 @@ export {
   // Version / Info
   VersionResponse,
   InfoResponse,
+  Nip05WellKnownResponse,
 
   // Events / Polling
   StreamEvent,

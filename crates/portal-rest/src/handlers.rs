@@ -139,6 +139,31 @@ pub async fn info(
     }))
 }
 
+// GET /well-known/nostr.json
+pub async fn well_known_nostr_json(
+    State(state): State<AppState>,
+) -> ApiResult<Nip05WellKnownResponse> {
+    let name = state
+        .settings
+        .profile
+        .name
+        .clone()
+        .unwrap_or_else(|| "_".to_string());
+
+    let mut names = std::collections::HashMap::new();
+    names.insert(name, state.public_key.clone());
+
+    let mut relays = std::collections::HashMap::new();
+    if !state.settings.nostr.relays.is_empty() {
+        relays.insert(
+            state.public_key.clone(),
+            state.settings.nostr.relays.clone(),
+        );
+    }
+
+    Ok(ok(Nip05WellKnownResponse { names, relays }))
+}
+
 // POST /key-handshake
 pub async fn new_key_handshake_url(
     State(state): State<AppState>,
