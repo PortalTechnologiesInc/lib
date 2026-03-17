@@ -73,33 +73,9 @@
           src = ./crates/portal-rest/clients/ts;
           npmDepsHash = "sha256-UdI9Qp/E7+FCBuPa6viUxqEaJ27ZOGaBW7Wgfij2zH4=";
         };
-        backend = pkgs.buildNpmPackage {
-          name = "portal-backend";
-          version = (builtins.fromJSON (builtins.readFile ./backend/package.json)).version;
-          src = ./backend;
-          npmDepsHash = "sha256-tUGd0fSl4H3lmSC2eMy8wtvgQa9/y8h+m4SI7zORRTk=";
-          buildInputs = [ pkgs.sqlite ];
-          preBuild = ''
-            # Remove symlink to non-existent "../crates/portal-rest/clients/ts"
-            rm -rf ./node_modules/portal-sdk
-            # Copy the dependency
-            cp -R ${tsClient}/lib/node_modules/portal-sdk ./node_modules/
-          '';
-          postInstall = ''
-            # Remove danlging symlink to non-existent path
-            rm -rf $out/lib/node_modules/portal-backend/node_modules/portal-sdk
-            # Copy again the dependency ??
-            cp -R ${tsClient}/lib/node_modules/portal-sdk $out/lib/node_modules/portal-backend/node_modules/portal-sdk
-
-            cp -Rv ./public $out/
-          '';
-          meta.mainProgram = "portal-backend";
-        };
       in
       {
         packages = rec {
-          inherit backend;
-
           rest = rest' rustPlatform;
           # Static binary for Docker: overlay Rust 1.90 + musl stdenv + static openssl
           rest-static = rest' staticRustPlatform;
@@ -164,15 +140,11 @@
 
         checks = {
           vm-test = pkgs.nixosTest {
-            name = "portal-backend-vm-test";
+            name = "portal-rest-vm-test";
 
             nodes.machine = { config, pkgs, lib, ... }: {
               imports = [ self.nixosModules.default ];
 
-              services.portal-backend = {
-                enable = true;
-                authToken = "vm-test-token";
-              };
               services.portal-rest = {
                 nostrKey = "nsec1rzl9z80dnn78zcv7p9t74sqss6xdvvg0dj0ef3wcmuy2lx3sh25qcmykwf";
                 rustLog = "portal=trace,rest=trace,info";
@@ -182,32 +154,33 @@
             testScript = ''
               machine.start()
               machine.wait_for_unit("portal-rest.service")
-              machine.wait_for_unit("portal-backend.service")
 
               # Wait a bit more for the service to fully start
               machine.sleep(5)
 
               # Test the health check endpoint
-              machine.succeed("curl -f http://localhost:8000")
+              machine.succeed("curl -f http://localhost:3000/health")
 
-              print("✅ Portal backend is running!")
+              # Test the version endpoint returns JSON with version
+              result = machine.succeed("curl -f http://localhost:3000/version")
+              assert "version" in result, f"Expected 'version' in response, got: {result}"
+
+              print("✅ Portal REST API is running!")
             '';
           };
         };
       }
     ) // {
         overlays.default = final: prev: {
-          portal-backend = self.packages.${prev.stdenv.hostPlatform.system}.backend;
           portal-rest = self.packages.${prev.stdenv.hostPlatform.system}.rest;
         };
 
         nixosModules = {
           default = { ... }: {
-            imports = [ self.nixosModules.portal-rest self.nixosModules.portal-backend ];
+            imports = [ self.nixosModules.portal-rest ];
             nixpkgs.overlays = [ self.overlays.default ];
           };
           portal-rest = ./crates/portal-rest/module.nix;
-          portal-backend = ./backend/module.nix;
         };
     };
 }
