@@ -45,16 +45,15 @@ npm install portal-sdk          # TypeScript / JavaScript
 implementation("com.github.PortalTechnologiesInc:java-sdk:0.4.0")
 ```
 
-**3. Connect and authenticate a user**
+**3. Authenticate a user**
 
 ```typescript
 import { PortalClient } from 'portal-sdk';
 
-// Auto-polling: background interval resolves done automatically
 const client = new PortalClient({
   baseUrl: 'http://localhost:3000',
   authToken: 'your-secret-token',
-  autoPollingIntervalMs: 500,
+  webhookSecret: 'your-webhook-secret', // or use autoPollingIntervalMs for polling
 });
 
 const handshake = await client.newKeyHandshakeUrl();
@@ -64,35 +63,9 @@ const { main_key } = await handshake.done; // resolves when user scans
 console.log('User authenticated:', main_key);
 ```
 
----
-
-## Async operations
-
-All async methods return `AsyncOperation<T>` with a `streamId` (available immediately)
-and a `done` promise/future that resolves with the typed result when the operation completes.
-
-Three ways to receive results — choose based on your environment:
-
-| Mode | How | Best for |
-|------|-----|----------|
-| **Manual polling** | call `poll(op)` / `pollUntilComplete(op, opts)` | scripts, CLIs, simple servers |
-| **Auto-polling** | set `autoPollingIntervalMs` in config | servers without inbound HTTP |
-| **Webhooks** | mount `webhookHandler()` / call `deliverWebhookPayload()` | production servers |
-
-```typescript
-// Manual polling
-const op = await client.requestSinglePayment(mainKey, [], content);
-const result = await client.poll(op, { timeoutMs: 60_000 });
-
-// Auto-polling (background timer)
-const op = await client.requestSinglePayment(mainKey, [], content);
-const result = await op.done;
-
-// Webhooks
-app.post('/portal/webhook', client.webhookHandler());
-const op = await client.requestSinglePayment(mainKey, [], content);
-const result = await op.done;
-```
+Async operations return `AsyncOperation<T>` immediately — `streamId` is available right away,
+`done` resolves with the typed result. Results can be delivered via **webhooks**,
+**auto-polling** (background timer), or **manual polling**. See the [SDK README](crates/portal-rest/clients/ts/README.md) for details.
 
 ---
 
