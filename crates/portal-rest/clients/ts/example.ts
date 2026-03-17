@@ -106,22 +106,7 @@ async function main() {
     const profile = await portal.fetchProfile(main_key);
     console.log('Profile:', profile);
 
-    // ---- 7. Request Invoice ----
-    console.log('\n=== Request Invoice ===');
-    try {
-      const invoiceOp = await portal.requestInvoice(main_key, [], {
-        amount: 599,
-        currency: 'EUR',
-        expires_at: Timestamp.fromNow(3600),
-        description: 'Test invoice',
-      });
-      console.log('Invoice stream ID:', invoiceOp.streamId);
-      const invoiceResult = await invoiceOp.done;
-      console.log('Invoice:', invoiceResult.invoice);
-    } catch (e) {
-      console.log('Invoice request failed (expected if no recipient app running):', e);
-    }
-
+    
     console.log('\nAll done! Pending streams:', portal.pendingCount);
   } finally {
     server.close();
