@@ -51,8 +51,18 @@ export interface ClientConfig {
   baseUrl: string;
   /** Bearer token for authentication. */
   authToken?: string;
-  /** Shared secret for verifying X-Portal-Signature HMAC-SHA256 webhook signatures. */
+  /**
+   * Shared secret for verifying X-Portal-Signature HMAC-SHA256 webhook signatures.
+   * Required when using `webhookHandler()`.
+   */
   webhookSecret?: string;
+  /**
+   * Enable automatic background polling. When set, the client starts an interval
+   * that polls all active streams and resolves their `done` promises automatically.
+   * Use `done` on the returned `AsyncOperation` instead of calling `poll()` manually.
+   * Call `destroy()` to stop the scheduler when done.
+   */
+  autoPollingIntervalMs?: number;
   /** Enable debug logging to console. Default false. */
   debug?: boolean;
 }
@@ -72,7 +82,7 @@ export interface PollOptions {
   intervalMs?: number;
   /** Maximum time to poll before giving up, in milliseconds. Default: no timeout. */
   timeoutMs?: number;
-  /** Called for each event received while polling. */
+  /** Called for each intermediate event received while polling. */
   onEvent?: (event: StreamEvent) => void;
 }
 

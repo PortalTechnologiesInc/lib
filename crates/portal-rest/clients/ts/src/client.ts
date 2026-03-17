@@ -75,24 +75,67 @@ interface PendingStream {
 /**
  * Portal REST API client (server-side, Node.js 18+).
  *
- * Primary async notification path: **webhooks**.
- * Mount `webhookHandler()` in your HTTP server to receive events.
- * A `poll()` fallback is available for environments without inbound HTTP.
+ * Configure via `ClientConfig`:
+ * - **Manual polling** — call `poll(op)` yourself (default, no background timers)
+ * - **Auto-polling** — set `autoPollingIntervalMs`, use `op.done` directly
+ * - **Webhooks** — set `webhookSecret`, mount `webhookHandler()`, use `op.done`
+ *
+ * Call `destroy()` to stop the auto-polling timer when done.
  */
 export class PortalClient {
   private baseUrl: string;
   private authToken?: string;
   private webhookSecret?: string;
   private debugEnabled: boolean;
+  private pollingTimer?: ReturnType<typeof setInterval>;
 
   /** Pending async operations keyed by stream_id. */
   private pending = new Map<string, PendingStream>();
+  /** Last seen event index per stream (used by auto-poller). */
+  private lastIndex = new Map<string, number>();
 
   constructor(config: ClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
     this.authToken = config.authToken;
     this.webhookSecret = config.webhookSecret;
     this.debugEnabled = config.debug ?? false;
+
+    if (config.autoPollingIntervalMs) {
+      this.startAutoPoller(config.autoPollingIntervalMs);
+    }
+  }
+
+  /**
+   * Stop the auto-polling scheduler (if started via `autoPollingIntervalMs`).
+   * Call this when you are done using the client.
+   */
+  public destroy(): void {
+    if (this.pollingTimer !== undefined) {
+      clearInterval(this.pollingTimer);
+      this.pollingTimer = undefined;
+    }
+  }
+
+  private startAutoPoller(intervalMs: number): void {
+    this.pollingTimer = setInterval(async () => {
+      for (const [streamId] of this.pending) {
+        try {
+          const after = this.lastIndex.get(streamId);
+          const response = await this.getEvents(streamId, after);
+          for (const event of response.events) {
+            this.lastIndex.set(streamId, event.index);
+            this.deliverEvent(streamId, event);
+            if (isTerminalEvent(event)) {
+              this.lastIndex.delete(streamId);
+              break;
+            }
+          }
+        } catch (err) {
+          this.debug(`auto-poll error for stream ${streamId}:`, err);
+        }
+      }
+    }, intervalMs);
+    this.debug(`auto-polling started (interval=${intervalMs}ms)`);
   }
 
   /** Update the auth token after construction. */
@@ -350,13 +393,12 @@ export class PortalClient {
   // ========================================================================
 
   /**
-   * Poll `GET /events/{stream_id}` until a terminal event arrives.
-   * Use this as a **fallback** when webhooks are not available.
+   * Manually poll until the operation resolves. Blocks until a terminal event arrives.
    *
-   * If a pending stream is registered (from an async operation), the terminal
-   * event also resolves that pending promise.
+   * Use this when auto-polling is not configured and you don't have an inbound HTTP server
+   * for webhooks. If `autoPollingIntervalMs` is set in config, use `op.done` instead.
    */
-  public async poll(streamId: string, options?: PollOptions): Promise<StreamEvent> {
+  public async poll<T>(operation: AsyncOperation<T>, options?: PollOptions): Promise<T> {
     const intervalMs = options?.intervalMs ?? 1000;
     const timeoutMs = options?.timeoutMs;
     const onEvent = options?.onEvent;
@@ -369,15 +411,14 @@ export class PortalClient {
         throw new PortalSDKError('Polling timed out', 'POLL_TIMEOUT');
       }
 
-      const response = await this.getEvents(streamId, lastIndex);
+      const response = await this.getEvents(operation.streamId, lastIndex);
 
       for (const event of response.events) {
         lastIndex = event.index;
         onEvent?.(event);
-        // Also deliver to pending stream if registered
-        this.deliverEvent(streamId, event);
+        this.deliverEvent(operation.streamId, event);
         if (isTerminalEvent(event)) {
-          return event;
+          return operation.done;
         }
       }
 
