@@ -41,6 +41,7 @@ dirs = { workspace = true }
 config = { workspace = true }
 lightning-invoice = { workspace = true }
 reqwest = { workspace = true }
+subtle = "2"
 hmac = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }

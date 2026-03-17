@@ -101,7 +101,10 @@ async fn auth_middleware<B>(
         },
     )?;
 
-    if token != state.settings.auth.auth_token {
+    // Constant-time comparison to prevent timing attacks
+    use subtle::ConstantTimeEq;
+    let valid = token.as_bytes().ct_eq(state.settings.auth.auth_token.as_bytes());
+    if !bool::from(valid) {
         return Err(ApiError::AuthenticationError("Invalid token".to_string()).into());
     }
 

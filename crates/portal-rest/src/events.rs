@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use reqwest::Client;
 use rusqlite::Connection;
 use tokio::sync::Mutex;
 use tracing::{error, info};
@@ -74,6 +75,7 @@ pub struct InFlightStream {
 pub struct EventStore {
     db: Arc<Mutex<Connection>>,
     webhook_settings: WebhookSettings,
+    http_client: Client,
 }
 
 impl EventStore {
@@ -111,6 +113,7 @@ impl EventStore {
         Ok(Self {
             db: Arc::new(Mutex::new(conn)),
             webhook_settings,
+            http_client: Client::new(),
         })
     }
 
@@ -183,11 +186,12 @@ impl EventStore {
 
         // Fire-and-forget webhook delivery
         let settings = self.webhook_settings.clone();
+        let http_client = self.http_client.clone();
         let sid = stream_id.to_string();
         let data_clone = data;
         let ts = timestamp.clone();
         tokio::spawn(async move {
-            webhook::deliver(&settings, &sid, &data_clone, index, &ts).await;
+            webhook::deliver(&http_client, &settings, &sid, &data_clone, index, &ts).await;
         });
 
         index

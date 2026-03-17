@@ -1,4 +1,5 @@
 use hmac::{Hmac, Mac};
+use reqwest::Client;
 use sha2::Sha256;
 use tracing::{debug, error};
 
@@ -12,7 +13,10 @@ type HmacSha256 = Hmac<Sha256>;
 /// The payload is JSON-serialised `NotificationData` wrapped in an envelope with the `stream_id`.
 /// If a `webhook_secret` is configured, the raw JSON body is signed with HMAC-SHA256 and the
 /// hex-encoded signature is sent in the `X-Portal-Signature` header.
+///
+/// The `client` should be a shared `reqwest::Client` — do not create one per call.
 pub async fn deliver(
+    client: &Client,
     settings: &WebhookSettings,
     stream_id: &str,
     data: &NotificationData,
@@ -42,7 +46,6 @@ pub async fn deliver(
         }
     };
 
-    let client = reqwest::Client::new();
     let mut req = client
         .post(&url)
         .header("Content-Type", "application/json");

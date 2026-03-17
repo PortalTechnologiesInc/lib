@@ -144,11 +144,6 @@ impl Settings {
             .build()?
             .try_deserialize()?;
 
-        // Allow DATABASE_PATH env var to override database.path
-        if let Ok(db_path) = std::env::var("DATABASE_PATH") {
-            settings.database.path = db_path;
-        }
-
         Ok(settings)
     }
 
