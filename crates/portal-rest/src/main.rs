@@ -308,12 +308,13 @@ async fn main() -> anyhow::Result<()> {
                             .await;
                     }
                 }
-                "key_handshake" => {
-                    // Key handshake streams cannot be resumed after restart — the notification
-                    // stream from the SDK is ephemeral. Mark as failed.
+                "key_handshake" | "authenticate_key" | "recurring_payment"
+                | "invoice_request" | "cashu_request" => {
+                    // These streams rely on ephemeral SDK conversation state and
+                    // cannot be resumed after restart. Mark as failed.
                     warn!(
-                        "Cannot recover key_handshake stream {} — marking as failed",
-                        stream.stream_id
+                        "Cannot recover {} stream {} — marking as failed",
+                        stream.stream_type, stream.stream_id
                     );
                     state
                         .events

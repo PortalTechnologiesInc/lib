@@ -199,31 +199,55 @@ pub async fn new_key_handshake_url(
 pub async fn authenticate_key(
     State(state): State<AppState>,
     Json(req): Json<AuthenticateKeyRequest>,
-) -> ApiResult<AuthKeyResponse> {
+) -> ApiResult<StreamResponse> {
     let main_key = hex_to_pubkey(&req.main_key).map_err(|e| bad_request(format!("Invalid main key: {e}")))?;
     let subkeys = parse_subkeys(&req.subkeys).map_err(|e| bad_request(format!("Invalid subkeys: {e}")))?;
 
-    let event = state
-        .sdk
-        .authenticate_key(main_key, subkeys)
-        .await
-        .map_err(|e| internal_error(format!("Failed to authenticate key: {e}")))?;
+    let stream_id = Uuid::new_v4().to_string();
+    state
+        .events
+        .create_stream(&stream_id, "authenticate_key", None)
+        .await;
 
-    Ok(ok(AuthKeyResponse {
-        event: AuthResponseData {
-            user_key: event.user_key.to_string(),
-            recipient: event.recipient.to_string(),
-            challenge: event.challenge,
-            status: event.status,
-        },
-    }))
+    let sdk = state.sdk.clone();
+    let events = state.events.clone();
+    let sid = stream_id.clone();
+    tokio::spawn(async move {
+        match sdk.authenticate_key(main_key, subkeys).await {
+            Ok(event) => {
+                events
+                    .push(
+                        &sid,
+                        NotificationData::AuthenticateKey {
+                            user_key: event.user_key.to_string(),
+                            recipient: event.recipient.to_string(),
+                            challenge: event.challenge,
+                            status: event.status,
+                        },
+                    )
+                    .await;
+            }
+            Err(e) => {
+                events
+                    .push(
+                        &sid,
+                        NotificationData::Error {
+                            reason: format!("Failed to authenticate key: {e}"),
+                        },
+                    )
+                    .await;
+            }
+        }
+    });
+
+    Ok(created(StreamResponse { stream_id }))
 }
 
 // POST /payments/recurring
 pub async fn request_recurring_payment(
     State(state): State<AppState>,
     Json(req): Json<RequestRecurringPaymentRequest>,
-) -> ApiResult<RecurringPaymentResponse> {
+) -> ApiResult<StreamResponse> {
     let main_key = hex_to_pubkey(&req.main_key).map_err(|e| bad_request(format!("Invalid main key: {e}")))?;
     let subkeys = parse_subkeys(&req.subkeys).map_err(|e| bad_request(format!("Invalid subkeys: {e}")))?;
 
@@ -246,13 +270,42 @@ pub async fn request_recurring_payment(
         current_exchange_rate,
     };
 
-    let status = state
-        .sdk
-        .request_recurring_payment(main_key, subkeys, payment_request)
-        .await
-        .map_err(|e| internal_error(format!("Failed to request recurring payment: {e}")))?;
+    let stream_id = Uuid::new_v4().to_string();
+    state
+        .events
+        .create_stream(&stream_id, "recurring_payment", None)
+        .await;
 
-    Ok(ok(RecurringPaymentResponse { status }))
+    let sdk = state.sdk.clone();
+    let events = state.events.clone();
+    let sid = stream_id.clone();
+    tokio::spawn(async move {
+        match sdk
+            .request_recurring_payment(main_key, subkeys, payment_request)
+            .await
+        {
+            Ok(status) => {
+                events
+                    .push(
+                        &sid,
+                        NotificationData::RecurringPaymentResponse { status },
+                    )
+                    .await;
+            }
+            Err(e) => {
+                events
+                    .push(
+                        &sid,
+                        NotificationData::Error {
+                            reason: format!("Failed to request recurring payment: {e}"),
+                        },
+                    )
+                    .await;
+            }
+        }
+    });
+
+    Ok(created(StreamResponse { stream_id }))
 }
 
 // POST /payments/single
@@ -497,12 +550,13 @@ pub async fn close_recurring_payment(
 pub async fn request_invoice(
     State(state): State<AppState>,
     Json(req): Json<RequestInvoiceRequest>,
-) -> ApiResult<InvoicePaymentResponse> {
+) -> ApiResult<StreamResponse> {
     let recipient_key = hex_to_pubkey(&req.recipient_key).map_err(|e| bad_request(format!("Invalid recipient key: {e}")))?;
     let subkeys = parse_subkeys(&req.subkeys).map_err(|e| bad_request(format!("Invalid subkeys: {e}")))?;
 
     let request_id = req.content.request_id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
 
+    // Resolve amount/exchange rate synchronously — errors returned as 400
     let (expected_amount_msat, current_exchange_rate) = resolve_amount_and_exchange_rate(
         req.content.amount,
         &req.content.currency,
@@ -521,37 +575,98 @@ pub async fn request_invoice(
         refund_invoice: req.content.refund_invoice.clone(),
     };
 
-    let invoice_response = state
-        .sdk
-        .request_invoice(recipient_key.into(), subkeys, sdk_content)
-        .await
-        .map_err(|e| internal_error(format!("Failed to request invoice: {e}")))?;
+    let stream_id = Uuid::new_v4().to_string();
+    state
+        .events
+        .create_stream(&stream_id, "invoice_request", None)
+        .await;
 
-    match invoice_response {
-        Some(resp) => {
-            // Validate amount
-            let invoice_amount_msat = match extract_invoice_amount_msat(&resp.invoice) {
-                Ok(Some(amt)) => amt,
-                Ok(None) => return Err(bad_request("Invoice has no amount (zero-amount invoice not allowed)")),
-                Err(e) => return Err(bad_request(format!("Invalid invoice: {e}"))),
-            };
+    let sdk = state.sdk.clone();
+    let events = state.events.clone();
+    let sid = stream_id.clone();
+    tokio::spawn(async move {
+        match sdk
+            .request_invoice(recipient_key.into(), subkeys, sdk_content)
+            .await
+        {
+            Ok(Some(resp)) => {
+                // Validate amount
+                let invoice_amount_msat = match extract_invoice_amount_msat(&resp.invoice) {
+                    Ok(Some(amt)) => amt,
+                    Ok(None) => {
+                        events
+                            .push(
+                                &sid,
+                                NotificationData::Error {
+                                    reason: "Invoice has no amount (zero-amount invoice not allowed)".to_string(),
+                                },
+                            )
+                            .await;
+                        return;
+                    }
+                    Err(e) => {
+                        events
+                            .push(
+                                &sid,
+                                NotificationData::Error {
+                                    reason: format!("Invalid invoice: {e}"),
+                                },
+                            )
+                            .await;
+                        return;
+                    }
+                };
 
-            let amount_diff = (invoice_amount_msat as i128 - expected_amount_msat as i128).abs();
-            if amount_diff > 1 {
-                return Err(bad_request(format!(
-                    "Invoice amount mismatch: got {invoice_amount_msat} msat, expected {expected_amount_msat} msat (diff: {amount_diff} msat)"
-                )));
+                let amount_diff =
+                    (invoice_amount_msat as i128 - expected_amount_msat as i128).abs();
+                if amount_diff > 1 {
+                    events
+                        .push(
+                            &sid,
+                            NotificationData::Error {
+                                reason: format!(
+                                    "Invoice amount mismatch: got {invoice_amount_msat} msat, expected {expected_amount_msat} msat (diff: {amount_diff} msat)"
+                                ),
+                            },
+                        )
+                        .await;
+                    return;
+                }
+
+                events
+                    .push(
+                        &sid,
+                        NotificationData::InvoiceResponse {
+                            invoice: resp.invoice,
+                            payment_hash: resp.payment_hash.unwrap_or_default(),
+                        },
+                    )
+                    .await;
             }
-
-            Ok(ok(InvoicePaymentResponse {
-                invoice: resp.invoice,
-                payment_hash: resp.payment_hash,
-            }))
+            Ok(None) => {
+                events
+                    .push(
+                        &sid,
+                        NotificationData::Error {
+                            reason: "Recipient did not reply with an invoice".to_string(),
+                        },
+                    )
+                    .await;
+            }
+            Err(e) => {
+                events
+                    .push(
+                        &sid,
+                        NotificationData::Error {
+                            reason: format!("Failed to request invoice: {e}"),
+                        },
+                    )
+                    .await;
+            }
         }
-        None => Err(bad_request(format!(
-            "Recipient '{recipient_key:?}' did not reply with an invoice"
-        ))),
-    }
+    });
+
+    Ok(created(StreamResponse { stream_id }))
 }
 
 // POST /jwt/issue
@@ -590,7 +705,7 @@ pub async fn verify_jwt(
 pub async fn request_cashu(
     State(state): State<AppState>,
     Json(req): Json<RequestCashuRequest>,
-) -> ApiResult<CashuResponse> {
+) -> ApiResult<StreamResponse> {
     let recipient_key = hex_to_pubkey(&req.recipient_key).map_err(|e| bad_request(format!("Invalid recipient key: {e}")))?;
     let subkeys = parse_subkeys(&req.subkeys).map_err(|e| bad_request(format!("Invalid subkeys: {e}")))?;
 
@@ -603,16 +718,46 @@ pub async fn request_cashu(
         expires_at,
     };
 
-    let response = state
-        .sdk
-        .request_cashu(recipient_key, subkeys, content)
-        .await
-        .map_err(|e| internal_error(format!("Failed to request cashu: {e}")))?;
+    let stream_id = Uuid::new_v4().to_string();
+    state
+        .events
+        .create_stream(&stream_id, "cashu_request", None)
+        .await;
 
-    match response {
-        Some(r) => Ok(ok(CashuResponse { status: r.status })),
-        None => Err(bad_request("No response from recipient")),
-    }
+    let sdk = state.sdk.clone();
+    let events = state.events.clone();
+    let sid = stream_id.clone();
+    tokio::spawn(async move {
+        match sdk.request_cashu(recipient_key, subkeys, content).await {
+            Ok(Some(r)) => {
+                events
+                    .push(&sid, NotificationData::CashuResponse { status: r.status })
+                    .await;
+            }
+            Ok(None) => {
+                events
+                    .push(
+                        &sid,
+                        NotificationData::Error {
+                            reason: "No response from recipient".to_string(),
+                        },
+                    )
+                    .await;
+            }
+            Err(e) => {
+                events
+                    .push(
+                        &sid,
+                        NotificationData::Error {
+                            reason: format!("Failed to request cashu: {e}"),
+                        },
+                    )
+                    .await;
+            }
+        }
+    });
+
+    Ok(created(StreamResponse { stream_id }))
 }
 
 // POST /cashu/send-direct

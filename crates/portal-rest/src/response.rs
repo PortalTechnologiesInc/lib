@@ -2,7 +2,9 @@ use nostr::nips::nip05::Nip05Profile;
 
 use portal::conversation::profile::Profile;
 use portal::protocol::model::auth::AuthResponseStatus;
-use portal::protocol::model::payment::{CashuResponseStatus, RecurringPaymentResponseContent};
+use portal::protocol::model::payment::{
+    CashuResponseStatus, RecurringPaymentResponseContent,
+};
 use portal::protocol::model::Timestamp;
 use serde::{Deserialize, Serialize};
 
@@ -44,22 +46,10 @@ pub struct KeyHandshakeUrlResponse {
     pub stream_id: String,
 }
 
+/// Generic response for async stream-based endpoints.
 #[derive(Debug, Serialize)]
-pub struct AuthResponseData {
-    pub user_key: String,
-    pub recipient: String,
-    pub challenge: String,
-    pub status: AuthResponseStatus,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AuthKeyResponse {
-    pub event: AuthResponseData,
-}
-
-#[derive(Debug, Serialize)]
-pub struct RecurringPaymentResponse {
-    pub status: RecurringPaymentResponseContent,
+pub struct StreamResponse {
+    pub stream_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -77,11 +67,7 @@ pub struct CloseRecurringPaymentResponse {
     pub message: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct InvoicePaymentResponse {
-    pub invoice: String,
-    pub payment_hash: Option<String>,
-}
+
 
 #[derive(Debug, Serialize)]
 pub struct IssueJwtResponse {
@@ -93,10 +79,7 @@ pub struct VerifyJwtResponse {
     pub target_key: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct CashuResponse {
-    pub status: CashuResponseStatus,
-}
+
 
 #[derive(Debug, Serialize)]
 pub struct SendCashuDirectResponse {
@@ -173,6 +156,25 @@ pub enum NotificationData {
         subscription_id: String,
         recipient: String,
         main_key: String,
+    },
+    AuthenticateKey {
+        user_key: String,
+        recipient: String,
+        challenge: String,
+        status: AuthResponseStatus,
+    },
+    RecurringPaymentResponse {
+        status: RecurringPaymentResponseContent,
+    },
+    InvoiceResponse {
+        invoice: String,
+        payment_hash: String,
+    },
+    CashuResponse {
+        status: CashuResponseStatus,
+    },
+    Error {
+        reason: String,
     },
 }
 
