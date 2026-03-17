@@ -393,11 +393,11 @@ async fn main() -> anyhow::Result<()> {
     // Public routes (no auth): health and version for Docker/orchestrators and support.
     let public = Router::new()
         .route("/health", get(handlers::health_check))
-        .route("/version", get(handlers::version))
-        .route("/info", get(handlers::info));
+        .route("/version", get(handlers::version));
 
     // Authenticated REST API routes
     let api = Router::new()
+        .route("/info", get(handlers::info))
         // Key handshake & auth
         .route("/key-handshake", post(handlers::new_key_handshake_url))
         .route("/authenticate-key", post(handlers::authenticate_key))
