@@ -129,6 +129,11 @@ pub struct VersionResponse {
     pub git_commit: &'static str,
 }
 
+#[derive(Debug, Serialize)]
+pub struct InfoResponse {
+    pub public_key: String,
+}
+
 // ---- Event / notification types (stored for polling, sent via webhook) ----
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

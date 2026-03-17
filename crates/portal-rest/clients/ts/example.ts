@@ -48,6 +48,9 @@ async function main() {
     const ver = await portal.version();
     console.log('Version:', ver.version, 'Commit:', ver.git_commit);
 
+    const serverInfo = await portal.info();
+    console.log('Server public key:', serverInfo.public_key);
+
     // ---- 4. Key Handshake (async — resolved via webhook) ----
     console.log('\n=== Key Handshake ===');
     const handshake = await portal.newKeyHandshakeUrl();

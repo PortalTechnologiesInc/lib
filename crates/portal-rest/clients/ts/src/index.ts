@@ -72,8 +72,9 @@ export {
   // Wallet
   WalletInfoResponse,
 
-  // Version
+  // Version / Info
   VersionResponse,
+  InfoResponse,
 
   // Events / Polling
   StreamEvent,

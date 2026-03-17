@@ -70,6 +70,7 @@ impl From<ApiError> for (StatusCode, Json<ErrorResponse>) {
 #[derive(Clone)]
 pub struct AppState {
     sdk: Arc<PortalSDK>,
+    public_key: String,
     settings: config::Settings,
     wallet: Option<Arc<dyn PortalWallet>>,
     market_api: Arc<portal_rates::MarketAPI>,
@@ -146,7 +147,8 @@ async fn main() -> anyhow::Result<()> {
             .map(|s| serde_json::from_str(&s).expect("Failed to parse subkey proof")),
     );
 
-    info!("Running with keypair: {}", keypair.public_key());
+    let public_key = keypair.public_key().to_string();
+    info!("Running with keypair: {}", public_key);
 
     // Initialize SDK
     let sdk = PortalSDK::new(keypair, config.nostr.relays.clone()).await?;
@@ -175,6 +177,7 @@ async fn main() -> anyhow::Result<()> {
     // Create app state
     let state = AppState {
         sdk: Arc::new(sdk),
+        public_key,
         settings: config,
         wallet,
         market_api: portal_rates::MarketAPI::new().expect("Failed to create market API"),
@@ -390,7 +393,8 @@ async fn main() -> anyhow::Result<()> {
     // Public routes (no auth): health and version for Docker/orchestrators and support.
     let public = Router::new()
         .route("/health", get(handlers::health_check))
-        .route("/version", get(handlers::version));
+        .route("/version", get(handlers::version))
+        .route("/info", get(handlers::info));
 
     // Authenticated REST API routes
     let api = Router::new()

@@ -345,6 +345,10 @@ export interface VersionResponse {
   git_commit: string;
 }
 
+export interface InfoResponse {
+  public_key: string;
+}
+
 // ---- Events / Streaming ----
 
 export interface StreamEvent {

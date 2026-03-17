@@ -131,6 +131,14 @@ pub async fn version() -> (StatusCode, Json<ApiResponse<VersionResponse>>) {
     })
 }
 
+pub async fn info(
+    State(state): State<AppState>,
+) -> ApiResult<InfoResponse> {
+    Ok(ok(InfoResponse {
+        public_key: state.public_key.clone(),
+    }))
+}
+
 // POST /key-handshake
 pub async fn new_key_handshake_url(
     State(state): State<AppState>,

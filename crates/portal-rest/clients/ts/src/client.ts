@@ -24,6 +24,7 @@ import {
   CashuResponseStatus,
   WalletInfoResponse,
   VersionResponse,
+  InfoResponse,
   Nip05Profile,
   StreamEvent,
   EventsResponse,
@@ -401,6 +402,11 @@ export class PortalClient {
   /** Get server version and git commit. No auth required. */
   public async version(): Promise<VersionResponse> {
     return this.get<VersionResponse>('/version');
+  }
+
+  /** Get server info (public key). No auth required. */
+  public async info(): Promise<InfoResponse> {
+    return this.get<InfoResponse>('/info');
   }
 
   // ---- Key Handshake ----
