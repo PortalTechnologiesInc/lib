@@ -146,6 +146,8 @@
               imports = [ self.nixosModules.default ];
 
               services.portal-rest = {
+                enable = true;
+                authToken = "vm-test-token";
                 nostrKey = "nsec1rzl9z80dnn78zcv7p9t74sqss6xdvvg0dj0ef3wcmuy2lx3sh25qcmykwf";
                 rustLog = "portal=trace,rest=trace,info";
               };
