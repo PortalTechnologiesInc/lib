@@ -229,10 +229,6 @@ export interface Profile {
   nip05?: string;
 }
 
-export interface SetProfileRequest {
-  profile: Profile;
-}
-
 // ---- Invoice ----
 
 export interface RequestInvoiceParams {
@@ -372,7 +368,12 @@ export interface EventsResponse {
 export type NotificationData =
   | { type: 'key_handshake'; main_key: string; preferred_relays: string[] }
   | { type: 'payment_status_update'; status: InvoiceStatus }
-  | { type: 'closed_recurring_payment'; reason: string | null; subscription_id: string; main_key: string; recipient: string };
+  | { type: 'closed_recurring_payment'; reason: string | null; subscription_id: string; main_key: string; recipient: string }
+  | { type: 'authenticate_key'; user_key: string; recipient: string; challenge: string; status: AuthResponseStatus }
+  | { type: 'recurring_payment_response'; status: RecurringPaymentResponseContent }
+  | { type: 'invoice_response'; invoice: string; payment_hash: string }
+  | { type: 'cashu_response'; status: CashuResponseStatus }
+  | { type: 'error'; reason: string };
 
 export type CloseRecurringPaymentNotification = {
   reason: string | null;

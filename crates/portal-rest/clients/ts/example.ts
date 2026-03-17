@@ -106,13 +106,15 @@ async function main() {
     // ---- 7. Request Invoice ----
     console.log('\n=== Request Invoice ===');
     try {
-      const invoice = await portal.requestInvoice(main_key, [], {
+      const invoiceOp = await portal.requestInvoice(main_key, [], {
         amount: 599,
         currency: 'EUR',
         expires_at: Timestamp.fromNow(3600),
         description: 'Test invoice',
       });
-      console.log('Invoice:', invoice.invoice);
+      console.log('Invoice stream ID:', invoiceOp.streamId);
+      const invoiceResult = await invoiceOp.done;
+      console.log('Invoice:', invoiceResult.invoice);
     } catch (e) {
       console.log('Invoice request failed (expected if no recipient app running):', e);
     }

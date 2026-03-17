@@ -6,12 +6,13 @@ import {
   AsyncOperation,
   KeyHandshakeUrlResponse,
   KeyHandshakeResult,
-  AuthKeyResponse,
   AuthResponseData,
+  AuthResponseStatus,
   SinglePaymentRequestContent,
   SinglePaymentResponse,
   InvoicePaymentRequestContent,
   RecurringPaymentRequestContent,
+  RecurringPaymentStatus,
   RecurringPaymentResponseContent,
   CloseRecurringPaymentRequest,
   Profile,
@@ -46,6 +47,11 @@ const TERMINAL_PAYMENT_STATUSES = new Set([
 function isTerminalEvent(event: StreamEvent): boolean {
   switch (event.type) {
     case 'key_handshake':
+    case 'authenticate_key':
+    case 'recurring_payment_response':
+    case 'invoice_response':
+    case 'cashu_response':
+    case 'error':
       return true;
     case 'payment_status_update': {
       const status = (event as Record<string, unknown>).status as { status: string } | undefined;
@@ -423,13 +429,22 @@ export class PortalClient {
     return { url: resp.url, streamId: resp.stream_id, done };
   }
 
-  /** Authenticate a key (NIP-46 style). Synchronous — no stream. */
-  public async authenticateKey(mainKey: string, subkeys: string[] = []): Promise<AuthResponseData> {
-    const response = await this.post<AuthKeyResponse>('/authenticate-key', {
+  /** Authenticate a key (NIP-46 style). Returns an async operation. */
+  public async authenticateKey(
+    mainKey: string,
+    subkeys: string[] = []
+  ): Promise<AsyncOperation<AuthResponseData>> {
+    const resp = await this.post<{ stream_id: string }>('/authenticate-key', {
       main_key: mainKey,
       subkeys,
     });
-    return response.event;
+    const done = this.registerStream(resp.stream_id).then((event) => ({
+      user_key: event.user_key as string,
+      recipient: event.recipient as string,
+      challenge: event.challenge as string,
+      status: event.status as AuthResponseStatus,
+    }));
+    return { streamId: resp.stream_id, done };
   }
 
   // ---- Payments ----
@@ -473,18 +488,22 @@ export class PortalClient {
     return { streamId: resp.stream_id, done };
   }
 
-  /** Request a recurring payment. Synchronous — returns status directly. */
+  /** Request a recurring payment. Returns an async operation. */
   public async requestRecurringPayment(
     mainKey: string,
     subkeys: string[] = [],
     paymentRequest: RecurringPaymentRequestContent
-  ): Promise<RecurringPaymentResponseContent> {
-    const response = await this.post<{ status: RecurringPaymentResponseContent }>('/payments/recurring', {
+  ): Promise<AsyncOperation<RecurringPaymentResponseContent>> {
+    const resp = await this.post<{ stream_id: string }>('/payments/recurring', {
       main_key: mainKey,
       subkeys,
       payment_request: paymentRequest,
     });
-    return response.status;
+    const done = this.registerStream(resp.stream_id).then((event) => ({
+      request_id: event.request_id as string,
+      status: event.status as RecurringPaymentStatus,
+    }));
+    return { streamId: resp.stream_id, done };
   }
 
   /** Close a recurring payment subscription. */
@@ -497,20 +516,7 @@ export class PortalClient {
     return response.message;
   }
 
-  /**
-   * Start listening for closed recurring payment events.
-   *
-   * Returns `{ streamId }`. Use `onEvent(streamId, cb)` to handle each
-   * closed-recurring-payment notification as it arrives. This stream does
-   * not have a natural terminal event — use `destroy(streamId)` to stop.
-   */
-  public async listenClosedRecurringPayment(): Promise<{ streamId: string }> {
-    const resp = await this.post<{ stream_id: string }>('/payments/recurring/listen');
-    // Register the stream so onEvent() works, but the promise won't auto-resolve
-    // (no terminal event for this stream type). Caller uses onEvent + destroy.
-    this.registerStream(resp.stream_id).catch(() => { /* intentionally unhandled */ });
-    return { streamId: resp.stream_id };
-  }
+
 
   // ---- Profile ----
 
@@ -520,24 +526,24 @@ export class PortalClient {
     return response.profile;
   }
 
-  /** Set the current user's profile. */
-  public async setProfile(profile: Profile): Promise<void> {
-    await this.put<unknown>('/profile', { profile });
-  }
-
   // ---- Invoices ----
 
-  /** Request an invoice from a recipient. */
+  /** Request an invoice from a recipient. Returns an async operation. */
   public async requestInvoice(
     recipientKey: string,
     subkeys: string[],
     content: RequestInvoiceParams
-  ): Promise<InvoicePaymentResponse> {
-    return this.post<InvoicePaymentResponse>('/invoices/request', {
+  ): Promise<AsyncOperation<InvoicePaymentResponse>> {
+    const resp = await this.post<{ stream_id: string }>('/invoices/request', {
       recipient_key: recipientKey,
       subkeys,
       content,
     });
+    const done = this.registerStream(resp.stream_id).then((event) => ({
+      invoice: event.invoice as string,
+      payment_hash: (event.payment_hash as string) ?? null,
+    }));
+    return { streamId: resp.stream_id, done };
   }
 
   /** Pay a BOLT11 invoice. Returns preimage and fees paid. */
@@ -564,22 +570,25 @@ export class PortalClient {
 
   // ---- Cashu ----
 
-  /** Request Cashu tokens from a recipient. */
+  /** Request Cashu tokens from a recipient. Returns an async operation. */
   public async requestCashu(
     recipientKey: string,
     subkeys: string[],
     mintUrl: string,
     unit: string,
     amount: number
-  ): Promise<CashuResponseStatus> {
-    const response = await this.post<{ status: CashuResponseStatus }>('/cashu/request', {
+  ): Promise<AsyncOperation<CashuResponseStatus>> {
+    const resp = await this.post<{ stream_id: string }>('/cashu/request', {
       recipient_key: recipientKey,
       subkeys,
       mint_url: mintUrl,
       unit,
       amount,
     });
-    return response.status;
+    const done = this.registerStream(resp.stream_id).then((event) =>
+      event.status as CashuResponseStatus
+    );
+    return { streamId: resp.stream_id, done };
   }
 
   /** Send Cashu tokens directly to a recipient. */

@@ -40,7 +40,6 @@ export {
 
   // Profile
   Profile,
-  SetProfileRequest,
 
   // Invoice
   RequestInvoiceParams,
