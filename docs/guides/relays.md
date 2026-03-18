@@ -9,6 +9,25 @@ Manage Nostr relays used by your Portal instance. Relays store and forward Nostr
 
 <custom-tabs category="sdk">
 
+<div slot="title">HTTP</div>
+<section>
+
+```bash
+# Add a relay
+curl -s -X POST $BASE_URL/relays \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"relay": "wss://relay.damus.io"}'
+
+# Remove a relay
+curl -s -X DELETE $BASE_URL/relays \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"relay": "wss://relay.damus.io"}'
+```
+
+</section>
+
 <div slot="title">JavaScript</div>
 <section>
 

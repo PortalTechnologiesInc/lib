@@ -25,9 +25,21 @@ Portal uses [Nostr](introduction/what-is-nostr.md) and the [Lightning Network](i
 
 ## How to use Portal
 
-1. **Integrate with an SDK** — Use the `JavaScript SDK` or `Java SDK`: connect to a Portal endpoint with an auth token and call the API.
-2. **Or run the API** — Self-host or develop locally: run the Portal API (Docker or [build from source](getting-started/building-from-source.md)); then use an SDK or connect to the WebSocket API.
-3. **Auth, payments, tickets** — Generate auth URLs (users approve with Nostr wallet); request single or recurring Lightning payments; issue Cashu tokens.
+Portal exposes a **standard HTTP REST API** — you can integrate from any language or platform.
+
+1. **Run the Portal daemon** — self-host or develop locally: run `getportal/sdk-daemon` with Docker (see [Quick Start](getting-started/quick-start.md)).
+2. **Call the REST API** — use any HTTP client (curl, Python, Go, Ruby, PHP…), or use the official SDKs for JavaScript/TypeScript and Java.
+3. **Auth, payments, tickets** — generate auth URLs (users approve with Nostr wallet), request single or recurring Lightning payments, issue Cashu tokens.
+
+## Integration options
+
+| Option | When to use |
+|--------|-------------|
+| **HTTP / REST** | Any language — Python, Go, Ruby, PHP, Rust, etc. No SDK needed. |
+| **JavaScript / TypeScript SDK** | Node.js and browser apps. Handles polling and webhooks automatically. |
+| **Java SDK** | JVM apps. Same capabilities as the JS SDK. |
+
+All options talk to the same REST API under the hood. The SDKs just add typed wrappers and auto-polling.
 
 ## Key features
 
@@ -35,14 +47,15 @@ Portal uses [Nostr](introduction/what-is-nostr.md) and the [Lightning Network](i
 - **Payments** — Single and recurring Lightning; Cashu mint/burn/request/send.
 - **Profiles** — Fetch and set Nostr profiles; NIP-05.
 - **Sessions** — Issue and verify JWTs for API access.
-- **SDKs** — TypeScript/JavaScript and JVM; React Native bindings.
+- **REST API** — Standard HTTP, [OpenAPI spec](sdk/api-reference-rest.md), any HTTP client.
 
 ## Getting started
 
-- **[Quick Start](getting-started/quick-start.md)** — Get going with the SDK (JavaScript or Java) or run Portal with Docker.
-- **[SDK](sdk/installation.md)** — Install, [basic usage](sdk/basic-usage.md), [configuration](sdk/configuration.md), [error handling](sdk/error-handling.md).
-- **[Docker](getting-started/docker-deployment.md)** — Run the Portal API with Docker.
-- **[Building from source](getting-started/building-from-source.md)** — Build and run the Rust project.
+- **[Quick Start](getting-started/quick-start.md)** — Get going in minutes with Docker + HTTP or an SDK.
+- **[REST API](sdk/rest-api.md)** — Use Portal from any language over HTTP.
+- **[OpenAPI Reference](sdk/api-reference-rest.md)** — Full interactive API reference.
+- **[SDK](sdk/installation.md)** — Install the JavaScript or Java SDK.
+- **[Docker](getting-started/docker-deployment.md)** — Run the Portal daemon with Docker.
 - **[Guides](guides/authentication.md)** — Auth flow, payments, profiles, Cashu, JWT, relays.
 
 ## Docs overview
@@ -50,8 +63,8 @@ Portal uses [Nostr](introduction/what-is-nostr.md) and the [Lightning Network](i
 | Section | For |
 |--------|-----|
 | [Getting Started](getting-started/quick-start.md) | Quick Start, Docker, env vars, building from source. |
-| [SDK](sdk/installation.md) | SDK install, usage, config, errors. |
-| [Guides](guides/authentication.md) | Auth, payments, profiles, Cashu, JWT, relays. |
+| [SDK & REST API](sdk/installation.md) | REST API, SDK install, usage, config, errors, OpenAPI reference. |
+| [Guides](guides/authentication.md) | Auth, payments, profiles, Cashu, JWT, relays — with curl, JS, and Java examples. |
 | [Resources](resources/faq.md) | FAQ, glossary, troubleshooting, contributing. |
 
 ## Open source

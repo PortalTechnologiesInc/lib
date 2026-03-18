@@ -1,11 +1,38 @@
 # Error Handling
 
-The SDK throws `PortalSDKError` with a code property. Check err instanceof PortalSDKError and use err.code:
-
 <custom-tabs category="sdk">
+
+<div slot="title">HTTP</div>
+<section>
+
+The API returns standard HTTP status codes:
+
+| Status | Meaning |
+|--------|---------|
+| `200` | Success |
+| `400` | Bad request (invalid parameters) |
+| `401` | Unauthorized (wrong or missing auth token) |
+| `404` | Not found (stream_id expired or unknown) |
+| `409` | Conflict (operation already in progress) |
+| `500` | Internal server error |
+
+Error responses include a JSON body:
+```json
+{ "error": "Invalid or unsupported version." }
+```
+
+For async operations, terminal error events arrive in the polling stream:
+```bash
+curl -s "$BASE_URL/events/$STREAM?after=0" -H "Authorization: Bearer $AUTH_TOKEN"
+# → { "events": [{ "data": { "status": "error", "reason": "user_rejected" } }] }
+```
+
+</section>
 
 <div slot="title">JavaScript</div>
 <section>
+
+The SDK throws `PortalSDKError` with a `code` property:
 
 ```typescript
 import { PortalSDKError } from 'portal-sdk';
@@ -38,13 +65,12 @@ try {
 <div slot="title">Java</div>
 <section>
 
-Check the err parameter in each sendCommand callback; handle connection and auth failures before sending commands.
+Check the `err` parameter in each `sendCommand` callback; handle connection and auth failures before sending commands.
 
 ```java
 sdk.sendCommand(someRequest, (response, err) -> {
     if (err != null) {
         System.err.println("Command failed: " + err);
-        // or: throw new RuntimeException(err);
         return;
     }
     // use response

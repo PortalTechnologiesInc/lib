@@ -12,6 +12,43 @@ Subscription-based payments with configurable billing (monthly, weekly, etc.), m
 
 <custom-tabs category="sdk">
 
+<div slot="title">HTTP</div>
+<section>
+
+```bash
+# Request a recurring payment subscription
+curl -s -X POST $BASE_URL/payments/recurring \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "main_key": "USER_PUBKEY_HEX",
+    "subkeys": [],
+    "description": "Monthly subscription",
+    "amount": 10000,
+    "currency": "millisats",
+    "recurrence": {
+      "calendar": "monthly",
+      "first_payment_due": 1700000000,
+      "max_payments": 12
+    },
+    "expires_at": 1700003600
+  }'
+# → { "stream_id": "xyz789" }
+
+# Poll for result
+curl -s "$BASE_URL/events/xyz789?after=0" \
+  -H "Authorization: Bearer $AUTH_TOKEN"
+# → { "events": [{ "data": { "subscription_id": "...", "authorized_amount": 10000 } }] }
+
+# Close a subscription
+curl -s -X POST $BASE_URL/payments/recurring/close \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"main_key": "USER_PUBKEY_HEX", "subkeys": [], "subscription_id": "SUB_ID"}'
+```
+
+</section>
+
 <div slot="title">JavaScript</div>
 <section>
 
@@ -64,7 +101,7 @@ sdk.sendCommand(
 
 **Listen for user cancellations:** `listenClosedRecurringPayment(onClosed)` — callback receives subscription_id, main_key, reason; returns unsubscribe function. Java: `ListenClosedRecurringPaymentRequest`.
 
-**Close from provider:** `closeRecurringPayment(mainKey, subkeys, subscriptionId)`. Java: `CloseRecurringPaymentRequest`.
+**Close from provider:** `closeRecurringPayment(mainKey, subkeys, subscriptionId)`. Java: `CloseRecurringPaymentRequest`. HTTP: `POST /payments/recurring/close`.
 
 ---
 
