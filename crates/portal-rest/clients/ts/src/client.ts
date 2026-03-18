@@ -532,11 +532,9 @@ export class PortalClient {
       subkeys,
       payment_request: paymentRequest,
     });
-    const done = this.registerStream(resp.stream_id).then((event) => ({
-      status: event.status as InvoiceStatus['status'],
-      preimage: event.preimage as string | undefined,
-      reason: event.reason as string | undefined,
-    }));
+    const done = this.registerStream(resp.stream_id).then(
+      (event) => event.status as InvoiceStatus
+    );
     return { streamId: resp.stream_id, done };
   }
 
@@ -554,11 +552,9 @@ export class PortalClient {
       subkeys,
       payment_request: paymentRequest,
     });
-    const done = this.registerStream(resp.stream_id).then((event) => ({
-      status: event.status as InvoiceStatus['status'],
-      preimage: event.preimage as string | undefined,
-      reason: event.reason as string | undefined,
-    }));
+    const done = this.registerStream(resp.stream_id).then(
+      (event) => event.status as InvoiceStatus
+    );
     return { streamId: resp.stream_id, done };
   }
 
@@ -573,10 +569,9 @@ export class PortalClient {
       subkeys,
       payment_request: paymentRequest,
     });
-    const done = this.registerStream(resp.stream_id).then((event) => ({
-      request_id: event.request_id as string,
-      status: event.status as RecurringPaymentStatus,
-    }));
+    const done = this.registerStream(resp.stream_id).then(
+      (event) => event.status as RecurringPaymentResponseContent
+    );
     return { streamId: resp.stream_id, done };
   }
 
