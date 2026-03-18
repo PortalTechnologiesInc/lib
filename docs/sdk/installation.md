@@ -1,6 +1,6 @@
 # Installing the SDK
 
-**JavaScript/TypeScript:** [npm](https://www.npmjs.com/package/portal-sdk) · **Java:** [GitHub](https://github.com/PortalTechnologiesInc/java-sdk)
+**JavaScript/TypeScript:** [npm](https://www.npmjs.com/package/portal-sdk) · **Java:** [GitHub](https://github.com/PortalTechnologiesInc/java-sdk) · **Any language:** [REST API](rest-api.md)
 
 ## Requirements
 
@@ -20,6 +20,16 @@
 
 - Java 17+
 - Portal endpoint and auth token
+
+</section>
+
+<div slot="title">HTTP</div>
+<section>
+
+No SDK needed. Any HTTP client works: curl, Python, Go, Ruby, PHP, etc.
+
+- Portal endpoint and auth token
+- That's it.
 
 </section>
 
@@ -70,6 +80,18 @@ dependencies {
 
 </section>
 
+<div slot="title">HTTP</div>
+<section>
+
+Nothing to install. Set your base URL and token:
+
+```bash
+export BASE_URL=http://localhost:3000
+export AUTH_TOKEN=your-secret-token
+```
+
+</section>
+
 </custom-tabs>
 
 ## Use
@@ -82,11 +104,12 @@ dependencies {
 Create a client, connect, then authenticate with your Portal endpoint and token:
 
 ```typescript
-import { PortalSDK } from 'portal-sdk';
+import { PortalClient } from 'portal-sdk';
 
-const client = new PortalSDK({ serverUrl: 'ws://localhost:3000/ws' });
-await client.connect();
-await client.authenticate('your-auth-token');
+const client = new PortalClient({
+  baseUrl: 'http://localhost:3000',
+  authToken: 'your-auth-token'
+});
 ```
 
 </section>
@@ -95,14 +118,31 @@ await client.authenticate('your-auth-token');
 <section>
 
 ```java
-import cc.getportal.PortalSDK;
+import cc.getportal.PortalClient;
+import cc.getportal.PortalClientConfig;
 
-PortalSDK sdk = new PortalSDK("ws://localhost:3000/ws");
-sdk.connect();
-sdk.authenticate("my-secret-token");
+PortalClient client = new PortalClient(
+    PortalClientConfig.create("http://localhost:3000", "your-auth-token")
+);
 ```
 
-Use sendCommand(request, (response, err) -> { ... }) for commands. Request/response types: **KeyHandshakeUrlRequest** / **KeyHandshakeUrlResponse**, **RequestSinglePaymentRequest**, etc. See [API Reference](api-reference.md) and the [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk).
+See [API Reference](api-reference.md) and the [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk).
+
+</section>
+
+<div slot="title">HTTP</div>
+<section>
+
+```bash
+# Health check
+curl -s $BASE_URL/health
+
+# All requests use Bearer auth
+curl -s $BASE_URL/version \
+  -H "Authorization: Bearer $AUTH_TOKEN"
+```
+
+See [REST API](rest-api.md) for the full reference and async polling pattern.
 
 </section>
 
