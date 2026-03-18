@@ -12,37 +12,37 @@ Portal reads `~/.portal-rest/config.toml` and overrides any value with environme
 
 ### Core
 
-| Config key | Env var | Description |
-|------------|---------|-------------|
-| `info.listen_port` | `PORTAL__INFO__LISTEN_PORT` | HTTP port (default `3000`). |
-| `auth.auth_token` | `PORTAL__AUTH__AUTH_TOKEN` | Bearer token for API access. **Required.** |
-| `nostr.private_key` | `PORTAL__NOSTR__PRIVATE_KEY` | Nostr private key (64 hex chars). **Required.** |
-| `nostr.relays` | `PORTAL__NOSTR__RELAYS` | Comma-separated relay URLs. |
-| `nostr.subkey_proof` | `PORTAL__NOSTR__SUBKEY_PROOF` | Subkey delegation proof (optional). |
+| Config key | Env var | Required | Default | Description |
+|------------|---------|----------|---------|-------------|
+| `info.listen_port` | `PORTAL__INFO__LISTEN_PORT` | No | `3000` | HTTP port. |
+| `auth.auth_token` | `PORTAL__AUTH__AUTH_TOKEN` | **Yes** | — | Bearer token for API access. |
+| `nostr.private_key` | `PORTAL__NOSTR__PRIVATE_KEY` | **Yes** | — | Nostr private key (64 hex chars). |
+| `nostr.relays` | `PORTAL__NOSTR__RELAYS` | No | `wss://relay.nostr.net, wss://relay.damus.io, wss://relay.getportal.cc` | Comma-separated relay URLs. |
+| `nostr.subkey_proof` | `PORTAL__NOSTR__SUBKEY_PROOF` | No | — | Subkey delegation proof. |
 
 ### Database
 
-| Config key | Env var | Description |
-|------------|---------|-------------|
-| `database.path` | `PORTAL__DATABASE__PATH` | SQLite database file path. Relative paths resolve under `~/.portal-rest/`. Default: `portal-rest.db`. |
+| Config key | Env var | Required | Default | Description |
+|------------|---------|----------|---------|-------------|
+| `database.path` | `PORTAL__DATABASE__PATH` | No | `portal-rest.db` | SQLite file path. Relative paths resolve under `~/.portal-rest/`. |
 
 ### Wallet
 
-| Config key | Env var | Description |
-|------------|---------|-------------|
-| `wallet.ln_backend` | `PORTAL__WALLET__LN_BACKEND` | `none` (default), `nwc`, or `breez`. |
-| `wallet.nwc.url` | `PORTAL__WALLET__NWC__URL` | NWC URL (when `ln_backend=nwc`). |
-| `wallet.breez.api_key` | `PORTAL__WALLET__BREEZ__API_KEY` | Breez API key (when `ln_backend=breez`). |
-| `wallet.breez.mnemonic` | `PORTAL__WALLET__BREEZ__MNEMONIC` | Breez mnemonic (when `ln_backend=breez`). |
+| Config key | Env var | Required | Default | Description |
+|------------|---------|----------|---------|-------------|
+| `wallet.ln_backend` | `PORTAL__WALLET__LN_BACKEND` | No | `none` | `none`, `nwc`, or `breez`. |
+| `wallet.nwc.url` | `PORTAL__WALLET__NWC__URL` | If `ln_backend=nwc` | — | NWC connection URL. |
+| `wallet.breez.api_key` | `PORTAL__WALLET__BREEZ__API_KEY` | If `ln_backend=breez` | — | Breez API key. |
+| `wallet.breez.mnemonic` | `PORTAL__WALLET__BREEZ__MNEMONIC` | If `ln_backend=breez` | — | Breez wallet mnemonic. |
 
 ### Webhooks
 
 Webhooks are an alternative to polling — the daemon will `POST` events to your endpoint as they arrive.
 
-| Config key | Env var | Description |
-|------------|---------|-------------|
-| `webhook.url` | `PORTAL__WEBHOOK__URL` | URL to receive webhook events (optional). |
-| `webhook.secret` | `PORTAL__WEBHOOK__SECRET` | Shared secret for HMAC-SHA256 signatures. |
+| Config key | Env var | Required | Default | Description |
+|------------|---------|----------|---------|-------------|
+| `webhook.url` | `PORTAL__WEBHOOK__URL` | No | — | URL to receive webhook events. |
+| `webhook.secret` | `PORTAL__WEBHOOK__SECRET` | No | — | Shared secret for HMAC-SHA256 signatures (`X-Portal-Signature` header). |
 
 When `webhook.secret` is set, each request includes an `X-Portal-Signature` header with the HMAC-SHA256 signature of the body. Verify it to authenticate incoming webhooks:
 
@@ -54,16 +54,16 @@ def verify(secret: str, body: bytes, signature: str) -> bool:
     return hmac.compare_digest(expected, signature)
 ```
 
-### Profile (optional)
+### Profile
 
-Publish your service's Nostr profile at startup:
+Publish your service's Nostr profile at startup. All fields are optional — omit the section to skip.
 
-| Config key | Env var | Description |
-|------------|---------|-------------|
-| `profile.name` | `PORTAL__PROFILE__NAME` | Username (no spaces). |
-| `profile.display_name` | `PORTAL__PROFILE__DISPLAY_NAME` | Display name. |
-| `profile.picture` | `PORTAL__PROFILE__PICTURE` | Avatar URL. |
-| `profile.nip05` | `PORTAL__PROFILE__NIP05` | NIP-05 verified identifier. |
+| Config key | Env var | Required | Default | Description |
+|------------|---------|----------|---------|-------------|
+| `profile.name` | `PORTAL__PROFILE__NAME` | No | — | Username (no spaces). |
+| `profile.display_name` | `PORTAL__PROFILE__DISPLAY_NAME` | No | — | Display name. |
+| `profile.picture` | `PORTAL__PROFILE__PICTURE` | No | — | Avatar URL. |
+| `profile.nip05` | `PORTAL__PROFILE__NIP05` | No | — | NIP-05 verified identifier. |
 
 ## Minimal setup
 
