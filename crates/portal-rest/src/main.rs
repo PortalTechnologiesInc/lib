@@ -314,6 +314,10 @@ async fn main() -> anyhow::Result<()> {
                             .await;
                     }
                 }
+                "recurring_payment_close" => {
+                    // This stream is backed by the long-running SDK listener started below, so
+                    // there's nothing to "recover" here. Also avoid noisy warnings on restart.
+                }
                 "key_handshake" | "authenticate_key" | "recurring_payment"
                 | "invoice_request" | "cashu_request" | "raw_payment" => {
                     // These streams rely on ephemeral SDK conversation state and

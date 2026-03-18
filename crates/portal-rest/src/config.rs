@@ -127,7 +127,7 @@ impl Settings {
             std::fs::write(&config_file, include_str!("../example.config.toml"))?;
         }
 
-        let mut settings: Settings = Config::builder()
+        let settings: Settings = Config::builder()
             // Load from TOML file
             .add_source(File::from(config_file))
             // Override with env vars prefixed with PORTAL_
