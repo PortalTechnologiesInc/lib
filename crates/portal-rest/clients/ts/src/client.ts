@@ -10,6 +10,7 @@ import {
   AuthResponseStatus,
   SinglePaymentRequestContent,
   SinglePaymentResponse,
+  InvoiceStatus,
   InvoicePaymentRequestContent,
   RecurringPaymentRequestContent,
   RecurringPaymentStatus,
@@ -525,13 +526,17 @@ export class PortalClient {
     mainKey: string,
     subkeys: string[] = [],
     paymentRequest: SinglePaymentRequestContent
-  ): Promise<AsyncOperation> {
+  ): Promise<AsyncOperation<InvoiceStatus>> {
     const resp = await this.post<SinglePaymentResponse>('/payments/single', {
       main_key: mainKey,
       subkeys,
       payment_request: paymentRequest,
     });
-    const done = this.registerStream(resp.stream_id);
+    const done = this.registerStream(resp.stream_id).then((event) => ({
+      status: event.status as InvoiceStatus['status'],
+      preimage: event.preimage as string | undefined,
+      reason: event.reason as string | undefined,
+    }));
     return { streamId: resp.stream_id, done };
   }
 
@@ -543,13 +548,17 @@ export class PortalClient {
     mainKey: string,
     subkeys: string[] = [],
     paymentRequest: InvoicePaymentRequestContent
-  ): Promise<AsyncOperation> {
+  ): Promise<AsyncOperation<InvoiceStatus>> {
     const resp = await this.post<SinglePaymentResponse>('/payments/raw', {
       main_key: mainKey,
       subkeys,
       payment_request: paymentRequest,
     });
-    const done = this.registerStream(resp.stream_id);
+    const done = this.registerStream(resp.stream_id).then((event) => ({
+      status: event.status as InvoiceStatus['status'],
+      preimage: event.preimage as string | undefined,
+      reason: event.reason as string | undefined,
+    }));
     return { streamId: resp.stream_id, done };
   }
 
@@ -564,10 +573,10 @@ export class PortalClient {
       subkeys,
       payment_request: paymentRequest,
     });
-    const done = this.registerStream(resp.stream_id).then((event) => {
-      const status = event.status as RecurringPaymentResponseContent;
-      return status;
-    });
+    const done = this.registerStream(resp.stream_id).then((event) => ({
+      request_id: event.request_id as string,
+      status: event.status as RecurringPaymentStatus,
+    }));
     return { streamId: resp.stream_id, done };
   }
 
