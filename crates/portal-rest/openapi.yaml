@@ -18,8 +18,8 @@ info:
     - **Recurring payment listeners**: re-subscribed to the notification stream.
     - **Key handshakes**: marked as failed (ephemeral notification streams cannot be resumed).
 
-    The database path is configurable via `[database] path` in config or `DATABASE_PATH` env var
-    (default: `portal-rest.db` under `~/.portal-rest/`).
+    The database path is configurable via `[database] path` in config or
+    `PORTAL__DATABASE__PATH` env var (default: `portal-rest.db` under `~/.portal-rest/`).
 
     ## Webhooks
     If `webhook_url` is configured, server-initiated events are also POSTed to that URL.
@@ -354,13 +354,6 @@ components:
           type: integer
           format: uint64
 
-    SetProfileRequest:
-      type: object
-      required: [profile]
-      properties:
-        profile:
-          type: object
-
     WalletInfoResponse:
       type: object
       properties:
@@ -441,6 +434,44 @@ paths:
                     type: string
                   git_commit:
                     type: string
+
+  /info:
+    get:
+      summary: Get server info
+      description: Returns the server's Nostr public key. Requires authentication.
+      responses:
+        "200":
+          description: Server info
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          pubkey:
+                            type: string
+                            description: Hex-encoded Nostr public key
+
+  /well-known/nostr.json:
+    get:
+      summary: NIP-05 well-known endpoint
+      security: []
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: NIP-05 local part to look up
+      responses:
+        "200":
+          description: NIP-05 names/relays mapping
+          content:
+            application/json:
+              schema:
+                type: object
 
   /key-handshake:
     post:
@@ -578,25 +609,6 @@ paths:
                 allOf:
                   - $ref: '#/components/schemas/ApiResponse'
 
-  /payments/recurring/listen:
-    post:
-      summary: Start listening for closed recurring payment events
-      description: Returns a stream_id to poll for closed recurring payment notifications.
-      responses:
-        "201":
-          description: Listener created
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
-                  - properties:
-                      data:
-                        type: object
-                        properties:
-                          stream_id:
-                            type: string
-
   /profile/{main_key}:
     get:
       summary: Fetch a profile by public key
@@ -610,24 +622,6 @@ paths:
       responses:
         "200":
           description: Profile data
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
-
-  /profile:
-    put:
-      summary: Set the profile
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SetProfileRequest'
-      responses:
-        "200":
-          description: Profile updated
           content:
             application/json:
               schema:
