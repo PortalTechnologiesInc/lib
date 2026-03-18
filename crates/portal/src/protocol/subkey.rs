@@ -79,19 +79,38 @@ pub struct SubkeyMetadata {
 }
 
 impl SubkeyMetadata {
-    pub fn get_tweak(&self) -> Result<Scalar, SubkeyError> {
-        // Serialize metadata to bytes
-        let metadata_bytes = serde_json::to_vec(self)?;
+    pub fn canonical_bytes(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.push(self.version);
+        let name_bytes = self.name.as_bytes();
+        buf.extend_from_slice(&(name_bytes.len() as u16).to_le_bytes());
+        buf.extend_from_slice(name_bytes);
+        buf.extend_from_slice(self.nonce.as_bytes());
+        buf.extend_from_slice(&self.valid_from.as_u64().to_le_bytes());
+        buf.extend_from_slice(&self.expires_at.as_u64().to_le_bytes());
+        let mut perms: u8 = 0;
+        for p in &self.permissions {
+            match p {
+                SubkeyPermission::Auth => perms |= 0x01,
+                SubkeyPermission::Payment => perms |= 0x02,
+            }
+        }
+        buf.push(perms);
+        buf
+    }
 
-        // Compute the tweaking factor by hashing the metadata
+    pub fn get_tweak(&self) -> Result<Scalar, SubkeyError> {
+        let tag = b"Portal/Subkey";
+        let tag_hash: [u8; 32] = Sha256::digest(tag).into();
         let mut hasher = Sha256::new();
-        hasher.update(&metadata_bytes);
+        hasher.update(&tag_hash);
+        hasher.update(&tag_hash);
+        hasher.update(&self.canonical_bytes());
         let hash: [u8; 32] = hasher
             .finalize()
             .try_into()
             .map_err(|_| SubkeyError::InvalidMetadata)?;
-        let tweak = Scalar::from_be_bytes(hash).map_err(|_| SubkeyError::InvalidMetadata)?;
-        Ok(tweak)
+        Scalar::from_be_bytes(hash).map_err(|_| SubkeyError::InvalidMetadata)
     }
 }
 
@@ -107,9 +126,6 @@ pub enum SubkeyPermission {
 pub enum SubkeyError {
     #[error("Invalid metadata")]
     InvalidMetadata,
-
-    #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
 
     #[error("Secp256k1 error: {0}")]
     Secp256k1(#[from] nostr::secp256k1::Error),
@@ -187,7 +203,7 @@ mod tests {
             valid_from: Timestamp::new(valid_from),
             expires_at: Timestamp::new(expires_at),
             permissions,
-            version: 1,
+            version: 2,
         }
     }
 
@@ -202,7 +218,7 @@ mod tests {
 
         // Test that we can access both the metadata and the key methods
         assert_eq!(subkey.metadata().name, "test_subkey");
-        assert_eq!(subkey.metadata().version, 1);
+        assert_eq!(subkey.metadata().version, 2);
 
         // Test that Deref works and we can use Keys methods directly
         let pubkey = subkey.public_key();
