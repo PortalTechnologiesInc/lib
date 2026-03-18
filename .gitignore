@@ -10,3 +10,4 @@ node_modules
 react-native/portal-app-lib-*.tgz
 
 result
+examples/.env

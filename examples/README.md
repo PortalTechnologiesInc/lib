@@ -9,14 +9,13 @@ cd examples
 npm install
 ```
 
-Set your Portal endpoint and auth token:
+Copy `.env.example` to `.env` and fill in your values:
 
-```bash
-export PORTAL_URL=http://localhost:3000
-export PORTAL_TOKEN=your-secret-token
 ```
-
-Or edit the `BASE_URL` / `AUTH_TOKEN` constants at the top of each file.
+PORTAL_URL=http://localhost:3000
+PORTAL_TOKEN=your-secret-token
+MAIN_KEY=replace-with-user-pubkey-hex
+```
 
 ## Run
 

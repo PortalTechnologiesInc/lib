@@ -7,6 +7,7 @@
  *   PORTAL_URL=http://localhost:3000 PORTAL_TOKEN=your-token MAIN_KEY=user-pubkey-hex node profile.js
  */
 
+import 'dotenv/config';
 import { PortalClient } from 'portal-sdk';
 
 const BASE_URL = process.env.PORTAL_URL ?? 'http://localhost:3000';
