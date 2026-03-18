@@ -133,12 +133,16 @@ components:
               type: string
               nullable: true
 
-    SinglePaymentResponse:
+    StreamIdResponse:
       type: object
+      description: Returned by all async operations. Poll GET /events/{stream_id} for results.
       properties:
         stream_id:
           type: string
-          description: Poll GET /events/{stream_id} for payment status updates
+          description: Use this ID to poll events via GET /events/{stream_id}
+
+    SinglePaymentResponse:
+      $ref: '#/components/schemas/StreamIdResponse'
 
     RecurringPaymentRequest:
       type: object
@@ -500,6 +504,7 @@ paths:
   /authenticate-key:
     post:
       summary: Authenticate a key
+      description: Initiates key authentication. Poll GET /events/{stream_id} for the auth result.
       requestBody:
         required: true
         content:
@@ -507,8 +512,8 @@ paths:
             schema:
               $ref: '#/components/schemas/AuthenticateKeyRequest'
       responses:
-        "200":
-          description: Authentication result
+        "201":
+          description: Authentication initiated
           content:
             application/json:
               schema:
@@ -516,7 +521,7 @@ paths:
                   - $ref: '#/components/schemas/ApiResponse'
                   - properties:
                       data:
-                        $ref: '#/components/schemas/AuthKeyResponse'
+                        $ref: '#/components/schemas/StreamIdResponse'
 
   /payments/single:
     post:
@@ -576,6 +581,7 @@ paths:
   /payments/recurring:
     post:
       summary: Request a recurring payment
+      description: Initiates a recurring payment request. Poll GET /events/{stream_id} for approval/rejection.
       requestBody:
         required: true
         content:
@@ -583,13 +589,16 @@ paths:
             schema:
               $ref: '#/components/schemas/RecurringPaymentRequest'
       responses:
-        "200":
-          description: Recurring payment status
+        "201":
+          description: Recurring payment initiated
           content:
             application/json:
               schema:
                 allOf:
                   - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/StreamIdResponse'
 
   /payments/recurring/close:
     post:
@@ -631,6 +640,7 @@ paths:
   /invoices/request:
     post:
       summary: Request an invoice from a recipient
+      description: Asks a recipient to generate a BOLT11 invoice. Poll GET /events/{stream_id} for the invoice_response event.
       requestBody:
         required: true
         content:
@@ -638,8 +648,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RequestInvoiceRequest'
       responses:
-        "200":
-          description: Invoice received
+        "201":
+          description: Invoice request initiated
           content:
             application/json:
               schema:
@@ -647,7 +657,7 @@ paths:
                   - $ref: '#/components/schemas/ApiResponse'
                   - properties:
                       data:
-                        $ref: '#/components/schemas/InvoicePaymentResponse'
+                        $ref: '#/components/schemas/StreamIdResponse'
 
   /invoices/pay:
     post:
@@ -715,6 +725,7 @@ paths:
   /cashu/request:
     post:
       summary: Request Cashu tokens from a recipient
+      description: Initiates a Cashu token request. Poll GET /events/{stream_id} for the cashu_response event.
       requestBody:
         required: true
         content:
@@ -722,13 +733,16 @@ paths:
             schema:
               $ref: '#/components/schemas/RequestCashuRequest'
       responses:
-        "200":
-          description: Cashu response
+        "201":
+          description: Cashu request initiated
           content:
             application/json:
               schema:
                 allOf:
                   - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/StreamIdResponse'
 
   /cashu/send-direct:
     post:
