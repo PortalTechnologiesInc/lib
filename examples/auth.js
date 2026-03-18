@@ -11,6 +11,7 @@
 
 import 'dotenv/config';
 import { PortalClient } from 'portal-sdk';
+import QRCode from 'qrcode';
 
 const BASE_URL = process.env.PORTAL_URL ?? 'http://localhost:3000';
 const AUTH_TOKEN = process.env.PORTAL_TOKEN ?? 'your-secret-token';
@@ -21,8 +22,19 @@ async function main() {
   // Step 1: get a handshake URL to show to the user
   console.log('Generating key handshake URL...');
   const handshake = await client.newKeyHandshakeUrl();
-  console.log('\n→ Share this URL with your user (QR code, link, etc.):');
-  console.log(handshake.url);
+  const keyHandshakeUrl = handshake.url;
+
+  console.log('\nKey handshake URL (share with your user):');
+  console.log(keyHandshakeUrl);
+
+  console.log('\nQR code (scan this in your Nostr wallet):');
+  try {
+    const qr = await QRCode.toString(keyHandshakeUrl, { type: 'terminal', small: true });
+    console.log(qr);
+  } catch (err) {
+    // If terminal QR rendering fails for any reason, at least the URL is still available.
+    console.error('Could not render QR code in terminal:', err?.message ?? err);
+  }
   console.log('\nWaiting for user to scan...');
 
   // Step 2: poll until the user completes the handshake

@@ -109,10 +109,29 @@ export class PortalClient {
    * Stop the auto-polling scheduler (if started via `autoPollingIntervalMs`).
    * Call this when you are done using the client.
    */
-  public destroy(): void {
-    if (this.pollingTimer !== undefined) {
-      clearInterval(this.pollingTimer);
-      this.pollingTimer = undefined;
+  public destroy(): void;
+
+  /**
+   * Cancel a pending stream. The `done` promise will reject with the given reason.
+   */
+  public destroy(streamId: string, reason?: string): void;
+
+  public destroy(
+    streamId?: string,
+    reason = 'Stream destroyed by caller'
+  ): void {
+    if (streamId === undefined) {
+      if (this.pollingTimer !== undefined) {
+        clearInterval(this.pollingTimer);
+        this.pollingTimer = undefined;
+      }
+      return;
+    }
+
+    const entry = this.pending.get(streamId);
+    if (entry) {
+      this.pending.delete(streamId);
+      entry.reject(new PortalSDKError(reason, 'API_ERROR'));
     }
   }
 
@@ -292,15 +311,8 @@ export class PortalClient {
   }
 
   /**
-   * Cancel a pending stream. The `done` promise will reject with the given reason.
+   * Cancel a pending stream is implemented by the `destroy(streamId, reason?)` overload above.
    */
-  public destroy(streamId: string, reason = 'Stream destroyed by caller'): void {
-    const entry = this.pending.get(streamId);
-    if (entry) {
-      this.pending.delete(streamId);
-      entry.reject(new PortalSDKError(reason, 'API_ERROR'));
-    }
-  }
 
   /** Number of currently pending streams (useful for diagnostics). */
   public get pendingCount(): number {

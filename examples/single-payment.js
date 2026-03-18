@@ -32,18 +32,27 @@ async function main() {
   console.log('Stream ID:', op.streamId);
   console.log('Waiting for user to approve in their wallet...');
 
+  // Listen for intermediate events (e.g. user_approved)
+  client.onEvent(op.streamId, (event) => {
+    console.log('Event:', event);
+  });
+
   // Poll for the terminal event (paid / rejected / timeout / error)
   const result = await client.poll(op);
 
-  if (result.status === 'paid') {
+  const status = result.status.status;
+  const reason = result.status.reason ?? '';
+  const preimage = result.status.preimage ?? '';
+
+  if (status === 'paid') {
     console.log('✓ Payment received!');
-    console.log('  Preimage:', result.preimage);
-  } else if (result.status === 'user_rejected') {
-    console.log('✗ User rejected the payment.');
-  } else if (result.status === 'timeout') {
+    console.log('  Preimage:', preimage);
+  } else if (status === 'user_rejected') {
+    console.log('✗ User rejected the payment. Reason:', reason);
+  } else if (status === 'timeout') {
     console.log('✗ Payment timed out.');
   } else {
-    console.log('✗ Payment failed:', result.status, result.reason ?? '');
+    console.log('✗ Payment failed:', status, reason);
   }
 }
 
