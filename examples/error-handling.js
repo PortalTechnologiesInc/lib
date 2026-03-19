@@ -162,7 +162,8 @@ async function testEventPolling() {
     // Poll it immediately — should return empty events array (no user yet)
     const { status, json } = await req('GET', `/events/${streamId}?after=0`);
     assert(status === 200, `expected 200, got ${status}`);
-    assert(Array.isArray(json?.events), `expected events array, got ${JSON.stringify(json)}`);
+    const events = json?.data?.events ?? json?.events;
+    assert(Array.isArray(events), `expected events array, got ${JSON.stringify(json)}`);
   });
 }
 
