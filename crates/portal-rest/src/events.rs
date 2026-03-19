@@ -201,59 +201,58 @@ impl EventStore {
     pub async fn get(&self, stream_id: &str, after: Option<u64>) -> Vec<StreamEvent> {
         let db = self.db.lock().await;
 
-        let (query, params): (&str, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(after_idx) = after {
-            (
+        let rows: Vec<(u64, String, String)> = if let Some(after_idx) = after {
+            let mut stmt = match db.prepare(
                 "SELECT event_index, timestamp, data FROM stream_events
                  WHERE stream_id = ?1 AND event_index > ?2
                  ORDER BY event_index ASC",
-                vec![
-                    Box::new(stream_id.to_string()),
-                    Box::new(after_idx as i64),
-                ],
-            )
+            ) {
+                Ok(s) => s,
+                Err(e) => {
+                    error!("Failed to prepare get events query: {e}");
+                    return vec![];
+                }
+            };
+            let collected: Vec<_> = match stmt.query_map(rusqlite::params![stream_id, after_idx as i64], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            }) {
+                Ok(mapped) => mapped.filter_map(|r| r.ok()).collect(),
+                Err(e) => {
+                    error!("Failed to query events for stream {stream_id}: {e}");
+                    return vec![];
+                }
+            };
+            collected
         } else {
-            (
+            let mut stmt = match db.prepare(
                 "SELECT event_index, timestamp, data FROM stream_events
                  WHERE stream_id = ?1
                  ORDER BY event_index ASC",
-                vec![Box::new(stream_id.to_string())],
-            )
+            ) {
+                Ok(s) => s,
+                Err(e) => {
+                    error!("Failed to prepare get events query: {e}");
+                    return vec![];
+                }
+            };
+            let collected: Vec<_> = match stmt.query_map(rusqlite::params![stream_id], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            }) {
+                Ok(mapped) => mapped.filter_map(|r| r.ok()).collect(),
+                Err(e) => {
+                    error!("Failed to query events for stream {stream_id}: {e}");
+                    return vec![];
+                }
+            };
+            collected
         };
 
-        let params_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-
-        let mut stmt = match db.prepare(query) {
-            Ok(s) => s,
-            Err(e) => {
-                error!("Failed to prepare get events query: {e}");
-                return vec![];
-            }
-        };
-
-        let rows = stmt.query_map(params_refs.as_slice(), |row| {
-            let index: u64 = row.get(0)?;
-            let timestamp: String = row.get(1)?;
-            let data_json: String = row.get(2)?;
-            Ok((index, timestamp, data_json))
-        });
-
-        match rows {
-            Ok(rows) => rows
-                .filter_map(|r| {
-                    let (index, timestamp, data_json) = r.ok()?;
-                    let data: NotificationData = serde_json::from_str(&data_json).ok()?;
-                    Some(StreamEvent {
-                        index,
-                        timestamp,
-                        data,
-                    })
-                })
-                .collect(),
-            Err(e) => {
-                error!("Failed to query events for stream {stream_id}: {e}");
-                vec![]
-            }
-        }
+        rows.into_iter()
+            .filter_map(|(index, timestamp, data_json)| {
+                let data: NotificationData = serde_json::from_str(&data_json).ok()?;
+                Some(StreamEvent { index, timestamp, data })
+            })
+            .collect()
     }
 
     /// Check if a stream exists.
