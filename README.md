@@ -70,7 +70,7 @@ Full docs at **[portaltechnologiesinc.github.io/lib](https://portaltechnologiesi
 
 ---
 
-## Optional SDKs
+## Official SDKs
 
 For JavaScript/TypeScript and Java, typed SDKs are available. They wrap the same REST API with auto-polling, webhook handling, and typed responses.
 
@@ -78,7 +78,6 @@ For JavaScript/TypeScript and Java, typed SDKs are available. They wrap the same
 |-----|---------|---------|
 | TypeScript / JavaScript | `0.4.0` | `npm install portal-sdk` |
 | Java | `0.4.0` | [JitPack](https://jitpack.io/#PortalTechnologiesInc/java-sdk) |
-| Docker image | `0.4.0` | `docker pull getportal/sdk-daemon:0.4.0` |
 
 The SDK `major.minor` version must match the daemon. See [Versioning & Compatibility](https://portaltechnologiesinc.github.io/lib/getting-started/versioning.html).
 
