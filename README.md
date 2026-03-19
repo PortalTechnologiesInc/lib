@@ -7,7 +7,7 @@
 
 **Portal is the identity and payment layer for Bitcoin-native applications — no accounts, no KYC, no payment processor.**
 
-Users interact through the Portal mobile app using their Nostr identity. You run a single Docker container and talk to it with our SDK.
+Users interact through the Portal mobile app using their Nostr identity. You run a single Docker container and call its REST API from any language.
 
 ---
 
@@ -34,50 +34,23 @@ docker run -d -p 3000:3000 \
   getportal/sdk-daemon:0.4.0
 ```
 
-**2. Install the SDK**
+**2. Call the REST API**
 
 ```bash
-npm install portal-sdk          # TypeScript / JavaScript
+# Get a handshake URL — show it to the user as a QR code
+curl -s -X POST http://localhost:3000/key-handshake \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{}' | jq .
+
+# → { "stream_id": "abc123", "url": "nostr+walletconnect://..." }
+
+# Poll for the user's public key (repeat until events arrive)
+curl -s "http://localhost:3000/events/abc123?after=0" \
+  -H "Authorization: Bearer your-secret-token" | jq .
 ```
 
-```kotlin
-// Java/Kotlin (Gradle) — via JitPack
-implementation("com.github.PortalTechnologiesInc:java-sdk:0.4.0")
-```
-
-**3. Authenticate a user**
-
-```typescript
-import { PortalClient } from 'portal-sdk';
-
-const client = new PortalClient({
-  baseUrl: 'http://localhost:3000',
-  authToken: 'your-secret-token',
-  webhookSecret: 'your-webhook-secret', // or use autoPollingIntervalMs for polling
-});
-
-const handshake = await client.newKeyHandshakeUrl();
-// Show handshake.url as a QR code to the user
-
-const { main_key } = await handshake.done; // resolves when user scans
-console.log('User authenticated:', main_key);
-```
-
-Async operations return `AsyncOperation<T>` immediately — `streamId` is available right away,
-`done` resolves with the typed result. Results can be delivered via **webhooks**,
-**auto-polling** (background timer), or **manual polling**. See the [SDK README](crates/portal-rest/clients/ts/README.md) for details.
-
----
-
-## SDK versions
-
-| SDK | Version | Install |
-|-----|---------|---------|
-| TypeScript / JavaScript | `0.4.0` | `npm install portal-sdk` |
-| Java | `0.4.0` | [JitPack](https://jitpack.io/#PortalTechnologiesInc/java-sdk) |
-| Docker image | `0.4.0` | `docker pull getportal/sdk-daemon:0.4.0` |
-
-The SDK `major.minor` version must match the daemon. Patch versions are independent. See [Versioning & Compatibility](https://portaltechnologiesinc.github.io/lib/getting-started/versioning.html).
+Any language works — Python, Go, Ruby, PHP, Java, TypeScript. No SDK required.
 
 ---
 
@@ -88,6 +61,26 @@ The SDK `major.minor` version must match the daemon. Patch versions are independ
 - **Issue JWTs** — signed by the user's Nostr key, verifiable server-side
 - **Cashu tokens** — mint, burn, and transfer ecash
 - **NWC wallet** — connect any NWC-compatible wallet for outbound payments
+
+---
+
+## Documentation
+
+Full docs at **[portaltechnologiesinc.github.io/lib](https://portaltechnologiesinc.github.io/lib/)** — REST API reference, curl examples, guides for authentication, payments, Cashu, JWT, Docker deployment, and more.
+
+---
+
+## Optional SDKs
+
+For JavaScript/TypeScript and Java, typed SDKs are available. They wrap the same REST API with auto-polling, webhook handling, and typed responses.
+
+| SDK | Version | Install |
+|-----|---------|---------|
+| TypeScript / JavaScript | `0.4.0` | `npm install portal-sdk` |
+| Java | `0.4.0` | [JitPack](https://jitpack.io/#PortalTechnologiesInc/java-sdk) |
+| Docker image | `0.4.0` | `docker pull getportal/sdk-daemon:0.4.0` |
+
+The SDK `major.minor` version must match the daemon. See [Versioning & Compatibility](https://portaltechnologiesinc.github.io/lib/getting-started/versioning.html).
 
 ---
 
@@ -102,12 +95,6 @@ The SDK `major.minor` version must match the daemon. Patch versions are independ
 | `portal-rates` | Fiat/BTC exchange rates |
 | `clients/ts` | TypeScript SDK source |
 | `portal-cli` | CLI tools for development and testing |
-
----
-
-## Documentation
-
-Full docs at **[portaltechnologiesinc.github.io/lib](https://portaltechnologiesinc.github.io/lib/)** — guides for authentication, payments, Cashu, JWT, relay setup, Docker deployment, and more.
 
 ---
 
