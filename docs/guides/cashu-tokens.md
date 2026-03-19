@@ -4,12 +4,51 @@ Cashu ecash tokens: mint, send, request, and burn. Use for tickets, vouchers, or
 
 ## API
 
-- **requestCashu(mainKey, subkeys, mintUrl, unit, amount):** Request tokens from a user. Returns status (success / insufficient_funds / rejected), token, reason. On success, burn the token to claim.
-- **mintCashu(mintUrl, staticAuthToken?, unit, amount, description?):** Mint new tokens. Returns token string.
-- **burnCashu(mintUrl, unit, token, staticAuthToken?):** Burn (redeem) a token. Returns amount in millisats.
-- **sendCashuDirect(mainKey, subkeys, token):** Send a token to a user.
+- **requestCashu:** Request tokens from a user. Returns status (success / insufficient_funds / rejected), token, reason. On success, burn the token to claim.
+- **mintCashu:** Mint new tokens. Returns token string.
+- **burnCashu:** Burn (redeem) a token. Returns amount in millisats.
+- **sendCashuDirect:** Send a token directly to a user.
 
 <custom-tabs category="sdk">
+
+<div slot="title">HTTP</div>
+<section>
+
+```bash
+# Request Cashu tokens from a user (async)
+curl -s -X POST $BASE_URL/cashu/request \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "main_key": "USER_PUBKEY_HEX",
+    "subkeys": [],
+    "mint_url": "https://mint.example.com",
+    "unit": "sat",
+    "amount": 1000
+  }'
+# → { "stream_id": "abc123" }
+# Poll events/abc123 for result: { "status": "success", "token": "cashuA..." }
+
+# Mint tokens
+curl -s -X POST $BASE_URL/cashu/mint \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"mint_url": "https://mint.example.com", "unit": "sat", "amount": 500}'
+
+# Burn (redeem) a token
+curl -s -X POST $BASE_URL/cashu/burn \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"mint_url": "https://mint.example.com", "unit": "sat", "token": "cashuA..."}'
+
+# Send token directly to a user
+curl -s -X POST $BASE_URL/cashu/send-direct \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"main_key": "USER_PUBKEY_HEX", "subkeys": [], "token": "cashuA..."}'
+```
+
+</section>
 
 <div slot="title">JavaScript</div>
 <section>

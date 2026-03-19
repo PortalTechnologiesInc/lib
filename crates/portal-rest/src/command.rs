@@ -1,118 +1,120 @@
-use portal::conversation::profile::Profile;
 use portal::protocol::model::payment::{
     Currency, RecurrenceInfo, SinglePaymentRequestContent,
 };
 use portal::protocol::model::Timestamp;
 use serde::Deserialize;
 
+// ---- REST request bodies ----
+
 #[derive(Debug, Deserialize)]
-pub struct CommandWithId {
-    pub id: String,
-    #[serde(flatten)]
-    pub cmd: Command,
+pub struct KeyHandshakeRequest {
+    pub static_token: Option<String>,
+    pub no_request: Option<bool>,
 }
 
-// Commands that can be sent from client to server
 #[derive(Debug, Deserialize)]
-#[serde(tag = "cmd", content = "params")]
-pub enum Command {
-    // Authentication command - must be first command sent
-    Auth {
-        token: String,
-    },
-
-    // SDK methods
-    NewKeyHandshakeUrl {
-        static_token: Option<String>,
-        no_request: Option<bool>,
-    },
-    AuthenticateKey {
-        main_key: String,
-        subkeys: Vec<String>,
-    },
-    RequestRecurringPayment {
-        main_key: String,
-        subkeys: Vec<String>,
-        payment_request: RecurringPaymentParams,
-    },
-    RequestSinglePayment {
-        main_key: String,
-        subkeys: Vec<String>,
-        payment_request: SinglePaymentParams,
-    },
-    RequestPaymentRaw {
-        main_key: String,
-        subkeys: Vec<String>,
-        payment_request: SinglePaymentRequestContent,
-    },
-    FetchProfile {
-        main_key: String,
-    },
-    SetProfile {
-        profile: Profile,
-    },
-    CloseRecurringPayment {
-        main_key: String,
-        subkeys: Vec<String>,
-        subscription_id: String,
-    },
-    ListenClosedRecurringPayment,
-    RequestInvoice {
-        recipient_key: String,
-        subkeys: Vec<String>,
-        content: RequestInvoiceParams,
-    },
-    IssueJwt {
-        target_key: String,
-        duration_hours: i64,
-    },
-    VerifyJwt {
-        pubkey: String,
-        token: String,
-    },
-    RequestCashu {
-        recipient_key: String,
-        subkeys: Vec<String>,
-        mint_url: String,
-        unit: String,
-        amount: u64,
-    },
-    SendCashuDirect {
-        main_key: String,
-        subkeys: Vec<String>,
-        token: String,
-    },
-    MintCashu {
-        mint_url: String,
-        unit: String,
-        static_auth_token: Option<String>,
-        amount: u64,
-        description: Option<String>,
-    },
-    BurnCashu {
-        mint_url: String,
-        unit: String,
-        static_auth_token: Option<String>,
-        token: String,
-    },
-    AddRelay {
-        relay: String,
-    },
-    RemoveRelay {
-        relay: String,
-    },
-    CalculateNextOccurrence {
-        calendar: String,
-        from: Timestamp,
-    },
-    PayInvoice {
-        invoice: String,
-    },
-    FetchNip05Profile {
-        nip05: String,
-    },
-    GetWalletInfo,
+pub struct AuthenticateKeyRequest {
+    pub main_key: String,
+    pub subkeys: Vec<String>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct RequestRecurringPaymentRequest {
+    pub main_key: String,
+    pub subkeys: Vec<String>,
+    pub payment_request: RecurringPaymentParams,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RequestSinglePaymentRequest {
+    pub main_key: String,
+    pub subkeys: Vec<String>,
+    pub payment_request: SinglePaymentParams,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RequestPaymentRawRequest {
+    pub main_key: String,
+    pub subkeys: Vec<String>,
+    pub payment_request: SinglePaymentRequestContent,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CloseRecurringPaymentRequest {
+    pub main_key: String,
+    pub subkeys: Vec<String>,
+    pub subscription_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RequestInvoiceRequest {
+    pub recipient_key: String,
+    pub subkeys: Vec<String>,
+    pub content: RequestInvoiceParams,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct IssueJwtRequest {
+    pub target_key: String,
+    pub duration_hours: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VerifyJwtRequest {
+    pub pubkey: String,
+    pub token: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RequestCashuRequest {
+    pub recipient_key: String,
+    pub subkeys: Vec<String>,
+    pub mint_url: String,
+    pub unit: String,
+    pub amount: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SendCashuDirectRequest {
+    pub main_key: String,
+    pub subkeys: Vec<String>,
+    pub token: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MintCashuRequest {
+    pub mint_url: String,
+    pub unit: String,
+    pub static_auth_token: Option<String>,
+    pub amount: u64,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BurnCashuRequest {
+    pub mint_url: String,
+    pub unit: String,
+    pub static_auth_token: Option<String>,
+    pub token: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RelayRequest {
+    pub relay: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CalculateNextOccurrenceRequest {
+    pub calendar: String,
+    pub from: Timestamp,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PayInvoiceRequest {
+    pub invoice: String,
+}
+
+// ---- Shared param types ----
 
 #[derive(Debug, Deserialize)]
 pub struct SinglePaymentParams {
@@ -144,6 +146,6 @@ pub struct RequestInvoiceParams {
     pub expires_at: Timestamp,
     pub description: Option<String>,
     pub refund_invoice: Option<String>,
-    /// Optional request ID. If not provided, the command ID is used.
+    /// Optional request ID. If not provided, a UUID is generated.
     pub request_id: Option<String>,
 }

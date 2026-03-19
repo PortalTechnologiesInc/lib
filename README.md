@@ -7,14 +7,14 @@
 
 **Portal is the identity and payment layer for Bitcoin-native applications — no accounts, no KYC, no payment processor.**
 
-Users interact through the Portal mobile app using their Nostr identity. You run a single Docker container and talk to it with our SDK.
+Users interact through the Portal mobile app using their Nostr identity. You run a single Docker container and call its REST API from any language.
 
 ---
 
 ## How it works
 
 ```
-Your backend  ←—WebSocket—→  sdk-daemon  ←—Nostr relays—→  Portal app (user's phone)
+Your backend  ←—REST API—→  sdk-daemon  ←—Nostr relays—→  Portal app (user's phone)
 ```
 
 1. Your backend asks sdk-daemon for a handshake URL → show it as a QR code
@@ -31,46 +31,26 @@ Your backend  ←—WebSocket—→  sdk-daemon  ←—Nostr relays—→  Porta
 docker run -d -p 3000:3000 \
   -e PORTAL__AUTH__AUTH_TOKEN=your-secret-token \
   -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
-  getportal/sdk-daemon:0.3.0
+  getportal/sdk-daemon:0.4.0
 ```
 
-**2. Install the SDK**
+**2. Call the REST API**
 
 ```bash
-npm install portal-sdk          # TypeScript / JavaScript
+# Get a handshake URL — show it to the user as a QR code
+curl -s -X POST http://localhost:3000/key-handshake \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{}' | jq .
+
+# → { "stream_id": "abc123", "url": "nostr+walletconnect://..." }
+
+# Poll for the user's public key (repeat until events arrive)
+curl -s "http://localhost:3000/events/abc123?after=0" \
+  -H "Authorization: Bearer your-secret-token" | jq .
 ```
 
-```groovy
-// Java (Gradle) — via JitPack
-implementation 'com.github.PortalTechnologiesInc:java-sdk:0.3.0'
-```
-
-**3. Connect and authenticate a user**
-
-```typescript
-import { PortalSDK } from 'portal-sdk';
-
-const client = new PortalSDK({ serverUrl: 'ws://localhost:3000/ws' });
-await client.connect();
-await client.authenticate('your-secret-token');
-
-const url = await client.newKeyHandshakeUrl((userKey) => {
-  console.log('User authenticated:', userKey);
-});
-// Show `url` as a QR code to the user
-```
-
----
-
-## SDK versions
-
-| SDK | Version | Install |
-|-----|---------|---------|
-| TypeScript / JavaScript | `0.3.0` | `npm install portal-sdk` |
-| Java | `0.3.0` | [JitPack](https://jitpack.io/#PortalTechnologiesInc/java-sdk) |
-| Docker image | `0.3.0` | `docker pull getportal/sdk-daemon:0.3.0` |
-
-The SDK `major.minor` version must match the daemon. Patch versions are independent. See [Versioning & Compatibility](https://portaltechnologiesinc.github.io/lib/getting-started/versioning.html).
+Any language works — Python, Go, Ruby, PHP, Java, TypeScript. No SDK required.
 
 ---
 
@@ -84,23 +64,36 @@ The SDK `major.minor` version must match the daemon. Patch versions are independ
 
 ---
 
+## Documentation
+
+Full docs at **[portaltechnologiesinc.github.io/lib](https://portaltechnologiesinc.github.io/lib/)** — REST API reference, curl examples, guides for authentication, payments, Cashu, JWT, Docker deployment, and more.
+
+---
+
+## Official SDKs
+
+For JavaScript/TypeScript and Java, typed SDKs are available. They wrap the same REST API with auto-polling, webhook handling, and typed responses.
+
+| SDK | Version | Install |
+|-----|---------|---------|
+| TypeScript / JavaScript | `0.4.0` | `npm install portal-sdk` |
+| Java | `0.4.0` | [JitPack](https://jitpack.io/#PortalTechnologiesInc/java-sdk) |
+
+The SDK `major.minor` version must match the daemon. See [Versioning & Compatibility](https://portaltechnologiesinc.github.io/lib/getting-started/versioning.html).
+
+---
+
 ## This repository
 
 | Package | Description |
 |---------|-------------|
-| `portal-rest` | SDK Daemon — HTTP + WebSocket API server |
+| `portal-rest` | SDK Daemon — REST API server |
 | `portal` | Core Nostr protocol and conversation logic |
 | `portal-app` | App runtime and wallet integration |
 | `portal-wallet` | Wallet backends (NWC, Breez) |
 | `portal-rates` | Fiat/BTC exchange rates |
 | `clients/ts` | TypeScript SDK source |
 | `portal-cli` | CLI tools for development and testing |
-
----
-
-## Documentation
-
-Full docs at **[portaltechnologiesinc.github.io/lib](https://portaltechnologiesinc.github.io/lib/)** — guides for authentication, payments, Cashu, JWT, relay setup, Docker deployment, and more.
 
 ---
 

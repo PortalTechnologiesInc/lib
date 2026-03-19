@@ -1,205 +1,120 @@
-import { PortalSDK, Currency, RecurringPaymentRequestContent, SinglePaymentRequestContent, Timestamp } from './src/index';
-import * as readline from 'readline';
+/**
+ * Example: Portal SDK with Express + webhook-based async flow.
+ *
+ * 1. Start portal-rest with webhook_url pointing to this server.
+ * 2. Run: npx ts-node example.ts
+ * 3. Open the handshake URL in a browser / scan QR.
+ * 4. The webhook fires → handshake promise resolves → payment is initiated.
+ */
 
-// Store unsubscribe functions at the module level
-async function testFullFlow(client: PortalSDK, mainKey: string, subkeys: string[]) {
-    // Example 2: Key Authentication
-    console.log('\n=== Key Authentication ===');
-    const authResponse = await client.authenticateKey(mainKey, subkeys);
-    console.log('Authentication successful:', authResponse);
+import { createServer } from 'http';
+import { PortalClient, Timestamp } from './src/index';
 
-    // Example 3: Recurring Payment
-    console.log('\n=== Recurring Payment ===');
-    const recurringPayment: RecurringPaymentRequestContent = {
-      amount: 10 * 1000,
-      currency: Currency.Millisats,
-      recurrence: {
-        calendar: "monthly",
-        first_payment_due: Timestamp.fromNow(86400), // 24 hours from now
-        max_payments: 12
-      },
-      expires_at: Timestamp.fromNow(3600) // 1 hour from now
-    };
-
-    const recurringStatus = await client.requestRecurringPayment(
-      mainKey,
-      subkeys,
-      recurringPayment
-    );
-    console.log('Recurring payment status:', recurringStatus);
-
-    // Example 4: Single Payment
-    console.log('\n=== Single Payment ===');
-    const singlePayment: SinglePaymentRequestContent = {
-      amount: 11 * 1000,
-      currency: Currency.Millisats,
-      description: "Test payment",
-      subscription_id: recurringStatus.status.status === 'confirmed' ? recurringStatus.status.subscription_id : undefined
-    };
-
-    await client.requestSinglePayment(
-      mainKey,
-      subkeys,
-      singlePayment,
-      (status) => {
-        console.log('Payment status update:', status);
-      }
-    );
-    
-    // Example 5: Fetch Profile
-    console.log('\n=== Fetch Profile ===');
-    const profile = await client.fetchProfile(mainKey);
-    console.log('User profile:', profile);
-}
+const PORT = parseInt(process.env.WEBHOOK_PORT ?? '4000', 10);
+const PORTAL_URL = process.env.PORTAL_URL ?? 'http://localhost:3000';
+const AUTH_TOKEN = process.env.PORTAL_AUTH_TOKEN ?? 'password12345';
+const WEBHOOK_SECRET = process.env.PORTAL_WEBHOOK_SECRET ?? 'my-webhook-secret';
 
 async function main() {
-  // Create a new client instance
-  const client = new PortalSDK({
-    serverUrl: 'ws://localhost:7000/ws',
-    connectTimeout: 5000,
-    debug: false
+  // ---- 1. Create client ----
+  const portal = new PortalClient({
+    baseUrl: PORTAL_URL,
+    authToken: AUTH_TOKEN,
+    webhookSecret: WEBHOOK_SECRET,
+    debug: true,
   });
 
-  // Create readline interface for user input
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
+  // ---- 2. Mount webhook handler in a plain HTTP server ----
+  const handler = portal.webhookHandler();
+  const server = createServer((req, res) => {
+    if (req.method === 'POST' && req.url === '/portal/webhook') {
+      return handler(req, res);
+    }
+    res.writeHead(404);
+    res.end('Not found');
+  });
+
+  server.listen(PORT, () => {
+    console.log(`Webhook server listening on http://localhost:${PORT}/portal/webhook`);
+    console.log(`Make sure portal-rest is configured with webhook_url = http://localhost:${PORT}/portal/webhook`);
   });
 
   try {
-    // Connect to the server
-    console.log('Connecting to server...');
-    await client.connect();
-    console.log('Connected successfully');
+    // ---- 3. Health check ----
+    console.log('\n=== Health Check ===');
+    const health = await portal.health();
+    console.log('Health:', health);
 
-    // Set up event listeners
-    client.on({
-      onConnected: () => console.log('Connection established'),
-      onDisconnected: () => console.log('Disconnected from server'),
-      onError: (error) => console.error('Error:', error)
-    });
+    const ver = await portal.version();
+    console.log('Version:', ver.version, 'Commit:', ver.git_commit);
 
-    // First, authenticate with the server
-    console.log('\n=== Authentication ===');
-    const authToken = process.env.AUTH_TOKEN || 'password12345'; // Replace with your actual token
-    await client.authenticate(authToken);
-    console.log('Authentication successful');
+    const serverInfo = await portal.info();
+    console.log('Server public key:', serverInfo.public_key);
 
-    // Example: JWT Operations
-    console.log('\n=== JWT Operations ===');
-    const target_key = '02eec5685e141a8fc6ee91e3aad0556bdb4f7b8f3c8c8c8c8c8c8c8c8c8c8c8c8';
-    const durationHours = 1; // 1 hour
-    
-    try {
-      const token = await client.issueJwt(target_key, durationHours);
-      console.log('Issued JWT token:', token);
-      
-      // Example: Verify the JWT token
-      const claims = await client.verifyJwt(target_key, token);
-      console.log('JWT claims:', claims);
-      console.log('Target key:', claims.target_key);
-    } catch (error) {
-      console.error('JWT operation failed:', error);
-    }
+    // ---- 4. Key Handshake (async — resolved via webhook) ----
+    console.log('\n=== Key Handshake ===');
+    const handshake = await portal.newKeyHandshakeUrl();
+    console.log('Share this URL with the user:', handshake.url);
+    console.log('Stream ID:', handshake.streamId);
+    console.log('Waiting for handshake completion (via webhook)...');
 
-    // Example: Relay Management
-    console.log('\n=== Relay Management ===');
-    try {
-      const relayUrl = 'wss://relay.damus.io';
-      const addedRelay = await client.addRelay(relayUrl);
-      console.log('Added relay:', addedRelay);
-      
-      const removedRelay = await client.removeRelay(relayUrl);
-      console.log('Removed relay:', removedRelay);
-    } catch (error) {
-      console.error('Relay management failed:', error);
-    }
+    const { main_key, preferred_relays } = await handshake.done;
+    console.log('Handshake complete!');
+    console.log('  Main key:', main_key);
+    console.log('  Preferred relays:', preferred_relays);
 
-    // Example 1: Authentication Flow
-    console.log('\n=== Authentication Flow ===');
-    const url = await client.newKeyHandshakeUrl((mainKey) => {
-      console.log('Auth Init received for key:', mainKey);
-      testFullFlow(client, mainKey, []);
-    });
-    console.log('Auth Init URL:', url);
-
-    // Example 2: Calculate Next Occurrence
-    console.log('\n=== Calculate Next Occurrence ===');
-    const calendar = 'daily';
-    const from = Timestamp.fromNow(0); // now
-    const nextOccurrence = await client.calculateNextOccurrence(calendar, from);
-    if (nextOccurrence) {
-      // Print the next occurrence in a human readable format
-      const nextOccurrenceDate = nextOccurrence.toDate();
-      console.log('Next occurrence:', nextOccurrenceDate.toISOString());
-    } else {
-      console.log('No next occurrence found');
-    }
-
-    // Example 3: Fetch Nip05 Profile
-    console.log('\n=== Fetch Nip05 Profile ===');
-    const nip05 = 'ancientdragon913@getportal.cc';
-    const nip05Profile = await client.fetchNip05Profile(nip05);
-    console.log('Nip05 profile pubkey:', nip05Profile?.public_key ?? 'No profile found');
-
-
-    const pubkey = "b64f27e66fdd979d2d0a0afb13f4d601339047fd3d2041a80cbc8d6398f66fdf";
-
-    // Example 4: Request Single Payment
-    console.log('\n=== Request Single Payment ===');
-    await client.requestSinglePayment(pubkey, [], {
+    // ---- 5. Single Payment (async — resolved via webhook) ----
+    console.log('\n=== Single Payment ===');
+    const payment = await portal.requestSinglePayment(main_key, [], {
       amount: 200,
-      currency: "EUR",
-      description: "Test payment",
-    }, (status) => {
-      console.log('Payment status:', status);
+      currency: 'EUR',
+      description: 'Example payment',
     });
-    console.log('Payment request sent');
+    console.log('Payment stream ID:', payment.streamId);
 
-    // Example 5: Get Wallet Info
-    console.log('\n=== Get Wallet Info ===');
-    const walletInfo = await client.getWalletInfo();
-    console.log('Wallet info:', walletInfo);
+    // Listen for intermediate events (e.g. user_approved)
+    portal.onEvent(payment.streamId, (event) => {
+      console.log('  [intermediate]', event.type, event);
+    });
 
-    // Example 6: Request Invoice (same recipient as single payment)
-    // The recipient (portal-app-demo with identity matching `pubkey`) must be running and must
-    // reply to the "Invoice request" section in the demo UI for this to resolve.
-    console.log('\n=== Request Invoice ===');
-    try {
-      const invoice = await client.requestInvoice(pubkey, [], {
-        amount: 599,  // 5.99 EUR
-        currency: "EUR",
-        expires_at: Timestamp.fromNow(3600),
-        description: "Test invoice request",
-      });
-      console.log('Invoice received:', invoice);
-    } catch (e) {
-      console.error('Request invoice failed (reply to the invoice request in the demo UI?):', e);
-    }
+    console.log('Waiting for payment to complete (via webhook)...');
+    const finalEvent = await payment.done;
+    console.log('Payment complete:', finalEvent);
 
+    // ---- 6. Synchronous operations ----
+    console.log('\n=== Wallet Info ===');
+    const wallet = await portal.getWalletInfo();
+    console.log('Wallet:', wallet.wallet_type, '— Balance:', wallet.balance_msat, 'msat');
 
-    // Keep the connection alive and wait for user input
-    console.log('\nConnection is active. Press Enter to disconnect...');
+    console.log('\n=== JWT ===');
+    const token = await portal.issueJwt(main_key, 1);
+    console.log('JWT:', token.substring(0, 40) + '...');
+    const claims = await portal.verifyJwt(serverInfo.public_key, token);
+    console.log('Verified target_key:', claims.target_key);
+
+    console.log('\n=== Relay Management ===');
+    await portal.addRelay('wss://relay.damus.io');
+    console.log('Added relay');
+    await portal.removeRelay('wss://relay.damus.io');
+    console.log('Removed relay');
+
+    console.log('\n=== Calendar ===');
+    const next = await portal.calculateNextOccurrence('daily', Timestamp.fromNow(0));
+    console.log('Next daily occurrence:', next?.toDate().toISOString() ?? 'none');
+
+    console.log('\n=== Profile ===');
+    const profile = await portal.fetchProfile(main_key);
+    console.log('Profile:', profile);
+
     
-    await new Promise<void>((resolve) => {
-      rl.question('', () => {
-        resolve();
-      });
-    });
-
-    // Clean up
-    client.disconnect();
-    rl.close();
-    console.log('\nDisconnected and cleaned up');
-
-  } catch (error) {
-    console.error('Error in example:', error);
-    client.disconnect();
-    rl.close();
+    console.log('\nAll done! Pending streams:', portal.pendingCount);
+  } finally {
+    server.close();
+    console.log('Server closed.');
   }
 }
 
-
-
-// Run the example
-main().catch(console.error); 
+main().catch((err) => {
+  console.error('Fatal error:', err);
+  process.exit(1);
+});

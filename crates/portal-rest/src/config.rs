@@ -10,6 +10,30 @@ pub struct Settings {
     pub nostr: NostrSettings,
     pub auth: AuthSettings,
     pub wallet: WalletSettings,
+    #[serde(default)]
+    pub webhook: WebhookSettings,
+    #[serde(default)]
+    pub database: DatabaseSettings,
+    #[serde(default)]
+    pub profile: ProfileSettings,
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+pub struct ProfileSettings {
+    pub name: Option<String>,
+    pub display_name: Option<String>,
+    pub picture: Option<String>,
+    pub nip05: Option<String>,
+}
+
+impl ProfileSettings {
+    /// Returns true if any field is set.
+    pub fn is_set(&self) -> bool {
+        self.name.is_some()
+            || self.display_name.is_some()
+            || self.picture.is_some()
+            || self.nip05.is_some()
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -34,6 +58,25 @@ pub struct WalletSettings {
     pub ln_backend: LnBackend,
     pub nwc: Option<NwcSettings>,
     pub breez: Option<BreezSettings>,
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+pub struct WebhookSettings {
+    pub url: Option<String>,
+    pub secret: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct DatabaseSettings {
+    pub path: String,
+}
+
+impl Default for DatabaseSettings {
+    fn default() -> Self {
+        Self {
+            path: "portal-rest.db".to_string(),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]

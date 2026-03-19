@@ -12,6 +12,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### [0.4.0] - 2026-03-17
+
+#### Changed
+- **WebSocket → REST**: All endpoints are now standard HTTP (POST/GET/PUT/DELETE); WebSocket API removed
+- Async operations (key handshake, payments, invoices, cashu) now return `stream_id` immediately; events are delivered via webhooks or polling (`GET /events/:stream_id`)
+- `GET /version` response now wrapped in standard `ApiResponse` envelope
+- Profile is now set via `[profile]` config / env vars at startup; `SetProfile` command removed
+- `FAKE_PAYMENTS` feature gated behind `#[cfg(debug_assertions)]`
+- `/.well-known/nostr.json` is now a public endpoint (no auth required) for NIP-05 verification
+
+#### Added
+- **Webhook delivery**: HMAC-SHA256 signed POST (`X-Portal-Signature` header) to configured URL on every stream event
+- **SQLite event persistence**: Events stored with WAL mode; startup recovery for in-flight `single_payment` streams
+- `GET /info`: New authenticated endpoint returning server public key
+- **TypeScript SDK**: `autoPollingIntervalMs` config option starts a background scheduler; `poll(op)` now typed — takes `AsyncOperation<T>`, returns `T`; `destroy()` stops the auto-poller; `webhookHandler()` for HMAC-verified webhook processing
+- **Java SDK** (`portal-java-sdk`): Full rewrite from WebSocket to REST; `PortalClient` with `PortalClientConfig` supporting manual polling, auto-polling, and webhooks; all async methods return typed `AsyncOperation<T>`
+- **OpenAPI spec**: `openapi.yaml` with all endpoints, request/response schemas, and `StreamIdResponse` for async operations
+- **Documentation**: Full mdBook docs with HTTP/curl tabs on every page, REST API guide, interactive OpenAPI viewer (Redoc), updated environment variables reference
+- **Examples**: Runnable Node.js examples (`auth.js`, `single-payment.js`, `profile.js`, `error-handling.js`) with `.env` support
+- **Security**: Constant-time Bearer token comparison (`subtle::ConstantTimeEq`); constant-time webhook signature verification (`timingSafeEqual`)
+- **Performance**: Shared `reqwest::Client` in `EventStore` for webhook delivery (no per-event allocation)
+
+#### Fixed
+- TypeScript SDK: `requestSinglePayment`, `requestPaymentRaw`, `requestRecurringPayment` now return correctly typed `AsyncOperation<T>` (previously returned raw `StreamEvent`)
+
+#### Removed
+- WebSocket API (`/ws` endpoint)
+- `SetProfile` / `ListenClosedRecurringPayment` commands
+
+---
+
 ### [0.3.0] - 2026-02-26
 
 #### Changed

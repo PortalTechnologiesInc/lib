@@ -1,10 +1,18 @@
-# Portal API
+# Portal REST API
 
-This crate is the **Portal API** server (REST + WebSocket). Use it via the [TypeScript SDK](https://www.npmjs.com/package/portal-sdk) or [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk), or connect to the WebSocket API directly.
+REST API server for Portal — Nostr key auth, Lightning payments, JWT, Cashu, profiles, and more. Use it via the [TypeScript SDK](https://www.npmjs.com/package/portal-sdk) or call the HTTP endpoints directly.
 
-**Full documentation:** [https://portaltechnologiesinc.github.io/lib/](https://portaltechnologiesinc.github.io/lib/) — Quick Start, SDK usage, configuration, and [API reference](https://portaltechnologiesinc.github.io/lib/) (WebSocket commands).
+**Full documentation:** [https://portaltechnologiesinc.github.io/lib/](https://portaltechnologiesinc.github.io/lib/)
 
 ---
+
+## Architecture
+
+- **REST API** with Bearer token authentication
+- **Async operations** return a `stream_id`; poll via `GET /events/:stream_id?after=<index>`
+- **Webhook delivery** for real-time push notifications (HMAC-SHA256 signed)
+- **TypeScript SDK** available on npm (`portal-sdk`)
+- **Public endpoints** (no auth): `GET /health`, `GET /version`
 
 ## Run the API
 
@@ -17,19 +25,13 @@ docker run -d -p 3000:3000 \
   getportal/sdk-daemon:latest
 ```
 
-Use `ws://localhost:3000/ws` as the SDK `serverUrl` and your token in `client.authenticate(...)`. Check: `curl http://localhost:3000/health` → `OK`, `curl http://localhost:3000/version` → `{"version":"0.1.0","git_commit":"a1b2c3d4"}`.
+Check: `curl http://localhost:3000/health` → `OK`, `curl http://localhost:3000/version` → `{"data":{"version":"...","git_commit":"..."}}`
 
 **From source:**
 
 ```bash
 cargo build --release
-./target/release/portal-rest
+./target/release/rest
 ```
 
-**Configuration:** Config file `~/.portal-rest/config.toml` (see `example.config.toml` in this crate) and env vars `PORTAL__<SECTION>__<KEY>`. Full options: [Environment Variables](https://portaltechnologiesinc.github.io/lib/getting-started/environment-variables.html) and [Docker / Building](https://portaltechnologiesinc.github.io/lib/getting-started/docker-deployment.html).
-
----
-
-## API reference (advanced)
-
-Without an SDK: connect to `GET /ws` (WebSocket), send an `Auth` command first, then JSON commands (`id`, `cmd`, `params`). Full command list and request/response shapes: see the [documentation](https://portaltechnologiesinc.github.io/lib/) and the TypeScript SDK types in `clients/ts`.
+**Configuration:** Config file `~/.portal-rest/config.toml` (see `example.config.toml`) and environment variables `PORTAL__<SECTION>__<KEY>`. Full options: [Environment Variables](https://portaltechnologiesinc.github.io/lib/getting-started/environment-variables.html) and [Docker / Building](https://portaltechnologiesinc.github.io/lib/getting-started/docker-deployment.html).

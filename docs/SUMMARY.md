@@ -14,13 +14,15 @@
 * [Building from Source](getting-started/building-from-source.md)
 * [Versioning & Compatibility](getting-started/versioning.md)
 
-# SDK
+# SDK & REST API
 
 * [Installation](sdk/installation.md)
 * [Basic Usage](sdk/basic-usage.md)
 * [Configuration](sdk/configuration.md)
 * [Error Handling](sdk/error-handling.md)
-* [API Reference](sdk/api-reference.md)
+* [API Reference (SDK)](sdk/api-reference.md)
+* [REST API (HTTP / curl)](sdk/rest-api.md)
+* [API Reference (OpenAPI)](sdk/api-reference-rest.md)
 
 # Guides
 

@@ -59,6 +59,33 @@ sdk.sendCommand(
 
 </section>
 
+<div slot="title">HTTP</div>
+<section>
+
+```bash
+# 1. Request payment (amount in millisats; 1 sat = 1000 millisats)
+curl -s -X POST $BASE_URL/payments/single \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "main_key": "USER_PUBKEY_HEX",
+    "subkeys": [],
+    "description": "Premium - 1 month",
+    "amount": 10000,
+    "currency": "millisats"
+  }'
+# → { "stream_id": "xyz789" }
+
+# 2. Poll for payment status
+curl -s "$BASE_URL/events/xyz789?after=0" \
+  -H "Authorization: Bearer $AUTH_TOKEN"
+# → { "events": [{ "index": 0, "data": { "status": "paid", "preimage": "..." } }] }
+```
+
+Poll until status is `paid`, `user_rejected`, `timeout`, or `error`. See [REST API](../sdk/rest-api.md).
+
+</section>
+
 </custom-tabs>
 
 **Invoice payment:** `requestInvoicePayment(mainKey, subkeys, { amount, currency, description, invoice, expires_at }, onStatusChange)` — pay an external Lightning invoice. Java: **RequestInvoicePaymentRequest**.

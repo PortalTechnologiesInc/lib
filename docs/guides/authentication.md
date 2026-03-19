@@ -56,6 +56,36 @@ sdk.sendCommand(
 
 </section>
 
+<div slot="title">HTTP</div>
+<section>
+
+```bash
+# 1. Get a key handshake URL
+curl -s -X POST $BASE_URL/key-handshake \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+# → { "stream_id": "abc123", "url": "nostr+walletconnect://..." }
+# Show the URL to the user (QR code, link, etc.)
+# Poll the stream to receive the user's public key when they complete the handshake.
+
+# 2. Authenticate the key
+curl -s -X POST $BASE_URL/authenticate-key \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"main_key": "USER_PUBKEY_HEX", "subkeys": []}'
+# → { "stream_id": "def456" }
+
+# 3. Poll for result
+curl -s "$BASE_URL/events/def456?after=0" \
+  -H "Authorization: Bearer $AUTH_TOKEN"
+# → { "events": [{ "index": 0, "type": "StatusUpdate", "data": { "status": "approved", "session_token": "..." } }] }
+```
+
+See [REST API](../sdk/rest-api.md) for the full polling flow.
+
+</section>
+
 </custom-tabs>
 
 - **Subkeys:** Pass optional subkeys to `authenticateKey` (JS) or `AuthenticateKeyRequest` (Java) for delegated auth.

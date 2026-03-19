@@ -2,123 +2,159 @@ use nostr::nips::nip05::Nip05Profile;
 
 use portal::conversation::profile::Profile;
 use portal::protocol::model::auth::AuthResponseStatus;
-use portal::protocol::model::payment::{CashuResponseStatus, RecurringPaymentResponseContent};
+use portal::protocol::model::payment::{
+    CashuResponseStatus, RecurringPaymentResponseContent,
+};
 use portal::protocol::model::Timestamp;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-// Response structs for each API
+/// Generic API response wrapper used for all REST endpoints.
 #[derive(Debug, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum Response {
-    Error { id: String, message: String },
+pub struct ApiResponse<T: Serialize> {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
 
-    Success { id: String, data: ResponseData },
+impl<T: Serialize> ApiResponse<T> {
+    pub fn ok(data: T) -> Self {
+        Self {
+            success: true,
+            data: Some(data),
+            error: None,
+        }
+    }
+}
 
-    Notification { id: String, data: NotificationData },
+impl ApiResponse<()> {
+    pub fn error(msg: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            data: None,
+            error: Some(msg.into()),
+        }
+    }
+}
+
+// ---- Data types returned by endpoints ----
+
+#[derive(Debug, Serialize)]
+pub struct KeyHandshakeUrlResponse {
+    pub url: String,
+    pub stream_id: String,
+}
+
+/// Generic response for async stream-based endpoints.
+#[derive(Debug, Serialize)]
+pub struct StreamResponse {
+    pub stream_id: String,
 }
 
 #[derive(Debug, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ResponseData {
-    AuthSuccess {
-        message: String,
-    },
-
-    KeyHandshakeUrl {
-        url: String,
-        stream_id: String,
-    },
-
-    AuthResponse {
-        event: AuthResponseData,
-    },
-
-    RecurringPayment {
-        status: RecurringPaymentResponseContent,
-    },
-
-    SinglePayment {
-        stream_id: String,
-    },
-
-    #[serde(rename = "profile")]
-    ProfileData {
-        profile: Option<Profile>,
-    },
-
-    CloseRecurringPaymentSuccess {
-        message: String,
-    },
-
-    ListenClosedRecurringPayment {
-        stream_id: String,
-    },
-
-    InvoicePayment {
-        invoice: String,
-        payment_hash: Option<String>,
-    },
-
-    IssueJwt {
-        token: String,
-    },
-
-    VerifyJwt {
-        target_key: String,
-    },
-
-    CashuResponse {
-        status: CashuResponseStatus,
-    },
-
-    SendCashuDirectSuccess {
-        message: String,
-    },
-
-    CashuMint {
-        token: String,
-    },
-
-    CashuBurn {
-        amount: u64,
-    },
-
-    AddRelay {
-        relay: String,
-    },
-
-    RemoveRelay {
-        relay: String,
-    },
-
-    CalculateNextOccurrence {
-        next_occurrence: Option<Timestamp>,
-    },
-
-    PayInvoice {
-        preimage: String,
-        fees_paid_msat: u64,
-    },
-
-    FetchNip05Profile {
-        profile: Nip05Profile,
-    },
-
-    WalletInfo {
-        wallet_type: String,
-        balance_msat: u64,
-    },
+pub struct SinglePaymentResponse {
+    pub stream_id: String,
 }
 
 #[derive(Debug, Serialize)]
-pub struct AuthResponseData {
-    pub user_key: String,
-    pub recipient: String,
-    pub challenge: String,
-    pub status: AuthResponseStatus,
+pub struct ProfileResponse {
+    pub profile: Option<Profile>,
 }
 
 #[derive(Debug, Serialize)]
+pub struct CloseRecurringPaymentResponse {
+    pub message: String,
+}
+
+
+
+#[derive(Debug, Serialize)]
+pub struct IssueJwtResponse {
+    pub token: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerifyJwtResponse {
+    pub target_key: String,
+}
+
+
+
+#[derive(Debug, Serialize)]
+pub struct SendCashuDirectResponse {
+    pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CashuMintResponse {
+    pub token: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CashuBurnResponse {
+    pub amount: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RelayResponse {
+    pub relay: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct NextOccurrenceResponse {
+    pub next_occurrence: Option<Timestamp>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PayInvoiceResponse {
+    pub preimage: String,
+    pub fees_paid_msat: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Nip05ProfileResponse {
+    pub profile: Nip05Profile,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WalletInfoResponse {
+    pub wallet_type: String,
+    pub balance_msat: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VersionResponse {
+    pub version: &'static str,
+    pub git_commit: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InfoResponse {
+    pub public_key: String,
+}
+
+/// NIP-05 `.well-known/nostr.json` content.
+#[derive(Debug, Serialize)]
+pub struct Nip05WellKnownResponse {
+    pub names: std::collections::HashMap<String, String>,
+    #[serde(skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub relays: std::collections::HashMap<String, Vec<String>>,
+}
+
+// ---- Event / notification types (stored for polling, sent via webhook) ----
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamEvent {
+    /// Monotonically increasing index within this stream.
+    pub index: u64,
+    /// ISO-8601 timestamp of when the event was created.
+    pub timestamp: String,
+    #[serde(flatten)]
+    pub data: NotificationData,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum NotificationData {
     KeyHandshake {
@@ -134,9 +170,28 @@ pub enum NotificationData {
         recipient: String,
         main_key: String,
     },
+    AuthenticateKey {
+        user_key: String,
+        recipient: String,
+        challenge: String,
+        status: AuthResponseStatus,
+    },
+    RecurringPaymentResponse {
+        status: RecurringPaymentResponseContent,
+    },
+    InvoiceResponse {
+        invoice: String,
+        payment_hash: String,
+    },
+    CashuResponse {
+        status: CashuResponseStatus,
+    },
+    Error {
+        reason: String,
+    },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum InvoiceStatus {
     Paid { preimage: Option<String> },
@@ -146,4 +201,11 @@ pub enum InvoiceStatus {
     UserSuccess { preimage: Option<String> },
     UserFailed { reason: Option<String> },
     UserRejected { reason: Option<String> },
+}
+
+/// Events polling response.
+#[derive(Debug, Serialize)]
+pub struct EventsResponse {
+    pub stream_id: String,
+    pub events: Vec<StreamEvent>,
 }

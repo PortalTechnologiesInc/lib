@@ -19,7 +19,7 @@ relays = ["wss://relay.nostr.net", "wss://relay.damus.io", "wss://relay.getporta
 
 
 [auth]
-## Authentication token for API access. This token must be provided by clients when connecting to the WebSocket API.
+## Authentication token for API access. This token must be provided by clients via Bearer token in the Authorization header.
 auth_token = "your-auth-token"
 
 
@@ -38,3 +38,29 @@ ln_backend = "none"
 # [wallet.breez]
 # api_key = "your-breez-api-key"
 # mnemonic = "your-breez-mnemonic"
+
+
+[database]
+## Path to the SQLite database file. Relative paths are resolved under ~/.portal-rest/.
+## Can also be set via DATABASE_PATH env var.
+path = "portal-rest.db"
+
+
+## Optional Nostr profile metadata. Set any combination of fields to publish
+## your profile on the Nostr network at startup. Omit the section or leave
+## fields commented out to skip.
+# [profile]
+# name = "my-service"
+# display_name = "My Service"
+# picture = "https://example.com/avatar.png"
+# nip05 = "service@example.com"
+
+
+[webhook]
+## Optional webhook URL. When set, server-initiated events (key handshake completions,
+## payment status updates, closed recurring payments) will be POSTed to this URL as JSON.
+# url = "https://example.com/webhook"
+
+## Shared secret for HMAC-SHA256 webhook signatures. The signature is sent
+## in the X-Portal-Signature header so receivers can verify authenticity.
+# secret = "your-webhook-secret"

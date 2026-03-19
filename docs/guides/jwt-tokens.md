@@ -9,6 +9,27 @@ Verify JWTs issued by user wallets for API auth. Typically the wallet issues the
 
 <custom-tabs category="sdk">
 
+<div slot="title">HTTP</div>
+<section>
+
+```bash
+# Issue a JWT
+curl -s -X POST $BASE_URL/jwt/issue \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"target_key": "TARGET_PUBKEY_HEX", "duration_hours": 24}'
+# → { "token": "eyJ..." }
+
+# Verify a JWT
+curl -s -X POST $BASE_URL/jwt/verify \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"public_key": "PUBKEY_HEX", "token": "eyJ..."}'
+# → { "target_key": "..." }
+```
+
+</section>
+
 <div slot="title">JavaScript</div>
 <section>
 

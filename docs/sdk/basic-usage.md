@@ -4,19 +4,42 @@
 
 <custom-tabs category="sdk">
 
+<div slot="title">HTTP</div>
+<section>
+
+```bash
+export BASE_URL=http://localhost:3000
+export AUTH_TOKEN=your-auth-token
+
+# Get a key handshake URL
+curl -s -X POST $BASE_URL/key-handshake \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+# → { "stream_id": "abc123", "url": "nostr+walletconnect://..." }
+
+# Poll for the user's public key
+curl -s "$BASE_URL/events/abc123?after=0" \
+  -H "Authorization: Bearer $AUTH_TOKEN"
+```
+
+See [REST API](rest-api.md) for the full async flow.
+
+</section>
+
 <div slot="title">JavaScript</div>
 <section>
 
 ```typescript
-import { PortalSDK } from 'portal-sdk';
+import { PortalClient } from 'portal-sdk';
 
-const client = new PortalSDK({ serverUrl: 'ws://localhost:3000/ws' });
-await client.connect();
-await client.authenticate('your-auth-token');
-
-const authUrl = await client.newKeyHandshakeUrl((mainKey) => {
-  console.log('User key:', mainKey);
+const client = new PortalClient({
+  baseUrl: 'http://localhost:3000',
+  authToken: 'your-auth-token'
 });
+
+const { url, stream } = await client.newKeyHandshakeUrl();
+console.log('User key:', (await client.poll(stream)).main_key);
 ```
 
 </section>
@@ -25,26 +48,20 @@ const authUrl = await client.newKeyHandshakeUrl((mainKey) => {
 <section>
 
 ```java
-import cc.getportal.PortalSDK;
-import cc.getportal.command.request.KeyHandshakeUrlRequest;
-import cc.getportal.command.response.KeyHandshakeUrlResponse;
-import cc.getportal.command.notification.KeyHandshakeUrlNotification;
+import cc.getportal.PortalClient;
+import cc.getportal.PortalClientConfig;
 
-PortalSDK sdk = new PortalSDK("ws://localhost:3000/ws");
-sdk.connect();
-sdk.authenticate("my-secret-token");
-
-sdk.sendCommand(
-    new KeyHandshakeUrlRequest((n) ->
-        System.out.println("mainKey: " + n.main_key())),
-    (res, err) -> {
-        if (err != null) { System.err.println(err); return; }
-        System.out.println("URL: " + res.url());
-    }
+PortalClient client = new PortalClient(
+    PortalClientConfig.create("http://localhost:3000", "your-auth-token")
 );
+
+var operation = client.newKeyHandshakeUrl();
+System.out.println("URL: " + operation.url());
+var result = client.pollUntilComplete(operation);
+System.out.println("mainKey: " + result.main_key());
 ```
 
-Other requests: RequestSinglePaymentRequest, MintCashuRequest, CalculateNextOccurrenceRequest, etc. See [API Reference](api-reference.md).
+See [API Reference](api-reference.md) and the [Java SDK](https://github.com/PortalTechnologiesInc/java-sdk).
 
 </section>
 
@@ -52,11 +69,10 @@ Other requests: RequestSinglePaymentRequest, MintCashuRequest, CalculateNextOccu
 
 ## What to call
 
-- **Auth:** `newKeyHandshakeUrl`, `authenticateKey`
-- **Payments:** `requestSinglePayment`, `requestRecurringPayment`, `requestInvoicePayment` — see [Guides](../guides/authentication.md)
-- **Profiles:** `fetchProfile`, `setProfile`
-
-Types (Currency, Timestamp, Profile, request/response types) are in the package; use the [API Reference](api-reference.md) and your editor’s types.
+- **Auth:** `newKeyHandshakeUrl`, `authenticateKey` — see [Authentication](../guides/authentication.md)
+- **Payments:** `requestSinglePayment`, `requestRecurringPayment`, `requestInvoicePayment` — see [Guides](../guides/single-payments.md)
+- **Profiles:** `fetchProfile`
+- **Full reference:** [REST API](rest-api.md) · [OpenAPI](api-reference-rest.md) · [SDK API Reference](api-reference.md)
 
 ---
 

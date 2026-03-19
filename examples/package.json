@@ -1,0 +1,12 @@
+{
+  "name": "portal-examples",
+  "version": "1.0.0",
+  "description": "Portal REST API — runnable examples",
+  "type": "module",
+  "scripts": {},
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "portal-sdk": "file:../crates/portal-rest/clients/ts",
+    "qrcode": "^1.5.4"
+  }
+}

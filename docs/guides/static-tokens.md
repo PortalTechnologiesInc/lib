@@ -1,12 +1,27 @@
 # Static Tokens & Physical Authentication
 
-Static tokens make auth URLs reusable: pass a string as the second argument to `newKeyHandshakeUrl` so the same URL can be used many times (e.g. printed on a table, written to NFC).
+Static tokens make auth URLs reusable: pass a `static_token` so the same URL can be used many times (e.g. printed on a table, written to NFC).
 
 ## API
 
-`newKeyHandshakeUrl(onKeyHandshake, staticToken?, noRequest?)` — when you pass a staticToken, the returned URL does not expire after one use. Use it for location-specific auth (tables, doors, kiosks). Your callback receives the same token context so you can associate the handshake with a place.
+`newKeyHandshakeUrl` with a `static_token` — the returned URL does not expire after one use. Use it for location-specific auth (tables, doors, kiosks). Your callback receives the same token context so you can associate the handshake with a place.
 
 <custom-tabs category="sdk">
+
+<div slot="title">HTTP</div>
+<section>
+
+```bash
+curl -s -X POST $BASE_URL/key-handshake \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"static_token": "table-14-restaurant-a"}'
+# → { "stream_id": "abc123", "url": "nostr+walletconnect://..." }
+# The URL can be reused — print it as QR, write to NFC, etc.
+# Poll events/abc123 to receive each user's public key as they scan.
+```
+
+</section>
 
 <div slot="title">JavaScript</div>
 <section>
@@ -47,7 +62,7 @@ sdk.sendCommand(
 
 </custom-tabs>
 
-You are responsible for generating QR codes or writing to NFC; the SDK only provides the URL.
+You are responsible for generating QR codes or writing to NFC; the API only provides the URL.
 
 ---
 
