@@ -111,6 +111,199 @@ async fn auth_middleware<B>(
     Ok(next.run(req).await)
 }
 
+/// Resume any in-flight streams that survived a server restart.
+async fn recover_in_flight_streams(state: &AppState) {
+    let in_flight = state.events.get_in_flight_streams().await;
+    if !in_flight.is_empty() {
+        info!("Recovering {} in-flight stream(s) from database", in_flight.len());
+    }
+    for stream in in_flight {
+        match stream.stream_type.as_str() {
+            "single_payment" => {
+                if let Some(events::StreamMetadata::SinglePayment { invoice, expires_at_secs }) =
+                    stream.metadata
+                {
+                    if let Some(wallet) = state.wallet.clone() {
+                        let events_store = state.events.clone();
+                        let sid = stream.stream_id.clone();
+                        info!("Recovering single_payment stream {sid}");
+
+                        let expires_at = portal::protocol::model::Timestamp::new(expires_at_secs);
+                        tokio::spawn(handlers::monitor_invoice_until_paid(
+                            wallet,
+                            events_store,
+                            sid,
+                            invoice,
+                            expires_at,
+                        ));
+                    } else {
+                        warn!("Cannot recover single_payment stream {} — no wallet configured", stream.stream_id);
+                        state
+                            .events
+                            .update_stream_status(
+                                &stream.stream_id,
+                                events::StreamStatus::Failed,
+                            )
+                            .await;
+                    }
+                } else {
+                    warn!("Cannot recover single_payment stream {} — missing metadata", stream.stream_id);
+                    state
+                        .events
+                        .update_stream_status(
+                            &stream.stream_id,
+                            events::StreamStatus::Failed,
+                        )
+                        .await;
+                }
+            }
+            "recurring_payment_close" => {
+                // This stream is backed by the long-running SDK listener started below, so
+                // there's nothing to "recover" here. Also avoid noisy warnings on restart.
+            }
+            "key_handshake" | "authenticate_key" | "recurring_payment"
+            | "invoice_request" | "cashu_request" | "raw_payment" => {
+                // These streams rely on ephemeral SDK conversation state and
+                // cannot be resumed after restart. Mark as failed.
+                warn!(
+                    "Cannot recover {} stream {} — marking as failed",
+                    stream.stream_type, stream.stream_id
+                );
+                state
+                    .events
+                    .update_stream_status(
+                        &stream.stream_id,
+                        events::StreamStatus::Failed,
+                    )
+                    .await;
+            }
+            other => {
+                warn!("Unknown stream type '{other}' for stream {} — marking as failed", stream.stream_id);
+                state
+                    .events
+                    .update_stream_status(
+                        &stream.stream_id,
+                        events::StreamStatus::Failed,
+                    )
+                    .await;
+            }
+        }
+    }
+}
+
+/// Start recurring long-lived background listeners and apply profile config.
+async fn setup_background_listeners(state: &AppState) {
+    // Always start the recurring payment close listener at startup
+    {
+        let stream_id = "recurring-payment-close";
+        state
+            .events
+            .create_stream(stream_id, "recurring_payment_close", None)
+            .await;
+        match state.sdk.listen_closed_recurring_payment().await {
+            Ok(notification_stream) => {
+                info!("Started recurring payment close listener (stream {stream_id})");
+                let events_store = state.events.clone();
+                let sid = stream_id.to_string();
+                tokio::spawn(async move {
+                    let mut stream = notification_stream;
+                    while let Some(Ok(event)) = stream.next().await {
+                        events_store
+                            .push(
+                                &sid,
+                                response::NotificationData::ClosedRecurringPayment {
+                                    reason: event.content.reason,
+                                    subscription_id: event.content.subscription_id,
+                                    main_key: event.main_key.to_string(),
+                                    recipient: event.recipient.to_string(),
+                                },
+                            )
+                            .await;
+                    }
+                });
+            }
+            Err(e) => {
+                error!("Failed to start recurring payment close listener: {e}");
+            }
+        }
+    }
+
+    // Apply profile from config if any fields are set
+    if state.settings.profile.is_set() {
+        let profile = portal::conversation::profile::Profile {
+            name: state.settings.profile.name.clone(),
+            display_name: state.settings.profile.display_name.clone(),
+            picture: state.settings.profile.picture.clone(),
+            nip05: state.settings.profile.nip05.clone(),
+        };
+        match state.sdk.set_profile(profile).await {
+            Ok(_) => info!("Profile set from config"),
+            Err(e) => error!("Failed to set profile from config: {e}"),
+        }
+    }
+}
+
+/// Assemble the Axum router — public routes, authenticated API, CORS, and tracing.
+fn build_router(state: AppState) -> Router {
+    // Public routes (no auth): health, version, and NIP-05 well-known for Docker/orchestrators and support.
+    let public = Router::new()
+        .route("/health", get(handlers::health_check))
+        .route("/version", get(handlers::version))
+        .route("/well-known/nostr.json", get(handlers::well_known_nostr_json));
+
+    // Authenticated REST API routes
+    let api = Router::new()
+        .route("/info", get(handlers::info))
+        // Key handshake & auth
+        .route("/key-handshake", post(handlers::new_key_handshake_url))
+        .route("/authenticate-key", post(handlers::authenticate_key))
+        // Payments
+        .route("/payments/single", post(handlers::request_single_payment))
+        .route("/payments/raw", post(handlers::request_payment_raw))
+        .route("/payments/recurring", post(handlers::request_recurring_payment))
+        .route("/payments/recurring/close", post(handlers::close_recurring_payment))
+        // Profiles
+        .route("/profile/:main_key", get(handlers::fetch_profile))
+        // Invoices
+        .route("/invoices/request", post(handlers::request_invoice))
+        .route("/invoices/pay", post(handlers::pay_invoice))
+        // JWT
+        .route("/jwt/issue", post(handlers::issue_jwt))
+        .route("/jwt/verify", post(handlers::verify_jwt))
+        // Cashu
+        .route("/cashu/request", post(handlers::request_cashu))
+        .route("/cashu/send-direct", post(handlers::send_cashu_direct))
+        .route("/cashu/mint", post(handlers::mint_cashu))
+        .route("/cashu/burn", post(handlers::burn_cashu))
+        // Relays
+        .route("/relays", post(handlers::add_relay))
+        .route("/relays", delete(handlers::remove_relay))
+        // Calendar
+        .route("/calendar/next-occurrence", post(handlers::calculate_next_occurrence))
+        // NIP-05
+        .route("/nip05/:nip05", get(handlers::fetch_nip05_profile))
+        // Wallet
+        .route("/wallet/info", get(handlers::get_wallet_info))
+        // Event polling
+        .route("/events/:stream_id", get(handlers::get_events))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ));
+
+    Router::new()
+        .merge(public)
+        .merge(api)
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     #[cfg(feature = "task-tracing")]
@@ -187,193 +380,10 @@ async fn main() -> anyhow::Result<()> {
         events: event_store,
     };
 
-    // ---- Startup recovery: resume in-flight streams ----
-    {
-        let in_flight = state.events.get_in_flight_streams().await;
-        if !in_flight.is_empty() {
-            info!("Recovering {} in-flight stream(s) from database", in_flight.len());
-        }
-        for stream in in_flight {
-            match stream.stream_type.as_str() {
-                "single_payment" => {
-                    if let Some(events::StreamMetadata::SinglePayment { invoice, expires_at_secs }) =
-                        stream.metadata
-                    {
-                        if let Some(wallet) = state.wallet.clone() {
-                            let events_store = state.events.clone();
-                            let sid = stream.stream_id.clone();
-                            info!("Recovering single_payment stream {sid}");
+    recover_in_flight_streams(&state).await;
+    setup_background_listeners(&state).await;
 
-                            let expires_at = portal::protocol::model::Timestamp::new(expires_at_secs);
-                            tokio::spawn(handlers::monitor_invoice_until_paid(
-                                wallet,
-                                events_store,
-                                sid,
-                                invoice,
-                                expires_at,
-                            ));
-                        } else {
-                            warn!("Cannot recover single_payment stream {} — no wallet configured", stream.stream_id);
-                            state
-                                .events
-                                .update_stream_status(
-                                    &stream.stream_id,
-                                    events::StreamStatus::Failed,
-                                )
-                                .await;
-                        }
-                    } else {
-                        warn!("Cannot recover single_payment stream {} — missing metadata", stream.stream_id);
-                        state
-                            .events
-                            .update_stream_status(
-                                &stream.stream_id,
-                                events::StreamStatus::Failed,
-                            )
-                            .await;
-                    }
-                }
-                "recurring_payment_close" => {
-                    // This stream is backed by the long-running SDK listener started below, so
-                    // there's nothing to "recover" here. Also avoid noisy warnings on restart.
-                }
-                "key_handshake" | "authenticate_key" | "recurring_payment"
-                | "invoice_request" | "cashu_request" | "raw_payment" => {
-                    // These streams rely on ephemeral SDK conversation state and
-                    // cannot be resumed after restart. Mark as failed.
-                    warn!(
-                        "Cannot recover {} stream {} — marking as failed",
-                        stream.stream_type, stream.stream_id
-                    );
-                    state
-                        .events
-                        .update_stream_status(
-                            &stream.stream_id,
-                            events::StreamStatus::Failed,
-                        )
-                        .await;
-                }
-                other => {
-                    warn!("Unknown stream type '{other}' for stream {} — marking as failed", stream.stream_id);
-                    state
-                        .events
-                        .update_stream_status(
-                            &stream.stream_id,
-                            events::StreamStatus::Failed,
-                        )
-                        .await;
-                }
-            }
-        }
-    }
-
-    // Always start the recurring payment close listener at startup
-    {
-        let stream_id = "recurring-payment-close";
-        state
-            .events
-            .create_stream(stream_id, "recurring_payment_close", None)
-            .await;
-        match state.sdk.listen_closed_recurring_payment().await {
-            Ok(notification_stream) => {
-                info!("Started recurring payment close listener (stream {stream_id})");
-                let events_store = state.events.clone();
-                let sid = stream_id.to_string();
-                tokio::spawn(async move {
-                    let mut stream = notification_stream;
-                    while let Some(Ok(event)) = stream.next().await {
-                        events_store
-                            .push(
-                                &sid,
-                                response::NotificationData::ClosedRecurringPayment {
-                                    reason: event.content.reason,
-                                    subscription_id: event.content.subscription_id,
-                                    main_key: event.main_key.to_string(),
-                                    recipient: event.recipient.to_string(),
-                                },
-                            )
-                            .await;
-                    }
-                });
-            }
-            Err(e) => {
-                error!("Failed to start recurring payment close listener: {e}");
-            }
-        }
-    }
-
-    // Apply profile from config if any fields are set
-    if state.settings.profile.is_set() {
-        let profile = portal::conversation::profile::Profile {
-            name: state.settings.profile.name.clone(),
-            display_name: state.settings.profile.display_name.clone(),
-            picture: state.settings.profile.picture.clone(),
-            nip05: state.settings.profile.nip05.clone(),
-        };
-        match state.sdk.set_profile(profile).await {
-            Ok(_) => info!("Profile set from config"),
-            Err(e) => error!("Failed to set profile from config: {e}"),
-        }
-    }
-
-    // Public routes (no auth): health, version, and NIP-05 well-known for Docker/orchestrators and support.
-    let public = Router::new()
-        .route("/health", get(handlers::health_check))
-        .route("/version", get(handlers::version))
-        .route("/well-known/nostr.json", get(handlers::well_known_nostr_json));
-
-    // Authenticated REST API routes
-    let api = Router::new()
-        .route("/info", get(handlers::info))
-        // Key handshake & auth
-        .route("/key-handshake", post(handlers::new_key_handshake_url))
-        .route("/authenticate-key", post(handlers::authenticate_key))
-        // Payments
-        .route("/payments/single", post(handlers::request_single_payment))
-        .route("/payments/raw", post(handlers::request_payment_raw))
-        .route("/payments/recurring", post(handlers::request_recurring_payment))
-        .route("/payments/recurring/close", post(handlers::close_recurring_payment))
-        // Profiles
-        .route("/profile/:main_key", get(handlers::fetch_profile))
-
-        // Invoices
-        .route("/invoices/request", post(handlers::request_invoice))
-        .route("/invoices/pay", post(handlers::pay_invoice))
-        // JWT
-        .route("/jwt/issue", post(handlers::issue_jwt))
-        .route("/jwt/verify", post(handlers::verify_jwt))
-        // Cashu
-        .route("/cashu/request", post(handlers::request_cashu))
-        .route("/cashu/send-direct", post(handlers::send_cashu_direct))
-        .route("/cashu/mint", post(handlers::mint_cashu))
-        .route("/cashu/burn", post(handlers::burn_cashu))
-        // Relays
-        .route("/relays", post(handlers::add_relay))
-        .route("/relays", delete(handlers::remove_relay))
-        // Calendar
-        .route("/calendar/next-occurrence", post(handlers::calculate_next_occurrence))
-        // NIP-05
-        .route("/nip05/:nip05", get(handlers::fetch_nip05_profile))
-        // Wallet
-        .route("/wallet/info", get(handlers::get_wallet_info))
-        // Event polling
-        .route("/events/:stream_id", get(handlers::get_events))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            auth_middleware,
-        ));
-
-    let app = Router::new()
-        .merge(public)
-        .merge(api)
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+    let app = build_router(state);
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], listen_port));
