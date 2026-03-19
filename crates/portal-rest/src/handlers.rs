@@ -118,6 +118,43 @@ async fn get_cashu_wallet(
     Ok(wallet)
 }
 
+// ---- Shared helpers ----
+
+/// Poll a Lightning invoice until it is paid, times out, or errors.
+/// Pushes a `PaymentStatusUpdate` notification to the event store when done.
+pub async fn monitor_invoice_until_paid(
+    wallet: Arc<dyn portal_wallet::PortalWallet>,
+    events: crate::events::EventStore,
+    stream_id: String,
+    invoice: String,
+    expires_at: portal::protocol::model::Timestamp,
+) {
+    let notification = loop {
+        if portal::protocol::model::Timestamp::now() > expires_at {
+            break NotificationData::PaymentStatusUpdate {
+                status: InvoiceStatus::Timeout,
+            };
+        }
+        match wallet.is_invoice_paid(invoice.clone()).await {
+            Ok((true, preimage)) => {
+                break NotificationData::PaymentStatusUpdate {
+                    status: InvoiceStatus::Paid { preimage },
+                };
+            }
+            Ok((false, _)) => {
+                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+            }
+            Err(e) => {
+                tracing::error!("Failed to check invoice for stream {stream_id}: {e}");
+                break NotificationData::PaymentStatusUpdate {
+                    status: InvoiceStatus::Error { reason: e.to_string() },
+                };
+            }
+        }
+    };
+    events.push(&stream_id, notification).await;
+}
+
 // ---- Route handlers ----
 
 pub async fn health_check() -> &'static str {
@@ -444,43 +481,7 @@ pub async fn request_single_payment(
                     let sid2 = sid.clone();
                     let wallet2 = wallet_clone.clone();
                     let inv2 = invoice_clone.clone();
-                    tokio::spawn(async move {
-                        let mut count = 0;
-                        let notification = loop {
-                            if Timestamp::now() > expires_at {
-                                break NotificationData::PaymentStatusUpdate {
-                                    status: InvoiceStatus::Timeout,
-                                };
-                            }
-                            count += 1;
-                            #[cfg(debug_assertions)]
-                            if std::env::var("FAKE_PAYMENTS").is_ok() && count > 3 {
-                                break NotificationData::PaymentStatusUpdate {
-                                    status: InvoiceStatus::Paid { preimage: None },
-                                };
-                            }
-                            match wallet2.is_invoice_paid(inv2.clone()).await {
-                                Ok((true, preimage)) => {
-                                    break NotificationData::PaymentStatusUpdate {
-                                        status: InvoiceStatus::Paid { preimage },
-                                    };
-                                }
-                                Ok((false, _)) => {
-                                    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-                                    continue;
-                                }
-                                Err(e) => {
-                                    error!("Failed to lookup invoice: {e}");
-                                    break NotificationData::PaymentStatusUpdate {
-                                        status: InvoiceStatus::Error {
-                                            reason: e.to_string(),
-                                        },
-                                    };
-                                }
-                            }
-                        };
-                        events2.push(&sid2, notification).await;
-                    });
+                    tokio::spawn(monitor_invoice_until_paid(wallet2, events2, sid2, inv2, expires_at));
                 }
                 Err(e) => {
                     error!("Payment notification error: {e}");

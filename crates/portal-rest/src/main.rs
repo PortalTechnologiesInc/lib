@@ -204,95 +204,14 @@ async fn main() -> anyhow::Result<()> {
                             let sid = stream.stream_id.clone();
                             info!("Recovering single_payment stream {sid}");
 
-                            tokio::spawn(async move {
-                                let now_secs = std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap_or_default()
-                                    .as_secs();
-                                let expired = now_secs > expires_at_secs;
-
-                                if expired {
-                                    // Check if it was paid before expiry
-                                    match wallet.is_invoice_paid(invoice).await {
-                                        Ok((true, preimage)) => {
-                                            events_store
-                                                .push(
-                                                    &sid,
-                                                    response::NotificationData::PaymentStatusUpdate {
-                                                        status: response::InvoiceStatus::Paid {
-                                                            preimage,
-                                                        },
-                                                    },
-                                                )
-                                                .await;
-                                        }
-                                        _ => {
-                                            events_store
-                                                .push(
-                                                    &sid,
-                                                    response::NotificationData::PaymentStatusUpdate {
-                                                        status: response::InvoiceStatus::Timeout,
-                                                    },
-                                                )
-                                                .await;
-                                        }
-                                    }
-                                } else {
-                                    // Still pending — restart monitoring loop
-                                    loop {
-                                        let now_secs = std::time::SystemTime::now()
-                                            .duration_since(std::time::UNIX_EPOCH)
-                                            .unwrap_or_default()
-                                            .as_secs();
-                                        if now_secs > expires_at_secs {
-                                            events_store
-                                                .push(
-                                                    &sid,
-                                                    response::NotificationData::PaymentStatusUpdate {
-                                                        status: response::InvoiceStatus::Timeout,
-                                                    },
-                                                )
-                                                .await;
-                                            break;
-                                        }
-                                        match wallet.is_invoice_paid(invoice.clone()).await {
-                                            Ok((true, preimage)) => {
-                                                events_store
-                                                    .push(
-                                                        &sid,
-                                                        response::NotificationData::PaymentStatusUpdate {
-                                                            status: response::InvoiceStatus::Paid {
-                                                                preimage,
-                                                            },
-                                                        },
-                                                    )
-                                                    .await;
-                                                break;
-                                            }
-                                            Ok((false, _)) => {
-                                                tokio::time::sleep(
-                                                    tokio::time::Duration::from_millis(1000),
-                                                )
-                                                .await;
-                                            }
-                                            Err(e) => {
-                                                error!("Recovery: failed to check invoice for {sid}: {e}");
-                                                events_store
-                                                    .push(
-                                                        &sid,
-                                                        response::NotificationData::PaymentStatusUpdate {
-                                                            status: response::InvoiceStatus::Error {
-                                                                reason: e.to_string(),
-                                                            },
-                                                        },
-                                                    )
-                                                    .await;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            });
+                            let expires_at = portal::protocol::model::Timestamp::new(expires_at_secs);
+                            tokio::spawn(handlers::monitor_invoice_until_paid(
+                                wallet,
+                                events_store,
+                                sid,
+                                invoice,
+                                expires_at,
+                            ));
                         } else {
                             warn!("Cannot recover single_payment stream {} — no wallet configured", stream.stream_id);
                             state
