@@ -85,7 +85,8 @@ async function testPublicEndpoints() {
     const res = await fetch(`${BASE_URL}/version`);
     assert(res.status === 200, `expected 200, got ${res.status}`);
     const json = await res.json();
-    assert(typeof json.version === 'string', `expected version string, got ${JSON.stringify(json)}`);
+    const version = json?.data?.version ?? json?.version;
+    assert(typeof version === 'string', `expected version string, got ${JSON.stringify(json)}`);
   });
 
   await expect('GET /.well-known/nostr.json → 200 (no auth)', async () => {
@@ -155,8 +156,8 @@ async function testEventPolling() {
     // Create a real stream first via key-handshake
     const { status: s, json: j } = await req('POST', '/key-handshake', {});
     assert(s === 201, `expected 201 from key-handshake, got ${s}`);
-    const streamId = j?.stream_id;
-    assert(streamId, 'expected stream_id in response');
+    const streamId = j?.data?.stream_id ?? j?.stream_id;
+    assert(streamId, `expected stream_id in response, got ${JSON.stringify(j)}`);
 
     // Poll it immediately — should return empty events array (no user yet)
     const { status, json } = await req('GET', `/events/${streamId}?after=0`);
