@@ -212,14 +212,10 @@ pub async fn new_key_handshake_url(
         .await
         .map_err(|e| internal_error(format!("Failed to create key handshake URL: {e}")))?;
 
-    let stream_id = Uuid::new_v4().to_string();
     let metadata = StreamMetadata::KeyHandshake {
         url: url.to_string(),
     };
-    state
-        .events
-        .create_stream(&stream_id, "key_handshake", Some(&metadata))
-        .await;
+    let stream_id = state.events.new_stream("key_handshake", Some(&metadata)).await;
 
     // Spawn background task to collect notifications
     let events = state.events.clone();
@@ -273,11 +269,7 @@ pub async fn authenticate_key(
     let main_key = hex_to_pubkey(&req.main_key).map_err(|e| bad_request(format!("Invalid main key: {e}")))?;
     let subkeys = parse_subkeys(&req.subkeys).map_err(|e| bad_request(format!("Invalid subkeys: {e}")))?;
 
-    let stream_id = Uuid::new_v4().to_string();
-    state
-        .events
-        .create_stream(&stream_id, "authenticate_key", None)
-        .await;
+    let stream_id = state.events.new_stream("authenticate_key", None).await;
 
     let sdk = state.sdk.clone();
     let events = state.events.clone();
@@ -340,11 +332,7 @@ pub async fn request_recurring_payment(
         current_exchange_rate,
     };
 
-    let stream_id = Uuid::new_v4().to_string();
-    state
-        .events
-        .create_stream(&stream_id, "recurring_payment", None)
-        .await;
+    let stream_id = state.events.new_stream("recurring_payment", None).await;
 
     let sdk = state.sdk.clone();
     let events = state.events.clone();
@@ -425,15 +413,11 @@ pub async fn request_single_payment(
         .await
         .map_err(|e| internal_error(format!("Failed to request single payment: {e}")))?;
 
-    let stream_id = Uuid::new_v4().to_string();
     let metadata = StreamMetadata::SinglePayment {
         invoice: invoice.clone(),
         expires_at_secs: expires_at.as_u64(),
     };
-    state
-        .events
-        .create_stream(&stream_id, "single_payment", Some(&metadata))
-        .await;
+    let stream_id = state.events.new_stream("single_payment", Some(&metadata)).await;
 
     let events = state.events.clone();
     let sid = stream_id.clone();
@@ -507,11 +491,7 @@ pub async fn request_payment_raw(
         .await
         .map_err(|e| internal_error(format!("Failed to request payment: {e}")))?;
 
-    let stream_id = Uuid::new_v4().to_string();
-    state
-        .events
-        .create_stream(&stream_id, "raw_payment", None)
-        .await;
+    let stream_id = state.events.new_stream("raw_payment", None).await;
 
     let events = state.events.clone();
     let sid = stream_id.clone();
@@ -610,11 +590,7 @@ pub async fn request_invoice(
         refund_invoice: req.content.refund_invoice.clone(),
     };
 
-    let stream_id = Uuid::new_v4().to_string();
-    state
-        .events
-        .create_stream(&stream_id, "invoice_request", None)
-        .await;
+    let stream_id = state.events.new_stream("invoice_request", None).await;
 
     let sdk = state.sdk.clone();
     let events = state.events.clone();
@@ -753,11 +729,7 @@ pub async fn request_cashu(
         expires_at,
     };
 
-    let stream_id = Uuid::new_v4().to_string();
-    state
-        .events
-        .create_stream(&stream_id, "cashu_request", None)
-        .await;
+    let stream_id = state.events.new_stream("cashu_request", None).await;
 
     let sdk = state.sdk.clone();
     let events = state.events.clone();

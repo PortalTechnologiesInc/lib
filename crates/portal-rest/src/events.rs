@@ -4,6 +4,7 @@ use reqwest::Client;
 use rusqlite::Connection;
 use tokio::sync::Mutex;
 use tracing::{error, info};
+use uuid::Uuid;
 
 use crate::config::WebhookSettings;
 use crate::response::{NotificationData, StreamEvent};
@@ -135,6 +136,13 @@ impl EventStore {
         ) {
             error!("Failed to create stream {stream_id}: {e}");
         }
+    }
+
+    /// Generate a new UUID stream ID, create the stream, and return the ID.
+    pub async fn new_stream(&self, stream_type: &str, metadata: Option<&StreamMetadata>) -> String {
+        let stream_id = Uuid::new_v4().to_string();
+        self.create_stream(&stream_id, stream_type, metadata).await;
+        stream_id
     }
 
     /// Push an event to a stream. Returns the assigned event index.
