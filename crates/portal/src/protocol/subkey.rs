@@ -67,6 +67,21 @@ pub trait PublicSubkeyVerifier {
     ) -> Result<(), SubkeyError>;
 }
 
+/// Metadata bound to a subkey at derivation time.
+///
+/// A subkey is derived from the master key using key tweaking (same math as BIP32 non-hardened,
+/// but using a BIP340-style tagged hash of this metadata as the tweak instead of a chaincode):
+///
+/// ```text
+/// child_secret = master_secret + SHA256_tagged("Portal/Subkey", canonical_bytes(metadata))  (mod n)
+/// child_pubkey = master_pubkey + tweak·G
+/// ```
+///
+/// This lets anyone with the master *public* key verify that a given subkey is legitimately
+/// derived — no private key is required on the server side.
+///
+/// See [`SubkeyMetadata::canonical_bytes`] for the exact wire format and [`SubkeyMetadata::get_tweak`]
+/// for the tagged hash construction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
 pub struct SubkeyMetadata {
@@ -79,6 +94,21 @@ pub struct SubkeyMetadata {
 }
 
 impl SubkeyMetadata {
+    /// Produces a deterministic, cross-language binary encoding of the metadata.
+    ///
+    /// Layout (all integers little-endian):
+    /// ```text
+    /// version        (1 byte,  u8)
+    /// name_len       (2 bytes, u16 LE)
+    /// name           (name_len bytes, UTF-8)
+    /// nonce          (32 bytes)
+    /// valid_from     (8 bytes, u64 LE, Unix timestamp)
+    /// expires_at     (8 bytes, u64 LE, Unix timestamp)
+    /// permissions    (1 byte bitmask: Auth=0x01, Payment=0x02)
+    /// ```
+    ///
+    /// This encoding is used as the message in [`get_tweak`] and must be reproduced
+    /// identically by any verifier (mobile app, server) regardless of language or platform.
     pub fn canonical_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.push(self.version);
@@ -99,6 +129,23 @@ impl SubkeyMetadata {
         buf
     }
 
+    /// Computes the key tweak using BIP340-style tagged hashing (same construction as BIP341 Taproot).
+    ///
+    /// ```text
+    /// tag        = "Portal/Subkey"
+    /// tag_hash   = SHA256(tag)
+    /// tweak      = SHA256(tag_hash || tag_hash || canonical_bytes())
+    /// ```
+    ///
+    /// The double-prefix `tag_hash || tag_hash` is the BIP340 tagged hash pattern — it provides
+    /// domain separation so tweaks produced here cannot collide with those from other protocols.
+    ///
+    /// The resulting scalar is used to tweak both private and public keys:
+    /// - Private: `child_secret = master_secret + tweak  (mod n)`
+    /// - Public:  `child_pubkey = master_pubkey + tweak·G`
+    ///
+    /// This allows the server to verify a subkey using only the master *public* key —
+    /// no private key is ever needed on the server side.
     pub fn get_tweak(&self) -> Result<Scalar, SubkeyError> {
         let tag = b"Portal/Subkey";
         let tag_hash: [u8; 32] = Sha256::digest(tag).into();
