@@ -67,6 +67,21 @@ pub trait PublicSubkeyVerifier {
     ) -> Result<(), SubkeyError>;
 }
 
+/// Metadata bound to a subkey at derivation time.
+///
+/// A subkey is derived from the master key using key tweaking (same math as BIP32 non-hardened,
+/// but using a BIP340-style tagged hash of this metadata as the tweak instead of a chaincode):
+///
+/// ```text
+/// child_secret = master_secret + SHA256_tagged("Portal/Subkey", canonical_bytes(metadata))  (mod n)
+/// child_pubkey = master_pubkey + tweak·G
+/// ```
+///
+/// This lets anyone with the master *public* key verify that a given subkey is legitimately
+/// derived — no private key is required on the server side.
+///
+/// See [`SubkeyMetadata::canonical_bytes`] for the exact wire format and [`SubkeyMetadata::get_tweak`]
+/// for the tagged hash construction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
 pub struct SubkeyMetadata {
@@ -79,19 +94,70 @@ pub struct SubkeyMetadata {
 }
 
 impl SubkeyMetadata {
-    pub fn get_tweak(&self) -> Result<Scalar, SubkeyError> {
-        // Serialize metadata to bytes
-        let metadata_bytes = serde_json::to_vec(self)?;
+    /// Produces a deterministic, cross-language binary encoding of the metadata.
+    ///
+    /// Layout (all integers little-endian):
+    /// ```text
+    /// version        (1 byte,  u8)
+    /// name_len       (2 bytes, u16 LE)
+    /// name           (name_len bytes, UTF-8)
+    /// nonce          (32 bytes)
+    /// valid_from     (8 bytes, u64 LE, Unix timestamp)
+    /// expires_at     (8 bytes, u64 LE, Unix timestamp)
+    /// permissions    (1 byte bitmask: Auth=0x01, Payment=0x02)
+    /// ```
+    ///
+    /// This encoding is used as the message in [`get_tweak`] and must be reproduced
+    /// identically by any verifier (mobile app, server) regardless of language or platform.
+    pub fn canonical_bytes(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.push(self.version);
+        let name_bytes = self.name.as_bytes();
+        buf.extend_from_slice(&(name_bytes.len() as u16).to_le_bytes());
+        buf.extend_from_slice(name_bytes);
+        buf.extend_from_slice(self.nonce.as_bytes());
+        buf.extend_from_slice(&self.valid_from.as_u64().to_le_bytes());
+        buf.extend_from_slice(&self.expires_at.as_u64().to_le_bytes());
+        let mut perms: u8 = 0;
+        for p in &self.permissions {
+            match p {
+                SubkeyPermission::Auth => perms |= 0x01,
+                SubkeyPermission::Payment => perms |= 0x02,
+            }
+        }
+        buf.push(perms);
+        buf
+    }
 
-        // Compute the tweaking factor by hashing the metadata
+    /// Computes the key tweak using BIP340-style tagged hashing (same construction as BIP341 Taproot).
+    ///
+    /// ```text
+    /// tag        = "Portal/Subkey"
+    /// tag_hash   = SHA256(tag)
+    /// tweak      = SHA256(tag_hash || tag_hash || canonical_bytes())
+    /// ```
+    ///
+    /// The double-prefix `tag_hash || tag_hash` is the BIP340 tagged hash pattern — it provides
+    /// domain separation so tweaks produced here cannot collide with those from other protocols.
+    ///
+    /// The resulting scalar is used to tweak both private and public keys:
+    /// - Private: `child_secret = master_secret + tweak  (mod n)`
+    /// - Public:  `child_pubkey = master_pubkey + tweak·G`
+    ///
+    /// This allows the server to verify a subkey using only the master *public* key —
+    /// no private key is ever needed on the server side.
+    pub fn get_tweak(&self) -> Result<Scalar, SubkeyError> {
+        let tag = b"Portal/Subkey";
+        let tag_hash: [u8; 32] = Sha256::digest(tag).into();
         let mut hasher = Sha256::new();
-        hasher.update(&metadata_bytes);
+        hasher.update(&tag_hash);
+        hasher.update(&tag_hash);
+        hasher.update(&self.canonical_bytes());
         let hash: [u8; 32] = hasher
             .finalize()
             .try_into()
             .map_err(|_| SubkeyError::InvalidMetadata)?;
-        let tweak = Scalar::from_be_bytes(hash).map_err(|_| SubkeyError::InvalidMetadata)?;
-        Ok(tweak)
+        Scalar::from_be_bytes(hash).map_err(|_| SubkeyError::InvalidMetadata)
     }
 }
 
@@ -107,9 +173,6 @@ pub enum SubkeyPermission {
 pub enum SubkeyError {
     #[error("Invalid metadata")]
     InvalidMetadata,
-
-    #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
 
     #[error("Secp256k1 error: {0}")]
     Secp256k1(#[from] nostr::secp256k1::Error),
@@ -187,7 +250,7 @@ mod tests {
             valid_from: Timestamp::new(valid_from),
             expires_at: Timestamp::new(expires_at),
             permissions,
-            version: 1,
+            version: 2,
         }
     }
 
@@ -202,7 +265,7 @@ mod tests {
 
         // Test that we can access both the metadata and the key methods
         assert_eq!(subkey.metadata().name, "test_subkey");
-        assert_eq!(subkey.metadata().version, 1);
+        assert_eq!(subkey.metadata().version, 2);
 
         // Test that Deref works and we can use Keys methods directly
         let pubkey = subkey.public_key();
