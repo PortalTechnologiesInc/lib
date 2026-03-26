@@ -7,7 +7,7 @@ edition = "2024"
 crate-type = ["staticlib", "lib"]
 
 [dependencies]
-portal = { path = "../portal", features = ["bindings"] }
+portal = { path = "../portal", features = ["bindings", "profile-service"] }
 portal-macros = { path = "../portal-macros" }
 portal-rates = { path = "../portal-rates", features = ["bindings"]}
 

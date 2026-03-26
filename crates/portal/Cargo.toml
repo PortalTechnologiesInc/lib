@@ -27,8 +27,9 @@ derive-new = { workspace = true }
 jwt-compact = { workspace = true }
 secp256k1 = { workspace = true }
 cdk = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, optional = true }
 
 [features]
 default = ["bindings"]
 bindings = ["uniffi", "anyhow"]
+profile-service = ["reqwest"]

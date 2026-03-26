@@ -241,6 +241,42 @@ async fn setup_background_listeners(state: &AppState) {
             Err(e) => error!("Failed to set profile from config: {e}"),
         }
     }
+
+    // Register NIP-05 with profile service (only once, tracked by local file)
+    if let Some(ref nip05) = state.settings.profile.nip05 {
+        // Only register with getportal.cc domain
+        if nip05.ends_with("@getportal.cc") {
+            let registered_file = constants::portal_rest_dir()
+                .map(|d| d.join("nip05.registered"));
+
+            let already_registered = match &registered_file {
+                Ok(path) => tokio::fs::read_to_string(path)
+                    .await
+                    .map(|s| s.trim().to_string() == nip05.trim())
+                    .unwrap_or(false),
+                Err(_) => false,
+            };
+
+            if already_registered {
+                info!("NIP-05 '{nip05}' already registered (cached), skipping");
+            } else {
+                let keys = portal::nostr::key::Keys::from_str(&state.settings.nostr.private_key)
+                    .expect("keys already validated at startup");
+                match portal::register_nip05(&keys, nip05).await {
+                    Ok(true) => {
+                        info!("NIP-05 '{nip05}' registered with profile service");
+                        if let Ok(path) = &registered_file {
+                            if let Err(e) = tokio::fs::write(path, nip05).await {
+                                warn!("Could not write NIP-05 registration cache file: {e}");
+                            }
+                        }
+                    }
+                    Ok(false) => info!("NIP-05 '{nip05}' set in profile (self-managed domain)"),
+                    Err(e) => warn!("Failed to register NIP-05 '{nip05}' with profile service (non-fatal): {e}"),
+                }
+            }
+        }
+    }
 }
 
 /// Assemble the Axum router — public routes, authenticated API, CORS, and tracing.
