@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Unreleased
 
+#### Changed
+- `GET /info` now also returns `version` and `git_commit` fields (previously only in `GET /version`). `/version` is kept for backward compatibility.
+
 ---
 
 ### [0.4.0] - 2026-03-17
