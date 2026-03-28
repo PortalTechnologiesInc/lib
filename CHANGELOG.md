@@ -11,7 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Unreleased
 
 #### Changed
-- `GET /info` now also returns `version` and `git_commit` fields (previously only in `GET /version`). `/version` is kept for backward compatibility.
+- `GET /info` now includes `version` and `git_commit` fields (previously only in `GET /version`). `GET /version` kept for backward compatibility.
+
+#### Added
+- **NIP-05 auto-registration**: if `PORTAL__PROFILE__NIP05` is set to a `@getportal.cc` address, the daemon registers it with the Portal profile service at startup (one-time, cached in `~/.portal-rest/nip05.registered`). Self-hosted domains are set in the Nostr profile only, no external call.
 
 ---
 
@@ -83,6 +86,9 @@ First release — Docker image available at [`getportal/sdk-daemon`](https://hub
 ## portal-app (App Library)
 
 ### Unreleased
+
+#### Changed
+- `register_nip05()` now delegates to `portal::register_nip05()` (moved to `portal` crate). UniFFI bindings unchanged.
 
 ---
 

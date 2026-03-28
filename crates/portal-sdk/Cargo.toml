@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-portal = { path = "../portal" }
+portal = { path = "../portal", features = ["profile-service"] }
 
 serde_json = { workspace = true }
 thiserror = { workspace = true }

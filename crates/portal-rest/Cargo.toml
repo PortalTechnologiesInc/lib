@@ -10,7 +10,7 @@ path = "src/main.rs"
 [dependencies]
 portal-wallet = { path = "../portal-wallet" }
 portal-sdk = { path = "../portal-sdk" }
-portal = { version = "0.1.0", path = "../portal" }
+portal = { version = "0.1.0", path = "../portal", features = ["profile-service"] }
 portal-rates = { path = "../portal-rates" }
 portal-macros = { path = "../portal-macros" }
 

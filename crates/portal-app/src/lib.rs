@@ -947,12 +947,11 @@ impl PortalApp {
     }
 
     pub async fn register_nip05(&self, local_part: String) -> Result<(), AppError> {
-        self.post_request_profile_service(EventContent {
-            nip_05: Some(local_part),
-            img: None,
-        })
-        .await?;
-        Ok(())
+        let nip05 = format!("{}@getportal.cc", local_part.trim().to_lowercase());
+        portal::register_nip05(&self.router.keypair().get_keys(), &nip05)
+            .await
+            .map(|_| ())
+            .map_err(|e| AppError::ProfileRegistrationError(e))
     }
 
     pub async fn next_invoice_request(

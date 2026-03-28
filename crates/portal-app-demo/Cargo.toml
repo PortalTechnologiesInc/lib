@@ -11,7 +11,7 @@ path = "src/main.rs"
 [dependencies]
 app = { path = "../portal-app", features = [] }
 portal-wallet = { path = "../portal-wallet" }
-portal = { path = "../portal", features = ["bindings"] }
+portal = { path = "../portal", features = ["bindings", "profile-service"] }
 
 axum = { workspace = true }
 tower-http = { workspace = true }

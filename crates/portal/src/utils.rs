@@ -1,3 +1,4 @@
+#[cfg(feature = "profile-service")]
 use nostr::{
     key::PublicKey,
     nips::nip05::{Nip05Address, Nip05Profile},
@@ -12,6 +13,7 @@ pub fn random_string(lenght: usize) -> String {
         .collect()
 }
 
+#[cfg(feature = "profile-service")]
 pub async fn verify_nip05(nip05: &str, main_key: &PublicKey) -> bool {
     let address = match Nip05Address::parse(nip05) {
         Ok(address) => address,
@@ -31,6 +33,7 @@ pub async fn verify_nip05(nip05: &str, main_key: &PublicKey) -> bool {
     nostr::nips::nip05::verify_from_json(&main_key, &address, &nip05)
 }
 
+#[cfg(feature = "profile-service")]
 pub async fn fetch_nip05_profile(nip05: &str) -> anyhow::Result<Nip05Profile> {
     let address = Nip05Address::parse(nip05)?;
 
