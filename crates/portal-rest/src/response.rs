@@ -132,6 +132,8 @@ pub struct VersionResponse {
 #[derive(Debug, Serialize)]
 pub struct InfoResponse {
     pub public_key: String,
+    pub version: &'static str,
+    pub git_commit: &'static str,
 }
 
 /// NIP-05 `.well-known/nostr.json` content.
