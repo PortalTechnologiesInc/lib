@@ -442,7 +442,7 @@ paths:
   /info:
     get:
       summary: Get server info
-      description: Returns the server's Nostr public key. Requires authentication.
+      description: Returns the server's Nostr public key, version, and git commit. Requires authentication.
       responses:
         "200":
           description: Server info
@@ -454,10 +454,22 @@ paths:
                   - properties:
                       data:
                         type: object
+                        required:
+                          - public_key
+                          - version
+                          - git_commit
                         properties:
-                          pubkey:
+                          public_key:
                             type: string
                             description: Hex-encoded Nostr public key
+                          version:
+                            type: string
+                            description: Daemon version
+                            example: "0.4.0"
+                          git_commit:
+                            type: string
+                            description: Git commit hash
+                            example: "abc1234"
 
   /well-known/nostr.json:
     get:

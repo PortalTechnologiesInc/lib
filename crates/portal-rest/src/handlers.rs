@@ -173,6 +173,8 @@ pub async fn info(
 ) -> ApiResult<InfoResponse> {
     Ok(ok(InfoResponse {
         public_key: state.public_key.clone(),
+        version: crate::APP_VERSION,
+        git_commit: crate::GIT_COMMIT,
     }))
 }
 
