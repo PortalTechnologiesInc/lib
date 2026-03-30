@@ -342,20 +342,21 @@ fn build_router(state: AppState) -> Router {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let config = config::Settings::load()?;
+
     #[cfg(feature = "task-tracing")]
     console_subscriber::init();
 
-    // Set up logging (default to info if RUST_LOG is not set)
+    // RUST_LOG wins; else [logging].filter from config.toml (default info).
     #[cfg(not(feature = "task-tracing"))]
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                tracing_subscriber::EnvFilter::new(&config.logging.filter)
+            }),
         )
         .with(tracing_subscriber::fmt::Layer::default().compact())
         .init();
-
-    let config = config::Settings::load()?;
     info!(
         listen_port = config.info.listen_port,
         wallet = format!("{:?}", config.wallet.ln_backend).to_lowercase(),

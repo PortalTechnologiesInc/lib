@@ -1,6 +1,12 @@
 ## All settings can be overridden via environment variables.
 ## Format: PORTAL__<SECTION>__<KEY>=value (use double underscores)
 ## Example: PORTAL__WALLET__LN_BACKEND=nwc
+## `RUST_LOG` in your shell environment overrides [logging] below.
+
+[logging]
+## Default tracing filter when RUST_LOG is unset. Same syntax as RUST_LOG.
+filter = "info"
+
 
 [info]
 ## The port on which the REST API will listen.
