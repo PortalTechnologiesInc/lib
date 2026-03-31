@@ -60,7 +60,9 @@ async function main() {
   console.log('Waiting for user to complete verification in browser...');
 
   // ── Step 3: wait for the result ──────────────────────────────────────────
-  const result = await op.done;
+  // This example runs as a plain CLI script (no webhook server, no auto-poller),
+  // so we must explicitly poll for events until the stream reaches a terminal state.
+  const result = await client.poll(op, { intervalMs: 1000, timeoutMs: 5 * 60 * 1000 });
 
   console.log('');
   if (result.status === 'success') {
