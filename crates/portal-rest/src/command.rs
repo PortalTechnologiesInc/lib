@@ -75,6 +75,20 @@ pub struct RequestCashuRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct InitiateBrowserSessionRequest {
+    /// Relay URLs to use for the verification session. Defaults to
+    /// ["wss://relay.damus.io", "wss://relay.getportal.cc"] if not set.
+    pub relays: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RequestPortalTokenRequest {
+    pub recipient_key: String,
+    pub subkeys: Vec<String>,
+    pub amount: u64,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct SendCashuDirectRequest {
     pub main_key: String,
     pub subkeys: Vec<String>,

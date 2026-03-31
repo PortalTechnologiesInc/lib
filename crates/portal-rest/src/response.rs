@@ -124,6 +124,14 @@ pub struct WalletInfoResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct VerificationSessionResponse {
+    pub session_id: String,
+    pub session_url: String,
+    pub ephemeral_npub: String,
+    pub expires_at: u64,
+}
+
+#[derive(Debug, Serialize)]
 pub struct VersionResponse {
     pub version: &'static str,
     pub git_commit: &'static str,

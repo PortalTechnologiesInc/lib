@@ -409,6 +409,52 @@ components:
           type: string
       additionalProperties: true
 
+    InitiateBrowserSessionRequest:
+      type: object
+      properties:
+        relays:
+          type: array
+          items:
+            type: string
+          description: |
+            Relay WebSocket URLs for the verification session.
+            Defaults to ["wss://relay.damus.io", "wss://relay.getportal.cc"] if omitted.
+
+    VerificationSessionResponse:
+      type: object
+      required: [session_id, session_url, ephemeral_npub, expires_at]
+      properties:
+        session_id:
+          type: string
+          description: Unique verification session identifier
+        session_url:
+          type: string
+          description: URL to redirect the user to for verification
+        ephemeral_npub:
+          type: string
+          description: Ephemeral Nostr public key for this session
+        expires_at:
+          type: integer
+          format: uint64
+          description: Unix timestamp when the session expires
+
+    RequestPortalTokenRequest:
+      type: object
+      required: [recipient_key, subkeys, amount]
+      properties:
+        recipient_key:
+          type: string
+          description: Hex-encoded recipient public key
+        subkeys:
+          type: array
+          items:
+            type: string
+          description: Optional subkeys to include
+        amount:
+          type: integer
+          format: uint64
+          description: Amount of tokens to request
+
 paths:
   /health:
     get:
@@ -928,3 +974,65 @@ paths:
                         $ref: '#/components/schemas/EventsResponse'
         "404":
           description: Stream not found
+
+
+  /verification/sessions:
+    post:
+      tags:
+        - Verification
+      summary: Initiate a browser-based age verification session
+      description: |
+        Calls the Portal verification service to create a new browser session.
+        Returns a session URL to redirect the user to for identity/age verification.
+        Requires `[verification] api_key` in the portal-rest configuration.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitiateBrowserSessionRequest'
+      responses:
+        "200":
+          description: Verification session created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/VerificationSessionResponse'
+        "400":
+          description: Verification not configured or invalid request
+        "500":
+          description: Verification service error
+
+  /payments/cashu/request-token:
+    post:
+      tags:
+        - Payments
+        - Cashu
+      summary: Request a Cashu token from a recipient Portal wallet
+      description: |
+        Requests a Cashu token from a recipient Portal wallet using the Portal mint
+        (`https://mint.getportal.cc`) with unit `multi`. Returns a stream_id for polling.
+        Poll GET /events/{stream_id} for the `cashu_response` event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestPortalTokenRequest'
+      responses:
+        "201":
+          description: Portal token request initiated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/StreamIdResponse'
+        "400":
+          description: Invalid recipient key or subkeys

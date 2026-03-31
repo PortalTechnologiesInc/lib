@@ -23,6 +23,7 @@ import {
   IssueJwtResponse,
   VerifyJwtResponse,
   CashuResponseStatus,
+  VerificationSessionResponse,
   WalletInfoResponse,
   VersionResponse,
   InfoResponse,
@@ -749,5 +750,45 @@ export class PortalClient {
   public async getEvents(streamId: string, after?: number): Promise<EventsResponse> {
     const q = after !== undefined ? `?after=${after}` : '';
     return this.get<EventsResponse>(`/events/${encodeURIComponent(streamId)}${q}`);
+  }
+
+  // ---- Verification ----
+
+  /**
+   * Initiate a browser-based age verification session.
+   *
+   * Returns a `VerificationSessionResponse` with a `session_url` to redirect the
+   * user to and a `session_id` for tracking the result.
+   *
+   * Requires `[verification] api_key` in portal-rest config.
+   */
+  public async initiateBrowserSession(relayUrls?: string[]): Promise<VerificationSessionResponse> {
+    return this.post<VerificationSessionResponse>('/verification/sessions', {
+      relays: relayUrls,
+    });
+  }
+
+  // ---- Portal Token ----
+
+  /**
+   * Request a Cashu token from a recipient Portal wallet.
+   *
+   * Uses the Portal mint (`https://mint.getportal.cc`) with unit `multi`.
+   * Returns the `stream_id`; poll via `getEvents(streamId)` or use `onEvent`.
+   */
+  public async requestPortalToken(
+    recipientKey: string,
+    subkeys: string[],
+    amount: number
+  ): Promise<AsyncOperation<CashuResponseStatus>> {
+    const resp = await this.post<{ stream_id: string }>('/payments/cashu/request-token', {
+      recipient_key: recipientKey,
+      subkeys,
+      amount,
+    });
+    const done = this.registerStream(resp.stream_id).then(
+      (event) => event.status as CashuResponseStatus
+    );
+    return { streamId: resp.stream_id, done };
   }
 }

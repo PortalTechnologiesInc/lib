@@ -60,6 +60,13 @@ export {
   BurnCashuRequest,
   CashuResponseStatus,
 
+  // Verification
+  InitiateBrowserSessionRequest,
+  VerificationSessionResponse,
+
+  // Portal Token
+  RequestPortalTokenRequest,
+
   // Relays
   RelayRequest,
 

@@ -967,3 +967,124 @@ pub async fn get_events(
 
     Ok(ok(EventsResponse { stream_id, events }))
 }
+
+// POST /verification/sessions
+pub async fn initiate_browser_session(
+    State(state): State<AppState>,
+    Json(req): Json<crate::command::InitiateBrowserSessionRequest>,
+) -> ApiResult<VerificationSessionResponse> {
+    let verification = state
+        .settings
+        .verification
+        .as_ref()
+        .ok_or_else(|| bad_request("Verification not configured — add [verification] api_key to config"))?;
+
+    let relays = req.relays.unwrap_or_else(|| {
+        vec![
+            "wss://relay.damus.io".to_string(),
+            "wss://relay.getportal.cc".to_string(),
+        ]
+    });
+
+    #[derive(serde::Serialize)]
+    struct VerifySessionRequest {
+        relays: Vec<String>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct VerifySessionApiResponse {
+        session_id: String,
+        session_url: String,
+        ephemeral_npub: String,
+        expires_at: u64,
+    }
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post("https://verify.getportal.cc/verify/sessions")
+        .header("X-Api-Key", &verification.api_key)
+        .json(&VerifySessionRequest { relays })
+        .send()
+        .await
+        .map_err(|e| internal_error(format!("Failed to call verification service: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(internal_error(format!(
+            "Verification service returned {}: {}",
+            status, body
+        )));
+    }
+
+    let api_resp: VerifySessionApiResponse = resp
+        .json()
+        .await
+        .map_err(|e| internal_error(format!("Failed to parse verification response: {e}")))?;
+
+    Ok(ok(VerificationSessionResponse {
+        session_id: api_resp.session_id,
+        session_url: api_resp.session_url,
+        ephemeral_npub: api_resp.ephemeral_npub,
+        expires_at: api_resp.expires_at,
+    }))
+}
+
+// POST /payments/cashu/request-token
+pub async fn request_portal_token(
+    State(state): State<AppState>,
+    Json(req): Json<crate::command::RequestPortalTokenRequest>,
+) -> ApiResult<StreamResponse> {
+    let recipient_key =
+        hex_to_pubkey(&req.recipient_key).map_err(|e| bad_request(format!("Invalid recipient key: {e}")))?;
+    let subkeys = parse_subkeys(&req.subkeys).map_err(|e| bad_request(format!("Invalid subkeys: {e}")))?;
+
+    let expires_at = Timestamp::now_plus_seconds(300);
+    let content = CashuRequestContent {
+        mint_url: "https://mint.getportal.cc".to_string(),
+        unit: "multi".to_string(),
+        amount: req.amount,
+        request_id: Uuid::new_v4().to_string(),
+        expires_at,
+    };
+
+    let stream_id = state
+        .events
+        .new_stream("cashu_portal_token_request", None)
+        .await;
+
+    let sdk = state.sdk.clone();
+    let events = state.events.clone();
+    let sid = stream_id.clone();
+    tokio::spawn(async move {
+        match sdk.request_cashu(recipient_key, subkeys, content).await {
+            Ok(Some(r)) => {
+                events
+                    .push(&sid, NotificationData::CashuResponse { status: r.status })
+                    .await;
+            }
+            Ok(None) => {
+                events
+                    .push(
+                        &sid,
+                        NotificationData::Error {
+                            reason: "No response from recipient".to_string(),
+                        },
+                    )
+                    .await;
+            }
+            Err(e) => {
+                events
+                    .push(
+                        &sid,
+                        NotificationData::Error {
+                            reason: format!("Failed to request portal token: {e}"),
+                        },
+                    )
+                    .await;
+            }
+        }
+    });
+
+    Ok(created(StreamResponse { stream_id }))
+}

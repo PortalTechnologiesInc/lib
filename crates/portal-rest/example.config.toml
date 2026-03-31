@@ -52,6 +52,12 @@ ln_backend = "none"
 path = "portal-rest.db"
 
 
+## Age verification settings. Required for the POST /verification/sessions endpoint.
+## Get your API key from https://verify.getportal.cc
+# [verification]
+# api_key = "your-api-key-here"
+
+
 ## Optional Nostr profile metadata. Set any combination of fields to publish
 ## your profile on the Nostr network at startup. Omit the section or leave
 ## fields commented out to skip.
