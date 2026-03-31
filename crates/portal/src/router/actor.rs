@@ -21,6 +21,9 @@ use crate::{
     },
 };
 
+/// Max events waiting for relay retry; avoids unbounded memory if a relay stays down.
+const MAX_PENDING_RELAY_EVENTS: usize = 512;
+
 #[derive(thiserror::Error, Debug)]
 pub enum MessageRouterActorError {
     #[error("Channel error: {0}")]
@@ -375,8 +378,8 @@ pub struct MessageRouterActorState {
     keypair: LocalKeypair,
     /// All conversation states
     conversations: HashMap<PortalConversationId, ConversationState>,
-    /// Events queued while the relay was disconnected, to be flushed on reconnect.
-    /// Each entry is (event, optional relay subset). Ordering is preserved.
+    /// Events queued while relays are disconnected. Each entry is:
+    /// (event, optional target-relay subset). Ordering is preserved.
     pending_events: Vec<(Event, Option<HashSet<String>>)>,
 }
 
@@ -930,8 +933,16 @@ impl MessageRouterActorState {
                 failed.len(),
                 failed
             );
-            // Queue only for the failed relays (surgical retry)
-            self.pending_events.push((event, Some(failed)));
+            // Queue only for the failed relays (surgical retry), but keep memory bounded.
+            if self.pending_events.len() >= MAX_PENDING_RELAY_EVENTS {
+                log::error!(
+                    "pending relay event queue is full (max {}), dropping retry for event {:?}",
+                    MAX_PENDING_RELAY_EVENTS,
+                    event.id
+                );
+            } else {
+                self.pending_events.push((event, Some(failed)));
+            }
         }
 
         Ok(())
@@ -943,9 +954,8 @@ impl MessageRouterActorState {
     /// that succeed, so a single stuck event won't block the rest.
     ///
     /// Relay-aware: if `relay_url` is `Some`, events whose target-relay set does *not*
-    /// include that relay are skipped (left in the queue for a later notification from
-    /// the correct relay).  If `relay_url` is `None`, all events are attempted
-    /// conservatively.
+    /// include that relay are skipped (left in queue for later notification from
+    /// the correct relay). If `relay_url` is `None`, all pending events are attempted.
     async fn flush_pending_events<C: Channel>(
         &mut self,
         channel: &Arc<C>,
@@ -961,7 +971,6 @@ impl MessageRouterActorState {
 
         // Pre-compute the string form once so we can compare against HashSet<String>.
         let relay_url_str = relay_url.map(|u| u.to_string());
-
         let pending = std::mem::take(&mut self.pending_events);
         let before = pending.len();
         let mut still_pending = Vec::new();
@@ -969,11 +978,11 @@ impl MessageRouterActorState {
         for (event, target_relays) in pending {
             // Decide whether this event is relevant for the notifying relay.
             let should_try = match (&target_relays, relay_url_str.as_deref()) {
-                // No target constraint → always try broadcast.
+                // No target constraint -> always try broadcast.
                 (None, _) => true,
-                // Target constraint but no relay hint → conservative: try anyway.
+                // Target constraint but no relay hint -> conservative: try anyway.
                 (Some(_), None) => true,
-                // Target constraint + relay hint → only if relay is in the target set.
+                // Target constraint + relay hint -> only if relay is in the target set.
                 (Some(relays), Some(url_str)) => relays.contains(url_str),
             };
 
@@ -1012,7 +1021,10 @@ impl MessageRouterActorState {
         self.pending_events = still_pending;
 
         if flushed > 0 {
-            log::debug!("Flushed {flushed} pending event(s), {} still queued", self.pending_events.len());
+            log::debug!(
+                "Flushed {flushed} pending event(s), {} still queued",
+                self.pending_events.len()
+            );
         }
     }
 
