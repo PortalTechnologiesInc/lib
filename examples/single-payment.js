@@ -40,9 +40,10 @@ async function main() {
   // Poll for the terminal event (paid / rejected / timeout / error)
   const result = await client.poll(op);
 
-  const status = result.status.status;
-  const reason = result.status.reason ?? '';
-  const preimage = result.status.preimage ?? '';
+  const status = result.status;
+  const reason = result.reason ?? '';
+  const preimage = result.preimage ?? '';
+
 
   if (status === 'paid') {
     console.log('✓ Payment received!');

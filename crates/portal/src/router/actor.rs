@@ -21,6 +21,9 @@ use crate::{
     },
 };
 
+/// Max events waiting for relay retry; avoids unbounded memory if a relay stays down.
+const MAX_PENDING_RELAY_EVENTS: usize = 512;
+
 #[derive(thiserror::Error, Debug)]
 pub enum MessageRouterActorError {
     #[error("Channel error: {0}")]
@@ -375,6 +378,9 @@ pub struct MessageRouterActorState {
     keypair: LocalKeypair,
     /// All conversation states
     conversations: HashMap<PortalConversationId, ConversationState>,
+    /// Events queued while relays are disconnected. Each entry is:
+    /// (event, optional target-relay subset). Ordering is preserved.
+    pending_events: Vec<(Event, Option<HashSet<String>>)>,
 }
 
 impl MessageRouterActorState {
@@ -382,6 +388,7 @@ impl MessageRouterActorState {
         Self {
             keypair,
             conversations: HashMap::new(),
+            pending_events: Vec::new(),
         }
     }
 
@@ -552,6 +559,18 @@ impl MessageRouterActorState {
     where
         C::Error: From<nostr::types::url::Error>,
     {
+        // Don't flush on Shutdown — the relay is going down, not coming up.
+        // For Event/Message variants, extract relay_url to pass into the relay-aware flush.
+        let opt_relay_url: Option<RelayUrl> = match &notification {
+            RelayPoolNotification::Shutdown => return Ok(()),
+            RelayPoolNotification::Event { relay_url, .. } => Some(relay_url.clone()),
+            RelayPoolNotification::Message { relay_url, .. } => Some(relay_url.clone()),
+        };
+
+        // A notification arriving means the relay is (at least momentarily) reachable.
+        // Try to drain any events that were queued while we were disconnected.
+        self.flush_pending_events(channel, opt_relay_url.as_ref()).await;
+
         enum LocalEvent {
             Message(Event),
             EndOfStoredEvents,
@@ -887,7 +906,7 @@ impl MessageRouterActorState {
     }
 
     async fn queue_event<C: Channel>(
-        &self,
+        &mut self,
         channel: &Arc<C>,
         event: Event,
         relays: Option<HashSet<String>>,
@@ -895,20 +914,118 @@ impl MessageRouterActorState {
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        if let Some(relays) = relays {
-            // if selected relays, broadcast to selected relays
+        let failed = if let Some(ref target_relays) = relays {
             channel
-                .broadcast_to(relays, event)
+                .broadcast_to(target_relays.clone(), event.clone())
                 .await
-                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?
         } else {
-            // if not selected relays, broadcast to all relays
             channel
-                .broadcast(event)
+                .broadcast(event.clone())
                 .await
-                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?
+        };
+
+        if !failed.is_empty() {
+            log::warn!(
+                "Event {:?} failed on {} relay(s), queuing for retry: {:?}",
+                event.id,
+                failed.len(),
+                failed
+            );
+            // Queue only for the failed relays (surgical retry), but keep memory bounded.
+            if self.pending_events.len() >= MAX_PENDING_RELAY_EVENTS {
+                log::error!(
+                    "pending relay event queue is full (max {}), dropping retry for event {:?}",
+                    MAX_PENDING_RELAY_EVENTS,
+                    event.id
+                );
+            } else {
+                self.pending_events.push((event, Some(failed)));
+            }
         }
+
         Ok(())
+    }
+
+    /// Attempt to flush any events that were queued while the relay was disconnected.
+    ///
+    /// No fail-fast: processes every pending event independently and only removes those
+    /// that succeed, so a single stuck event won't block the rest.
+    ///
+    /// Relay-aware: if `relay_url` is `Some`, events whose target-relay set does *not*
+    /// include that relay are skipped (left in queue for later notification from
+    /// the correct relay). If `relay_url` is `None`, all pending events are attempted.
+    async fn flush_pending_events<C: Channel>(
+        &mut self,
+        channel: &Arc<C>,
+        relay_url: Option<&RelayUrl>,
+    ) where
+        C::Error: From<nostr::types::url::Error>,
+    {
+        if self.pending_events.is_empty() {
+            return;
+        }
+
+        log::debug!("Flushing {} pending event(s)", self.pending_events.len());
+
+        // Pre-compute the string form once so we can compare against HashSet<String>.
+        let relay_url_str = relay_url.map(|u| u.to_string());
+        let pending = std::mem::take(&mut self.pending_events);
+        let before = pending.len();
+        let mut still_pending = Vec::new();
+
+        for (event, target_relays) in pending {
+            // Decide whether this event is relevant for the notifying relay.
+            let should_try = match (&target_relays, relay_url_str.as_deref()) {
+                // No target constraint -> always try broadcast.
+                (None, _) => true,
+                // Target constraint but no relay hint -> conservative: try anyway.
+                (Some(_), None) => true,
+                // Target constraint + relay hint -> only if relay is in the target set.
+                (Some(relays), Some(url_str)) => relays.contains(url_str),
+            };
+
+            if !should_try {
+                // This relay isn't relevant; leave event in queue.
+                still_pending.push((event, target_relays));
+                continue;
+            }
+
+            let result = if let Some(ref relays) = target_relays {
+                channel
+                    .broadcast_to(relays.clone(), event.clone())
+                    .await
+                    .map_err(|e| ConversationError::Inner(Box::new(e)))
+            } else {
+                channel
+                    .broadcast(event.clone())
+                    .await
+                    .map_err(|e| ConversationError::Inner(Box::new(e)))
+            };
+
+            match result {
+                Ok(f) if f.is_empty() => { /* success, event dropped */ }
+                Ok(f) => {
+                    log::warn!("Still failed on relay(s) {:?}, keeping queued", f);
+                    still_pending.push((event, Some(f)));
+                }
+                Err(e) => {
+                    log::warn!("Flush error for event {:?}: {:?}, keeping queued", event.id, e);
+                    still_pending.push((event, target_relays));
+                }
+            }
+        }
+
+        let flushed = before - still_pending.len();
+        self.pending_events = still_pending;
+
+        if flushed > 0 {
+            log::debug!(
+                "Flushed {flushed} pending event(s), {} still queued",
+                self.pending_events.len()
+            );
+        }
     }
 
     fn internal_add_with_id(

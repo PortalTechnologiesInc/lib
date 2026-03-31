@@ -16,6 +16,28 @@ pub struct Settings {
     pub database: DatabaseSettings,
     #[serde(default)]
     pub profile: ProfileSettings,
+    #[serde(default)]
+    pub logging: LoggingSettings,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct LoggingSettings {
+    /// `tracing` / `RUST_LOG` filter (e.g. `info`, `debug`, `portal_rest=debug`).
+    /// Used only when `RUST_LOG` is not set in the process environment.
+    #[serde(default = "default_log_filter")]
+    pub filter: String,
+}
+
+fn default_log_filter() -> String {
+    "info".to_string()
+}
+
+impl Default for LoggingSettings {
+    fn default() -> Self {
+        Self {
+            filter: default_log_filter(),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::{HashMap, HashSet}, sync::Arc};
 
 use nostr::{
     RelayUrl,
@@ -115,7 +115,7 @@ impl Channel for SimulatedChannel {
         Ok(())
     }
 
-    async fn broadcast(&self, event: Event) -> Result<(), Self::Error> {
+    async fn broadcast(&self, event: Event) -> Result<HashSet<String>, Self::Error> {
         // Store the event
         self.messages.lock().await.push(event.clone());
 
@@ -133,10 +133,10 @@ impl Channel for SimulatedChannel {
             }
         }
 
-        Ok(())
+        Ok(HashSet::new())
     }
 
-    async fn broadcast_to<I, U>(&self, urls: I, event: Event) -> Result<(), Self::Error>
+    async fn broadcast_to<I, U>(&self, urls: I, event: Event) -> Result<HashSet<String>, Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,
@@ -160,7 +160,7 @@ impl Channel for SimulatedChannel {
             }
         }
 
-        Ok(())
+        Ok(HashSet::new())
     }
 
     async fn receive(&self) -> Result<RelayPoolNotification, Self::Error> {
