@@ -968,6 +968,12 @@ pub async fn get_events(
     Ok(ok(EventsResponse { stream_id, events }))
 }
 
+// ── Age Verification constants ────────────────────────────────────────────────
+const VERIFICATION_SERVICE_URL: &str = "https://verify.getportal.cc/verify/sessions";
+const VERIFICATION_MINT_URL: &str = "https://mint.getportal.cc";
+const VERIFICATION_TICKET_UNIT: &str = "multi";
+const VERIFICATION_TOKEN_AMOUNT: u64 = 1;
+
 // POST /verification/sessions
 pub async fn create_verification_session(
     State(state): State<AppState>,
@@ -996,7 +1002,7 @@ pub async fn create_verification_session(
 
     let client = reqwest::Client::new();
     let resp = client
-        .post("https://verify.getportal.cc/verify/sessions")
+        .post(VERIFICATION_SERVICE_URL)
         .header("X-Api-Key", &verification.api_key)
         .json(&VerifySessionRequest { relays })
         .send()
@@ -1034,12 +1040,10 @@ pub async fn request_verification_token(
         hex_to_pubkey(&req.recipient_key).map_err(|e| bad_request(format!("Invalid recipient key: {e}")))?;
     let subkeys = parse_subkeys(&req.subkeys).map_err(|e| bad_request(format!("Invalid subkeys: {e}")))?;
 
-    const VERIFICATION_TOKEN_AMOUNT: u64 = 1;
-
     let expires_at = Timestamp::now_plus_seconds(300);
     let content = CashuRequestContent {
-        mint_url: "https://mint.getportal.cc".to_string(),
-        unit: "multi".to_string(),
+        mint_url: VERIFICATION_MINT_URL.to_string(),
+        unit: VERIFICATION_TICKET_UNIT.to_string(),
         amount: VERIFICATION_TOKEN_AMOUNT,
         request_id: Uuid::new_v4().to_string(),
         expires_at,
