@@ -34,16 +34,20 @@ async function main() {
   console.log('Creating age verification session...');
   const session = await client.createVerificationSession();
 
+  const sessionUrl = session.session_url.startsWith('http') ? session.session_url : `https://verify.getportal.cc${session.session_url}`;
+  const expiresAtMs = session.expires_at * 1000;
+  const timeoutMs = expiresAtMs - Date.now();
+
   console.log('');
   console.log('┌─────────────────────────────────────────────────────┐');
   console.log('│  Open this URL in a browser to complete verification │');
   console.log('├─────────────────────────────────────────────────────┤');
-  console.log(`│  ${session.session_url}`);
+  console.log(`│  ${sessionUrl}`);
   console.log('└─────────────────────────────────────────────────────┘');
   console.log('');
   console.log(`Session ID:      ${session.session_id}`);
   console.log(`Ephemeral npub:  ${session.ephemeral_npub}`);
-  console.log(`Expires at:      ${new Date(session.expires_at * 1000).toISOString()}`);
+  console.log(`Expires at:      ${new Date(expiresAtMs).toISOString()}`);
   console.log('');
 
   // ── Step 2: send Cashu request to the ephemeral key ─────────────────────
@@ -62,7 +66,7 @@ async function main() {
   // ── Step 3: wait for the result ──────────────────────────────────────────
   // This example runs as a plain CLI script (no webhook server, no auto-poller),
   // so we must explicitly poll for events until the stream reaches a terminal state.
-  const result = await client.poll(op, { intervalMs: 1000, timeoutMs: 5 * 60 * 1000 });
+  const result = await client.poll(op, { intervalMs: 1000, timeoutMs });
 
   console.log('');
   if (result.status === 'success') {
