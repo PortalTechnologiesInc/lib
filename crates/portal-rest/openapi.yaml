@@ -409,6 +409,53 @@ components:
           type: string
       additionalProperties: true
 
+    CreateVerificationSessionRequest:
+      type: object
+      properties:
+        relays:
+          type: array
+          items:
+            type: string
+          description: |
+            Relay WebSocket URLs for the verification session.
+            Defaults to the relays configured in the [nostr] section of the config if omitted.
+
+    VerificationSessionResponse:
+      type: object
+      required: [session_id, session_url, ephemeral_npub, expires_at, stream_id]
+      properties:
+        session_id:
+          type: string
+          description: Unique verification session identifier
+        session_url:
+          type: string
+          description: URL to redirect the user to for verification
+        ephemeral_npub:
+          type: string
+          description: Ephemeral Nostr public key for this session
+        expires_at:
+          type: integer
+          format: uint64
+          description: Unix timestamp when the session expires
+        stream_id:
+          type: string
+          description: Stream ID to poll for the verification token result via GET /events/{stream_id}
+
+    RequestVerificationTokenRequest:
+      type: object
+      required: [recipient_key, subkeys]
+      properties:
+        recipient_key:
+          type: string
+          description: Hex-encoded recipient public key
+        subkeys:
+          type: array
+          items:
+            type: string
+          description: Optional subkeys to include
+      description: |
+        Request a verification token from a recipient Portal wallet.
+
 paths:
   /health:
     get:
@@ -928,3 +975,70 @@ paths:
                         $ref: '#/components/schemas/EventsResponse'
         "404":
           description: Stream not found
+
+
+  /verification/sessions:
+    post:
+      tags:
+        - Verification
+      summary: Initiate a browser-based age verification session
+      description: |
+        Creates a verification session AND automatically starts listening for the
+        verification token. Returns session info (including `session_url` to redirect
+        the user to) plus a `stream_id` to poll for the Cashu token result.
+        Poll `GET /events/{stream_id}` for a `cashu_response` event containing the token.
+        Requires `[verification] api_key` in the portal-rest configuration.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVerificationSessionRequest'
+      responses:
+        "200":
+          description: Verification session created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/VerificationSessionResponse'
+        "400":
+          description: Verification not configured or invalid request
+        "500":
+          description: Verification service error
+
+  /verification/token:
+    post:
+      tags:
+        - Verification
+      summary: Request a verification token from a user who already holds one
+      description: |
+        Requests a verification token (Cashu) from a recipient who already has a token
+        in their Portal wallet (e.g. a mobile app user who completed verification previously).
+        Uses the Portal mint (`https://mint.getportal.cc`) with unit `multi`. Returns a
+        stream_id for polling. Poll GET /events/{stream_id} for the `cashu_response` event.
+
+        For new browser-based verification, use `POST /verification/sessions` instead — it
+        handles the full flow (session creation + token listening) in a single call.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestVerificationTokenRequest'
+      responses:
+        "201":
+          description: Verification token request initiated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/StreamIdResponse'
+        "400":
+          description: Invalid recipient key or subkeys

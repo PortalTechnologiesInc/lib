@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `GET /info` now includes `version` and `git_commit` fields (previously only in `GET /version`). `GET /version` kept for backward compatibility.
 
 #### Added
+- **Age verification**: `POST /verification/sessions` creates a browser-based age verification session AND automatically starts listening for the verification token in a single call. Returns session info plus a `stream_id` to poll for the Cashu token result. Requires `[verification] api_key` in config. Relay URLs default to the `[nostr]` config if not provided.
+- **Verification token request**: `POST /verification/token` requests a verification token from a user who already holds one (e.g. mobile app verified users). Returns a `stream_id` for async polling.
+- TS SDK: `createVerificationSession()` now returns `AsyncOperation<CashuResponseStatus>` — use `poll()` or `done` to wait for the token. `requestVerificationToken()` for the mobile flow.
+- Example: `examples/age-verification.js` — simplified single-call age verification flow
 - **NIP-05 auto-registration**: if `PORTAL__PROFILE__NIP05` is set to a `@getportal.cc` address, the daemon registers it with the Portal profile service at startup (one-time, cached in `~/.portal-rest/nip05.registered`). Self-hosted domains are set in the Nostr profile only, no external call.
 
 ---

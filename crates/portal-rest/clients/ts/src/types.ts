@@ -321,6 +321,28 @@ export type CashuResponseStatus =
   | { status: 'insufficient_funds' }
   | { status: 'rejected'; reason?: string };
 
+// ---- Verification ----
+
+export interface CreateVerificationSessionRequest {
+  /** Relay URLs to use for the verification session. Defaults to the relays configured in the [nostr] section of the config if omitted. */
+  relays?: string[];
+}
+
+export interface VerificationSessionResponse {
+  session_id: string;
+  session_url: string;
+  ephemeral_npub: string;
+  expires_at: number;
+  stream_id: string;
+}
+
+// ---- Portal Token (Cashu from Portal wallet) ----
+
+export interface RequestVerificationTokenRequest {
+  recipient_key: string;
+  subkeys: string[];
+}
+
 // ---- Relays ----
 
 export interface RelayRequest {
