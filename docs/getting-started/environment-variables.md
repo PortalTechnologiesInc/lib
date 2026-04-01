@@ -71,7 +71,7 @@ Age verification via Portal's verification service. Required for `POST /verifica
 
 | Config key | Env var | Required | Default | Description |
 |------------|---------|----------|---------|-------------|
-| `verification.api_key` | `PORTAL__VERIFICATION__API_KEY` | No | — | API key for the Portal verification service. Get yours at [verify.getportal.cc](https://verify.getportal.cc). Required to use the verification endpoints. |
+| `verification.api_key` | `PORTAL__VERIFICATION__API_KEY` | No | — | API key for the Portal verification service. Create one from the [PortalHub dashboard](https://hub.getportal.cc). Required to use the verification endpoints. |
 
 ## Minimal setup
 

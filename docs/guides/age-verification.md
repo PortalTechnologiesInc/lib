@@ -14,12 +14,15 @@ The entire flow is handled by a single SDK call (`createVerificationSession`), w
 
 ## Prerequisites
 
-- `[verification] api_key` configured in portal-rest (get one at [verify.getportal.cc](https://verify.getportal.cc))
+- A **PortalHub** account at [hub.getportal.cc](https://hub.getportal.cc) — create your verification API key and manage your dashboard from there
+- `[verification] api_key` configured in portal-rest
 - A wallet configured (NWC or Breez) — needed for relay connectivity
 
 ## Configuration
 
-Add to your `config.toml`:
+1. Sign up / log in at [hub.getportal.cc](https://hub.getportal.cc)
+2. Create a verification API key from the dashboard
+3. Add it to your `config.toml`:
 
 ```toml
 [verification]
