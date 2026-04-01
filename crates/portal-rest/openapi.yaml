@@ -37,6 +37,32 @@ servers:
 security:
   - BearerAuth: []
 
+tags:
+  - name: System
+    description: Health checks, version, and server info
+  - name: Key Management
+    description: Key handshake and authentication
+  - name: Payments
+    description: Single and recurring payment requests
+  - name: Invoices
+    description: Request and pay BOLT11 invoices
+  - name: Cashu
+    description: Cashu token operations (request, send, mint, burn)
+  - name: JWT
+    description: Issue and verify JWTs
+  - name: Profile
+    description: Nostr profiles and NIP-05
+  - name: Relays
+    description: Manage Nostr relays
+  - name: Wallet
+    description: Wallet information
+  - name: Events
+    description: Poll async operation events
+  - name: Calendar
+    description: Calendar utilities
+  - name: Verification
+    description: Age verification sessions and tokens
+
 components:
   securitySchemes:
     BearerAuth:
@@ -412,6 +438,8 @@ components:
 paths:
   /health:
     get:
+      tags:
+        - System
       summary: Health check
       security: []
       responses:
@@ -424,6 +452,8 @@ paths:
 
   /version:
     get:
+      tags:
+        - System
       summary: Version info
       security: []
       responses:
@@ -441,6 +471,8 @@ paths:
 
   /info:
     get:
+      tags:
+        - System
       summary: Get server info
       description: Returns the server's Nostr public key, version, and git commit. Requires authentication.
       responses:
@@ -473,6 +505,8 @@ paths:
 
   /well-known/nostr.json:
     get:
+      tags:
+        - System
       summary: NIP-05 well-known endpoint
       security: []
       parameters:
@@ -491,6 +525,8 @@ paths:
 
   /key-handshake:
     post:
+      tags:
+        - Key Management
       summary: Create a new key handshake URL
       description: |
         Returns a URL for the user to scan/open for key handshake.
@@ -515,6 +551,8 @@ paths:
 
   /authenticate-key:
     post:
+      tags:
+        - Key Management
       summary: Authenticate a key
       description: Initiates key authentication. Poll GET /events/{stream_id} for the auth result.
       requestBody:
@@ -537,6 +575,8 @@ paths:
 
   /payments/single:
     post:
+      tags:
+        - Payments
       summary: Request a single payment
       description: |
         Initiates a single payment request. Returns a stream_id for polling payment status.
@@ -560,6 +600,8 @@ paths:
 
   /payments/raw:
     post:
+      tags:
+        - Payments
       summary: Request a payment with raw SinglePaymentRequestContent
       requestBody:
         required: true
@@ -592,6 +634,8 @@ paths:
 
   /payments/recurring:
     post:
+      tags:
+        - Payments
       summary: Request a recurring payment
       description: Initiates a recurring payment request. Poll GET /events/{stream_id} for approval/rejection.
       requestBody:
@@ -614,6 +658,8 @@ paths:
 
   /payments/recurring/close:
     post:
+      tags:
+        - Payments
       summary: Close a recurring payment
       requestBody:
         required: true
@@ -632,6 +678,8 @@ paths:
 
   /profile/{main_key}:
     get:
+      tags:
+        - Profile
       summary: Fetch a profile by public key
       parameters:
         - in: path
@@ -651,6 +699,8 @@ paths:
 
   /invoices/request:
     post:
+      tags:
+        - Invoices
       summary: Request an invoice from a recipient
       description: Asks a recipient to generate a BOLT11 invoice. Poll GET /events/{stream_id} for the invoice_response event.
       requestBody:
@@ -673,6 +723,8 @@ paths:
 
   /invoices/pay:
     post:
+      tags:
+        - Invoices
       summary: Pay a BOLT11 invoice
       requestBody:
         required: true
@@ -694,6 +746,8 @@ paths:
 
   /jwt/issue:
     post:
+      tags:
+        - JWT
       summary: Issue a JWT
       requestBody:
         required: true
@@ -715,6 +769,8 @@ paths:
 
   /jwt/verify:
     post:
+      tags:
+        - JWT
       summary: Verify a JWT
       requestBody:
         required: true
@@ -736,6 +792,8 @@ paths:
 
   /cashu/request:
     post:
+      tags:
+        - Cashu
       summary: Request Cashu tokens from a recipient
       description: Initiates a Cashu token request. Poll GET /events/{stream_id} for the cashu_response event.
       requestBody:
@@ -758,6 +816,8 @@ paths:
 
   /cashu/send-direct:
     post:
+      tags:
+        - Cashu
       summary: Send Cashu tokens directly
       requestBody:
         required: true
@@ -776,6 +836,8 @@ paths:
 
   /cashu/mint:
     post:
+      tags:
+        - Cashu
       summary: Mint Cashu tokens
       requestBody:
         required: true
@@ -794,6 +856,8 @@ paths:
 
   /cashu/burn:
     post:
+      tags:
+        - Cashu
       summary: Burn (receive) Cashu tokens
       requestBody:
         required: true
@@ -812,6 +876,8 @@ paths:
 
   /relays:
     post:
+      tags:
+        - Relays
       summary: Add a relay
       requestBody:
         required: true
@@ -828,6 +894,8 @@ paths:
                 allOf:
                   - $ref: '#/components/schemas/ApiResponse'
     delete:
+      tags:
+        - Relays
       summary: Remove a relay
       requestBody:
         required: true
@@ -846,6 +914,8 @@ paths:
 
   /calendar/next-occurrence:
     post:
+      tags:
+        - Calendar
       summary: Calculate next calendar occurrence
       requestBody:
         required: true
@@ -864,6 +934,8 @@ paths:
 
   /nip05/{nip05}:
     get:
+      tags:
+        - Profile
       summary: Fetch NIP-05 profile
       parameters:
         - in: path
@@ -883,6 +955,8 @@ paths:
 
   /wallet/info:
     get:
+      tags:
+        - Wallet
       summary: Get wallet info
       responses:
         "200":
@@ -898,6 +972,8 @@ paths:
 
   /events/{stream_id}:
     get:
+      tags:
+        - Events
       summary: Poll events for an async operation
       description: |
         Returns events for a given stream. Use `after` query parameter to get only
