@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## portal-rest (SDK Daemon)
 
-### Unreleased
+### [0.4.1] - 2026-04-01
 
 #### Changed
 - `GET /info` now includes `version` and `git_commit` fields (previously only in `GET /version`). `GET /version` kept for backward compatibility.

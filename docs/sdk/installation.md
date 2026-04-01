@@ -72,7 +72,7 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 dependencies {
-    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.4.0'
+    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.4.1'
 }
 ```
 
@@ -86,7 +86,7 @@ dependencies {
 <dependency>
     <groupId>com.github.PortalTechnologiesInc</groupId>
     <artifactId>java-sdk</artifactId>
-    <version>0.4.0</version>
+    <version>0.4.1</version>
 </dependency>
 ```
 

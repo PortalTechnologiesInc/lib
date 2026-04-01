@@ -31,7 +31,7 @@ Your backend  ←—REST API—→  sdk-daemon  ←—Nostr relays—→  Portal
 docker run -d -p 3000:3000 \
   -e PORTAL__AUTH__AUTH_TOKEN=your-secret-token \
   -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
-  getportal/sdk-daemon:0.4.0
+  getportal/sdk-daemon:0.4.1
 ```
 
 **2. Call the REST API**
@@ -77,8 +77,8 @@ For JavaScript/TypeScript and Java, typed SDKs are available. They wrap the same
 
 | SDK | Version | Install |
 |-----|---------|---------|
-| TypeScript / JavaScript | `0.4.0` | `npm install portal-sdk` |
-| Java | `0.4.0` | [JitPack](https://jitpack.io/#PortalTechnologiesInc/java-sdk) |
+| TypeScript / JavaScript | `0.4.1` | `npm install portal-sdk` |
+| Java | `0.4.1` | [JitPack](https://jitpack.io/#PortalTechnologiesInc/java-sdk) |
 
 The SDK `major.minor` version must match the daemon. See [Versioning & Compatibility](https://portaltechnologiesinc.github.io/lib/getting-started/versioning.html).
 

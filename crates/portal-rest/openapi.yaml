@@ -25,7 +25,7 @@ info:
     If `webhook_url` is configured, server-initiated events are also POSTed to that URL.
     The `X-Portal-Signature` header contains an HMAC-SHA256 hex digest of the body,
     computed with the `webhook_secret`.
-  version: "0.4.0"
+  version: "0.4.1"
   contact:
     name: Portal Technologies Inc.
     url: https://getportal.cc
