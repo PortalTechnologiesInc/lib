@@ -1025,7 +1025,7 @@ pub async fn create_verification_session(
     }))
 }
 
-// POST /payments/cashu/request-token
+// POST /verification/token
 pub async fn request_verification_token(
     State(state): State<AppState>,
     Json(req): Json<crate::command::RequestVerificationTokenRequest>,
