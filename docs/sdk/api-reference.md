@@ -170,6 +170,36 @@ See [Cashu guide](../guides/cashu-tokens.md) and [Java SDK](https://github.com/P
 
 </custom-tabs>
 
+## Verification
+
+<custom-tabs category="sdk">
+
+<div slot="title">JavaScript</div>
+<section>
+
+| Method | Description |
+|--------|-------------|
+| `createVerificationSession(relays?): Promise<VerificationSession>` | Create an age verification session. Returns `session_url` to redirect the user to. Optionally pass relay URLs. |
+| `requestVerificationToken(recipientKey, subkeys): Promise<StreamOp>` | Request a verification token from a user who already holds one. |
+
+See [Age Verification guide](../guides/age-verification.md).
+
+</section>
+
+<div slot="title">Java</div>
+<section>
+
+| Request class | Description |
+|---------------|-------------|
+| `CreateVerificationSessionRequest(relays?)` | Create an age verification session. |
+| `RequestVerificationTokenRequest(recipientKey, subkeys)` | Request a verification token from a user. |
+
+See [Age Verification guide](../guides/age-verification.md).
+
+</section>
+
+</custom-tabs>
+
 ## Events
 
 <custom-tabs category="sdk">

@@ -35,6 +35,7 @@
 * [Running a Custom Mint](guides/running-a-mint.md)
 * [JWT Tokens (Session Management)](guides/jwt-tokens.md)
 * [Relay Management](guides/relays.md)
+* [Age Verification](guides/age-verification.md)
 
 # Resources
 

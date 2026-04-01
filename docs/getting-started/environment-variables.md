@@ -65,6 +65,14 @@ Publish your service's Nostr profile at startup. All fields are optional — omi
 | `profile.picture` | `PORTAL__PROFILE__PICTURE` | No | — | Avatar URL. |
 | `profile.nip05` | `PORTAL__PROFILE__NIP05` | No | — | NIP-05 verified identifier. |
 
+### Verification
+
+Age verification via Portal's verification service. Required for `POST /verification/sessions`.
+
+| Config key | Env var | Required | Default | Description |
+|------------|---------|----------|---------|-------------|
+| `verification.api_key` | `PORTAL__VERIFICATION__API_KEY` | No | — | API key for the Portal verification service. Create one from the [PortalHub dashboard](https://hub.getportal.cc). Required to use the verification endpoints. |
+
 ## Minimal setup
 
 ```bash
