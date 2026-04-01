@@ -2,10 +2,10 @@
  * Age verification example
  *
  * Initiates a browser-based age verification session via Portal's verification
- * service. The flow is:
+ * service. A single call handles the full flow:
  *
  *   1. Create a verification session → get a `session_url` to open in the browser
- *   2. Send a Cashu token request to the session's ephemeral key
+ *   2. Automatically starts listening for the verification token
  *   3. The user completes age verification in the browser
  *   4. The verification service mints a Cashu token and sends it back
  *   5. Receiving the token = proof of age ✅
@@ -27,7 +27,7 @@ const AUTH_TOKEN = process.env.PORTAL_TOKEN ?? 'your-secret-token';
 const client = new PortalClient({ baseUrl: BASE_URL, authToken: AUTH_TOKEN });
 
 async function main() {
-  // ── Step 1: create verification session ─────────────────────────────────
+  // ── Single call: create session + start listening for token ──────────────
   console.log('Creating age verification session...');
   const session = await client.createVerificationSession();
 
@@ -44,26 +44,13 @@ async function main() {
   console.log('');
   console.log(`Session ID:      ${session.session_id}`);
   console.log(`Ephemeral npub:  ${session.ephemeral_npub}`);
+  console.log(`Stream ID:       ${session.streamId}`);
   console.log(`Expires at:      ${new Date(expiresAtMs).toISOString()}`);
   console.log('');
-
-  // ── Step 2: send Cashu request to the ephemeral key ─────────────────────
-  // This signals to the verification worker that we're ready to receive the token.
-  // The worker will hold the request until the user completes verification in the browser.
-  // The token amount is set server-side (1 Portal verification ticket).
-  console.log('Sending Portal token request to verification worker...');
-  const op = await client.requestVerificationToken(
-    session.ephemeral_npub,
-    [], // no subkeys
-  );
-
-  console.log(`Stream ID: ${op.streamId}`);
   console.log('Waiting for user to complete verification in browser...');
 
-  // ── Step 3: wait for the result ──────────────────────────────────────────
-  // This example runs as a plain CLI script (no webhook server, no auto-poller),
-  // so we must explicitly poll for events until the stream reaches a terminal state.
-  const result = await client.poll(op, { intervalMs: 1000, timeoutMs });
+  // ── Wait for the result ──────────────────────────────────────────────────
+  const result = await client.poll(session, { intervalMs: 1000, timeoutMs });
 
   console.log('');
   if (result.status === 'success') {

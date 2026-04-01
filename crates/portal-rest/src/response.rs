@@ -129,6 +129,7 @@ pub struct VerificationSessionResponse {
     pub session_url: String,
     pub ephemeral_npub: String,
     pub expires_at: u64,
+    pub stream_id: String,
 }
 
 #[derive(Debug, Serialize)]

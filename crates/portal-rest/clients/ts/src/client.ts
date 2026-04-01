@@ -757,15 +757,22 @@ export class PortalClient {
   /**
    * Initiate a browser-based age verification session.
    *
-   * Returns a `VerificationSessionResponse` with a `session_url` to redirect the
-   * user to and a `session_id` for tracking the result.
+   * Creates the verification session AND automatically starts listening for the
+   * verification token. Returns session info plus an `AsyncOperation` — use
+   * `poll()` or `done` to wait for the Cashu token result.
    *
    * Requires `[verification] api_key` in portal-rest config.
    */
-  public async createVerificationSession(relayUrls?: string[]): Promise<VerificationSessionResponse> {
-    return this.post<VerificationSessionResponse>('/verification/sessions', {
+  public async createVerificationSession(relayUrls?: string[]): Promise<
+    VerificationSessionResponse & AsyncOperation<CashuResponseStatus>
+  > {
+    const resp = await this.post<VerificationSessionResponse>('/verification/sessions', {
       relays: relayUrls,
     });
+    const done = this.registerStream(resp.stream_id).then(
+      (event) => event.status as CashuResponseStatus
+    );
+    return { ...resp, streamId: resp.stream_id, done };
   }
 
   // ---- Verification Token ----

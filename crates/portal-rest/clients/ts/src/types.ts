@@ -333,6 +333,7 @@ export interface VerificationSessionResponse {
   session_url: string;
   ephemeral_npub: string;
   expires_at: number;
+  stream_id: string;
 }
 
 // ---- Portal Token (Cashu from Portal wallet) ----
