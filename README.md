@@ -57,6 +57,7 @@ Any language works — Python, Go, Ruby, PHP, Java, TypeScript. No SDK required.
 ## What you can do
 
 - **Authenticate users** — passwordless login via Nostr identity
+- **Age verification** — browser-based identity verification with cryptographic proof ([guide](https://portaltechnologiesinc.github.io/lib/guides/age-verification.html))
 - **Request payments** — single, recurring, or invoice-based; BTC (sats) or fiat (EUR, USD, and [more](https://portaltechnologiesinc.github.io/lib/sdk/api-reference.html))
 - **Issue JWTs** — signed by the user's Nostr key, verifiable server-side
 - **Cashu tokens** — mint, burn, and transfer ecash

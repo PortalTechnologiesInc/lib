@@ -1,6 +1,6 @@
 # Portal REST API
 
-REST API server for Portal — Nostr key auth, Lightning payments, JWT, Cashu, profiles, and more. Use it via the [TypeScript SDK](https://www.npmjs.com/package/portal-sdk) or call the HTTP endpoints directly.
+REST API server for Portal — Nostr key auth, Lightning payments, age verification, JWT, Cashu, profiles, and more. Use it via the [TypeScript SDK](https://www.npmjs.com/package/portal-sdk) or call the HTTP endpoints directly.
 
 **Full documentation:** [https://portaltechnologiesinc.github.io/lib/](https://portaltechnologiesinc.github.io/lib/)
 
