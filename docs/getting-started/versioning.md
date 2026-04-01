@@ -32,21 +32,21 @@ When a new `major.minor` version is released:
 2. Update the Docker image tag to the matching version.
 3. Check the [CHANGELOG](../../CHANGELOG.md) for breaking changes.
 
-**Example — upgrading to 0.4.0:**
+**Example — upgrading to 0.4.1:**
 
 ```bash
 # Docker
-docker pull getportal/sdk-daemon:0.4.0
+docker pull getportal/sdk-daemon:0.4.1
 ```
 
 ```bash
 # npm
-npm install portal-sdk@0.4.0
+npm install portal-sdk@0.4.1
 ```
 
 ```groovy
 // Gradle
-implementation 'com.github.PortalTechnologiesInc:java-sdk:0.4.0'
+implementation 'com.github.PortalTechnologiesInc:java-sdk:0.4.1'
 ```
 
 ## Current versions

@@ -90,7 +90,7 @@ Convert nsec to hex: `nak decode nsec1...`
 docker run -d -p 3000:3000 \
   -e PORTAL__AUTH__AUTH_TOKEN=my-secret-token \
   -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
-  getportal/sdk-daemon:0.4.0
+  getportal/sdk-daemon:0.4.1
 ```
 
 Or use a `.env` file: `docker run --env-file .env ...`. Don't commit `.env`.

@@ -10,7 +10,7 @@ You need a Nostr private key (hex) and a secret auth token. Then:
 docker run -d -p 3000:3000 \
   -e PORTAL__AUTH__AUTH_TOKEN=my-secret-token \
   -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
-  getportal/sdk-daemon:0.4.0
+  getportal/sdk-daemon:0.4.1
 ```
 
 Check it's running:
@@ -57,7 +57,7 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 dependencies {
-    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.4.0'
+    implementation 'com.github.PortalTechnologiesInc:java-sdk:0.4.1'
 }
 ```
 
@@ -71,7 +71,7 @@ dependencies {
 <dependency>
     <groupId>com.github.PortalTechnologiesInc</groupId>
     <artifactId>java-sdk</artifactId>
-    <version>0.4.0</version>
+    <version>0.4.1</version>
 </dependency>
 ```
 

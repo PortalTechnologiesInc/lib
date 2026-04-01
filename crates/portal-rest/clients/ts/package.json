@@ -1,6 +1,6 @@
 {
   "name": "portal-sdk",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Official TypeScript/JavaScript client for the Portal REST API — Nostr auth, Lightning payments, JWT, Cashu, profiles, polling",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
