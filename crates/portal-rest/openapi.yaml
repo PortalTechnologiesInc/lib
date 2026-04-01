@@ -438,7 +438,7 @@ components:
           format: uint64
           description: Unix timestamp when the session expires
 
-    RequestPortalTokenRequest:
+    RequestVerificationTokenRequest:
       type: object
       required: [recipient_key, subkeys]
       properties:
@@ -451,8 +451,7 @@ components:
             type: string
           description: Optional subkeys to include
       description: |
-        Request a Portal verification token. The token amount is set server-side
-        (currently 1 unit) and cannot be overridden by the client.
+        Request a verification token from a recipient Portal wallet.
 
 paths:
   /health:
@@ -1021,10 +1020,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RequestPortalTokenRequest'
+              $ref: '#/components/schemas/RequestVerificationTokenRequest'
       responses:
         "201":
-          description: Portal token request initiated
+          description: Verification token request initiated
           content:
             application/json:
               schema:

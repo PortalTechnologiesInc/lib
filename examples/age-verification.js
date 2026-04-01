@@ -52,7 +52,7 @@ async function main() {
   // The worker will hold the request until the user completes verification in the browser.
   // The token amount is set server-side (1 Portal verification ticket).
   console.log('Sending Portal token request to verification worker...');
-  const op = await client.requestPortalToken(
+  const op = await client.requestVerificationToken(
     session.ephemeral_npub,
     [], // no subkeys
   );

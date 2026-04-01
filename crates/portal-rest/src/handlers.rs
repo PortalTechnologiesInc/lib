@@ -1026,9 +1026,9 @@ pub async fn create_verification_session(
 }
 
 // POST /payments/cashu/request-token
-pub async fn request_portal_token(
+pub async fn request_verification_token(
     State(state): State<AppState>,
-    Json(req): Json<crate::command::RequestPortalTokenRequest>,
+    Json(req): Json<crate::command::RequestVerificationTokenRequest>,
 ) -> ApiResult<StreamResponse> {
     let recipient_key =
         hex_to_pubkey(&req.recipient_key).map_err(|e| bad_request(format!("Invalid recipient key: {e}")))?;

@@ -337,7 +337,7 @@ export interface VerificationSessionResponse {
 
 // ---- Portal Token (Cashu from Portal wallet) ----
 
-export interface RequestPortalTokenRequest {
+export interface RequestVerificationTokenRequest {
   recipient_key: string;
   subkeys: string[];
 }

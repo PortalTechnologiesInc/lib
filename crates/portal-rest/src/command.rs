@@ -82,7 +82,7 @@ pub struct CreateVerificationSessionRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct RequestPortalTokenRequest {
+pub struct RequestVerificationTokenRequest {
     pub recipient_key: String,
     pub subkeys: Vec<String>,
 }

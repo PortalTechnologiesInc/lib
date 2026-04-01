@@ -768,7 +768,7 @@ export class PortalClient {
     });
   }
 
-  // ---- Portal Token ----
+  // ---- Verification Token ----
 
   /**
    * Request a Cashu token from a recipient Portal wallet.
@@ -776,7 +776,7 @@ export class PortalClient {
    * Uses the Portal mint (`https://mint.getportal.cc`) with unit `multi`.
    * Returns the `stream_id`; poll via `getEvents(streamId)` or use `onEvent`.
    */
-  public async requestPortalToken(
+  public async requestVerificationToken(
     recipientKey: string,
     subkeys: string[]
   ): Promise<AsyncOperation<CashuResponseStatus>> {

@@ -314,7 +314,7 @@ fn build_router(state: AppState) -> Router {
         // Verification
         .route("/verification/sessions", post(handlers::create_verification_session))
         // Portal token (Cashu from Portal wallet)
-        .route("/payments/cashu/request-token", post(handlers::request_portal_token))
+        .route("/payments/cashu/request-token", post(handlers::request_verification_token))
         // Relays
         .route("/relays", post(handlers::add_relay))
         .route("/relays", delete(handlers::remove_relay))

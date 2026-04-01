@@ -65,7 +65,7 @@ export {
   VerificationSessionResponse,
 
   // Portal Token
-  RequestPortalTokenRequest,
+  RequestVerificationTokenRequest,
 
   // Relays
   RelayRequest,
