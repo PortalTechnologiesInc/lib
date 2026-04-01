@@ -1027,7 +1027,31 @@ pub async fn create_verification_session(
     let ephemeral_key = PublicKey::parse(&api_resp.ephemeral_npub)
         .map_err(|e| internal_error(format!("Invalid ephemeral_npub from verification service: {e}")))?;
 
-    // Create a cashu request for the verification token
+    let stream_id = spawn_verification_token_request(
+        state.sdk.clone(),
+        &state.events,
+        ephemeral_key,
+        vec![],
+    )
+    .await;
+
+    Ok(ok(VerificationSessionResponse {
+        session_id: api_resp.session_id,
+        session_url: api_resp.session_url,
+        ephemeral_npub: api_resp.ephemeral_npub,
+        expires_at: api_resp.expires_at,
+        stream_id,
+    }))
+}
+
+/// Shared helper: creates a verification token request stream, spawns a
+/// background task that calls `sdk.request_cashu`, and returns the `stream_id`.
+async fn spawn_verification_token_request(
+    sdk: Arc<portal_sdk::PortalSDK>,
+    events: &crate::events::EventStore,
+    recipient: PublicKey,
+    subkeys: Vec<PublicKey>,
+) -> String {
     let expires_at = Timestamp::now_plus_seconds(300);
     let content = CashuRequestContent {
         mint_url: VERIFICATION_MINT_URL.to_string(),
@@ -1037,17 +1061,14 @@ pub async fn create_verification_session(
         expires_at,
     };
 
-    let stream_id = state
-        .events
+    let stream_id = events
         .new_stream("cashu_portal_token_request", None)
         .await;
 
-    // Spawn background task to request the token (same logic as request_verification_token)
-    let sdk = state.sdk.clone();
-    let events = state.events.clone();
+    let events = events.clone();
     let sid = stream_id.clone();
     tokio::spawn(async move {
-        match sdk.request_cashu(ephemeral_key, vec![], content).await {
+        match sdk.request_cashu(recipient, subkeys, content).await {
             Ok(Some(r)) => {
                 events
                     .push(&sid, NotificationData::CashuResponse { status: r.status })
@@ -1068,7 +1089,7 @@ pub async fn create_verification_session(
                     .push(
                         &sid,
                         NotificationData::Error {
-                            reason: format!("Failed to request portal token: {e}"),
+                            reason: format!("Failed to request verification token: {e}"),
                         },
                     )
                     .await;
@@ -1076,13 +1097,7 @@ pub async fn create_verification_session(
         }
     });
 
-    Ok(ok(VerificationSessionResponse {
-        session_id: api_resp.session_id,
-        session_url: api_resp.session_url,
-        ephemeral_npub: api_resp.ephemeral_npub,
-        expires_at: api_resp.expires_at,
-        stream_id,
-    }))
+    stream_id
 }
 
 // POST /verification/token
@@ -1094,52 +1109,13 @@ pub async fn request_verification_token(
         hex_to_pubkey(&req.recipient_key).map_err(|e| bad_request(format!("Invalid recipient key: {e}")))?;
     let subkeys = parse_subkeys(&req.subkeys).map_err(|e| bad_request(format!("Invalid subkeys: {e}")))?;
 
-    let expires_at = Timestamp::now_plus_seconds(300);
-    let content = CashuRequestContent {
-        mint_url: VERIFICATION_MINT_URL.to_string(),
-        unit: VERIFICATION_TICKET_UNIT.to_string(),
-        amount: VERIFICATION_TOKEN_AMOUNT,
-        request_id: Uuid::new_v4().to_string(),
-        expires_at,
-    };
-
-    let stream_id = state
-        .events
-        .new_stream("cashu_portal_token_request", None)
-        .await;
-
-    let sdk = state.sdk.clone();
-    let events = state.events.clone();
-    let sid = stream_id.clone();
-    tokio::spawn(async move {
-        match sdk.request_cashu(recipient_key, subkeys, content).await {
-            Ok(Some(r)) => {
-                events
-                    .push(&sid, NotificationData::CashuResponse { status: r.status })
-                    .await;
-            }
-            Ok(None) => {
-                events
-                    .push(
-                        &sid,
-                        NotificationData::Error {
-                            reason: "No response from recipient".to_string(),
-                        },
-                    )
-                    .await;
-            }
-            Err(e) => {
-                events
-                    .push(
-                        &sid,
-                        NotificationData::Error {
-                            reason: format!("Failed to request portal token: {e}"),
-                        },
-                    )
-                    .await;
-            }
-        }
-    });
+    let stream_id = spawn_verification_token_request(
+        state.sdk.clone(),
+        &state.events,
+        recipient_key,
+        subkeys,
+    )
+    .await;
 
     Ok(created(StreamResponse { stream_id }))
 }
