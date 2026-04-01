@@ -323,8 +323,8 @@ export type CashuResponseStatus =
 
 // ---- Verification ----
 
-export interface InitiateBrowserSessionRequest {
-  /** Relay URLs to use for the verification session. Defaults to Portal defaults if omitted. */
+export interface CreateVerificationSessionRequest {
+  /** Relay URLs to use for the verification session. Defaults to the relays configured in the [nostr] section of the config if omitted. */
   relays?: string[];
 }
 

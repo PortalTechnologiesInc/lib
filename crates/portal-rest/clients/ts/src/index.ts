@@ -61,7 +61,7 @@ export {
   CashuResponseStatus,
 
   // Verification
-  InitiateBrowserSessionRequest,
+  CreateVerificationSessionRequest,
   VerificationSessionResponse,
 
   // Portal Token

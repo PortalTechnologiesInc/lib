@@ -762,7 +762,7 @@ export class PortalClient {
    *
    * Requires `[verification] api_key` in portal-rest config.
    */
-  public async initiateBrowserSession(relayUrls?: string[]): Promise<VerificationSessionResponse> {
+  public async createVerificationSession(relayUrls?: string[]): Promise<VerificationSessionResponse> {
     return this.post<VerificationSessionResponse>('/verification/sessions', {
       relays: relayUrls,
     });

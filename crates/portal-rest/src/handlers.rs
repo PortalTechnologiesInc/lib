@@ -969,9 +969,9 @@ pub async fn get_events(
 }
 
 // POST /verification/sessions
-pub async fn initiate_browser_session(
+pub async fn create_verification_session(
     State(state): State<AppState>,
-    Json(req): Json<crate::command::InitiateBrowserSessionRequest>,
+    Json(req): Json<crate::command::CreateVerificationSessionRequest>,
 ) -> ApiResult<VerificationSessionResponse> {
     let verification = state
         .settings
@@ -979,12 +979,7 @@ pub async fn initiate_browser_session(
         .as_ref()
         .ok_or_else(|| bad_request("Verification not configured — add [verification] api_key to config"))?;
 
-    let relays = req.relays.unwrap_or_else(|| {
-        vec![
-            "wss://relay.damus.io".to_string(),
-            "wss://relay.getportal.cc".to_string(),
-        ]
-    });
+    let relays = req.relays.unwrap_or_else(|| state.settings.nostr.relays.clone());
 
     #[derive(serde::Serialize)]
     struct VerifySessionRequest {

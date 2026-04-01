@@ -75,9 +75,9 @@ pub struct RequestCashuRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct InitiateBrowserSessionRequest {
+pub struct CreateVerificationSessionRequest {
     /// Relay URLs to use for the verification session. Defaults to
-    /// ["wss://relay.damus.io", "wss://relay.getportal.cc"] if not set.
+    /// the relays configured in the `[nostr]` section of the config if not set.
     pub relays: Option<Vec<String>>,
 }
 

@@ -32,7 +32,7 @@ const client = new PortalClient({ baseUrl: BASE_URL, authToken: AUTH_TOKEN });
 async function main() {
   // ── Step 1: create verification session ─────────────────────────────────
   console.log('Creating age verification session...');
-  const session = await client.initiateBrowserSession();
+  const session = await client.createVerificationSession();
 
   console.log('');
   console.log('┌─────────────────────────────────────────────────────┐');
