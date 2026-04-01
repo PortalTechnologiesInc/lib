@@ -18,6 +18,7 @@ pub struct Settings {
     pub profile: ProfileSettings,
     #[serde(default)]
     pub logging: LoggingSettings,
+    #[serde(default)]
     pub verification: Option<VerificationSettings>,
 }
 
