@@ -780,7 +780,7 @@ export class PortalClient {
     recipientKey: string,
     subkeys: string[]
   ): Promise<AsyncOperation<CashuResponseStatus>> {
-    const resp = await this.post<{ stream_id: string }>('/payments/cashu/request-token', {
+    const resp = await this.post<{ stream_id: string }>('/verification/token', {
       recipient_key: recipientKey,
       subkeys,
     });

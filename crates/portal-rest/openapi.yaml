@@ -1005,16 +1005,15 @@ paths:
         "500":
           description: Verification service error
 
-  /payments/cashu/request-token:
+  /verification/token:
     post:
       tags:
-        - Payments
-        - Cashu
-      summary: Request a Cashu token from a recipient Portal wallet
+        - Verification
+      summary: Request a verification token from a recipient Portal wallet
       description: |
-        Requests a Cashu token from a recipient Portal wallet using the Portal mint
-        (`https://mint.getportal.cc`) with unit `multi`. Returns a stream_id for polling.
-        Poll GET /events/{stream_id} for the `cashu_response` event.
+        Requests a verification token (Cashu) from a recipient Portal wallet using the
+        Portal mint (`https://mint.getportal.cc`) with unit `multi`. Returns a stream_id
+        for polling. Poll GET /events/{stream_id} for the `cashu_response` event.
       requestBody:
         required: true
         content:

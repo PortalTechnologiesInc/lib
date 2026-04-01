@@ -313,8 +313,8 @@ fn build_router(state: AppState) -> Router {
         .route("/cashu/burn", post(handlers::burn_cashu))
         // Verification
         .route("/verification/sessions", post(handlers::create_verification_session))
-        // Portal token (Cashu from Portal wallet)
-        .route("/payments/cashu/request-token", post(handlers::request_verification_token))
+        // Verification token (Cashu from Portal wallet)
+        .route("/verification/token", post(handlers::request_verification_token))
         // Relays
         .route("/relays", post(handlers::add_relay))
         .route("/relays", delete(handlers::remove_relay))
