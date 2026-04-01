@@ -778,13 +778,11 @@ export class PortalClient {
    */
   public async requestPortalToken(
     recipientKey: string,
-    subkeys: string[],
-    amount: number
+    subkeys: string[]
   ): Promise<AsyncOperation<CashuResponseStatus>> {
     const resp = await this.post<{ stream_id: string }>('/payments/cashu/request-token', {
       recipient_key: recipientKey,
       subkeys,
-      amount,
     });
     const done = this.registerStream(resp.stream_id).then(
       (event) => event.status as CashuResponseStatus

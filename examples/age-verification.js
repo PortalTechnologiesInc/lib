@@ -24,9 +24,6 @@ import { PortalClient } from 'portal-sdk';
 const BASE_URL   = process.env.PORTAL_URL   ?? 'http://localhost:7000';
 const AUTH_TOKEN = process.env.PORTAL_TOKEN ?? 'your-secret-token';
 
-// Amount of sats to send as part of the Cashu request (matches Portal's default).
-const VERIFICATION_AMOUNT = 500;
-
 const client = new PortalClient({ baseUrl: BASE_URL, authToken: AUTH_TOKEN });
 
 async function main() {
@@ -53,11 +50,11 @@ async function main() {
   // ── Step 2: send Cashu request to the ephemeral key ─────────────────────
   // This signals to the verification worker that we're ready to receive the token.
   // The worker will hold the request until the user completes verification in the browser.
-  console.log('Sending Cashu token request to verification worker...');
+  // The token amount is set server-side (1 Portal verification ticket).
+  console.log('Sending Portal token request to verification worker...');
   const op = await client.requestPortalToken(
     session.ephemeral_npub,
     [], // no subkeys
-    VERIFICATION_AMOUNT,
   );
 
   console.log(`Stream ID: ${op.streamId}`);

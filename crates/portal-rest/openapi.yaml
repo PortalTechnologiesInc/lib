@@ -440,7 +440,7 @@ components:
 
     RequestPortalTokenRequest:
       type: object
-      required: [recipient_key, subkeys, amount]
+      required: [recipient_key, subkeys]
       properties:
         recipient_key:
           type: string
@@ -450,10 +450,9 @@ components:
           items:
             type: string
           description: Optional subkeys to include
-        amount:
-          type: integer
-          format: uint64
-          description: Amount of tokens to request
+      description: |
+        Request a Portal verification token. The token amount is set server-side
+        (currently 1 unit) and cannot be overridden by the client.
 
 paths:
   /health:

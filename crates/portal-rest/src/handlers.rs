@@ -1034,11 +1034,13 @@ pub async fn request_portal_token(
         hex_to_pubkey(&req.recipient_key).map_err(|e| bad_request(format!("Invalid recipient key: {e}")))?;
     let subkeys = parse_subkeys(&req.subkeys).map_err(|e| bad_request(format!("Invalid subkeys: {e}")))?;
 
+    const VERIFICATION_TOKEN_AMOUNT: u64 = 1;
+
     let expires_at = Timestamp::now_plus_seconds(300);
     let content = CashuRequestContent {
         mint_url: "https://mint.getportal.cc".to_string(),
         unit: "multi".to_string(),
-        amount: req.amount,
+        amount: VERIFICATION_TOKEN_AMOUNT,
         request_id: Uuid::new_v4().to_string(),
         expires_at,
     };

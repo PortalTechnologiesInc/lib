@@ -85,7 +85,6 @@ pub struct CreateVerificationSessionRequest {
 pub struct RequestPortalTokenRequest {
     pub recipient_key: String,
     pub subkeys: Vec<String>,
-    pub amount: u64,
 }
 
 #[derive(Debug, Deserialize)]

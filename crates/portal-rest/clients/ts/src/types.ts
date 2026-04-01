@@ -340,7 +340,6 @@ export interface VerificationSessionResponse {
 export interface RequestPortalTokenRequest {
   recipient_key: string;
   subkeys: string[];
-  amount: number;
 }
 
 // ---- Relays ----
