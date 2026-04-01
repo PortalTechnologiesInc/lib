@@ -16,7 +16,6 @@ The entire flow is handled by a single SDK call (`createVerificationSession`), w
 
 - A **PortalHub** account at [hub.getportal.cc](https://hub.getportal.cc) — create your verification API key and manage your dashboard from there
 - `[verification] api_key` configured in portal-rest
-- A wallet configured (NWC or Breez) — needed for relay connectivity
 
 ## Configuration
 
