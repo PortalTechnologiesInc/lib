@@ -52,12 +52,12 @@ pub enum MessageRouterActorMessage {
     Shutdown(oneshot::Sender<Result<(), ConversationError>>),
     AddConversation(
         ConversationBox,
-        oneshot::Sender<Result<PortalConversationId, ConversationError>>,
+        oneshot::Sender<Result<(PortalConversationId, Vec<SendOutcome>), ConversationError>>,
     ),
     AddConversationWithRelays(
         ConversationBox,
         Vec<String>,
-        oneshot::Sender<Result<PortalConversationId, ConversationError>>,
+        oneshot::Sender<Result<(PortalConversationId, Vec<SendOutcome>), ConversationError>>,
     ),
     SubscribeToServiceRequest(
         PortalConversationId,
@@ -65,7 +65,7 @@ pub enum MessageRouterActorMessage {
     ),
     AddAndSubscribe(
         ConversationBox,
-        oneshot::Sender<Result<NotificationStream<serde_json::Value>, ConversationError>>,
+        oneshot::Sender<Result<(NotificationStream<serde_json::Value>, Vec<SendOutcome>), ConversationError>>,
     ),
     Ping(oneshot::Sender<()>),
 
@@ -286,7 +286,7 @@ where
     pub async fn add_conversation(
         &self,
         conversation: ConversationBox,
-    ) -> Result<PortalConversationId, MessageRouterActorError> {
+    ) -> Result<(PortalConversationId, Vec<SendOutcome>), MessageRouterActorError> {
         self.ping().await?;
         self.ping().await?;
 
@@ -301,7 +301,7 @@ where
         &self,
         conversation: ConversationBox,
         relays: Vec<String>,
-    ) -> Result<PortalConversationId, MessageRouterActorError> {
+    ) -> Result<(PortalConversationId, Vec<SendOutcome>), MessageRouterActorError> {
         let (tx, rx) = oneshot::channel();
         self.send_message(MessageRouterActorMessage::AddConversationWithRelays(
             conversation,
@@ -364,19 +364,19 @@ where
     pub async fn add_and_subscribe<T: DeserializeOwned + Serialize>(
         &self,
         conversation: ConversationBox,
-    ) -> Result<NotificationStream<T>, MessageRouterActorError> {
-        let raw_stream = self.add_and_subscribe_raw(conversation).await?;
+    ) -> Result<(NotificationStream<T>, Vec<SendOutcome>), MessageRouterActorError> {
+        let (raw_stream, outcomes) = self.add_and_subscribe_raw(conversation).await?;
         let NotificationStream { stream } = raw_stream;
         let typed_stream =
             stream.map(|result| result.and_then(|value| serde_json::from_value(value)));
-        Ok(NotificationStream::new(typed_stream))
+        Ok((NotificationStream::new(typed_stream), outcomes))
     }
 
     /// Adds a conversation and subscribes to its notifications in a single operation (raw Value).
     async fn add_and_subscribe_raw(
         &self,
         conversation: ConversationBox,
-    ) -> Result<NotificationStream<serde_json::Value>, MessageRouterActorError> {
+    ) -> Result<(NotificationStream<serde_json::Value>, Vec<SendOutcome>), MessageRouterActorError> {
         let (tx, rx) = oneshot::channel();
         self.send_message(MessageRouterActorMessage::AddAndSubscribe(conversation, tx))
             .await?;
@@ -1108,7 +1108,7 @@ impl MessageRouterActorState {
         &mut self,
         channel: &Arc<C>,
         conversation: ConversationBox,
-    ) -> Result<PortalConversationId, ConversationError>
+    ) -> Result<(PortalConversationId, Vec<SendOutcome>), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
@@ -1118,11 +1118,8 @@ impl MessageRouterActorState {
         let response = self.internal_add_with_id(&conversation_id, subscription_id.clone(), conversation, None, None)?;
         let outcomes = self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
-        if outcomes.iter().any(|o| *o == SendOutcome::Queued) {
-            log::warn!("One or more events for conversation {} were queued (no relay connected)", conversation_id);
-        }
 
-        Ok(conversation_id)
+        Ok((conversation_id, outcomes))
     }
 
     pub async fn add_conversation_with_relays<C: Channel>(
@@ -1130,7 +1127,7 @@ impl MessageRouterActorState {
         channel: &Arc<C>,
         conversation: ConversationBox,
         relays: Vec<String>,
-    ) -> Result<PortalConversationId, ConversationError>
+    ) -> Result<(PortalConversationId, Vec<SendOutcome>), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
@@ -1141,11 +1138,8 @@ impl MessageRouterActorState {
             self.internal_add_with_id(&conversation_id, subscription_id.clone(), conversation, Some(relays), None)?;
         let outcomes = self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
-        if outcomes.iter().any(|o| *o == SendOutcome::Queued) {
-            log::warn!("One or more events for conversation {} were queued (no relay connected)", conversation_id);
-        }
 
-        Ok(conversation_id)
+        Ok((conversation_id, outcomes))
     }
 
     /// Subscribes to notifications from a conversation.
@@ -1197,7 +1191,7 @@ impl MessageRouterActorState {
         &mut self,
         channel: &Arc<C>,
         conversation: ConversationBox,
-    ) -> Result<NotificationStream<T>, ConversationError>
+    ) -> Result<(NotificationStream<T>, Vec<SendOutcome>), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
@@ -1215,11 +1209,8 @@ impl MessageRouterActorState {
         let response = self.internal_add_with_id(&conversation_id, subscription_id.clone(), conversation, None, Some(tx))?;
         let outcomes = self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
-        if outcomes.iter().any(|o| *o == SendOutcome::Queued) {
-            log::warn!("One or more events for conversation {} were queued (no relay connected)", conversation_id);
-        }
 
-        Ok(rx)
+        Ok((rx, outcomes))
     }
 }
 

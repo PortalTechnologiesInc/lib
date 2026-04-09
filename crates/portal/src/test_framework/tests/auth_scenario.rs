@@ -56,7 +56,7 @@ async fn test_auth_flow() {
     let client_router = network.get_node("client").unwrap();
 
     // 1. Service sets up to receive auth init
-    let mut service_notifications = service_router
+    let (mut service_notifications, _) = service_router
         .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
             KeyHandshakeReceiverConversation::new(service_keys.public_key(), token.clone()),
             None,
@@ -65,7 +65,7 @@ async fn test_auth_flow() {
         .unwrap();
 
     // 2. Client sets up to listen for auth challenge
-    let mut challenge_notifications = client_router
+    let (mut challenge_notifications, _) = client_router
         .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
             AuthChallengeListenerConversation::new(client_keys.public_key()),
             None,
@@ -94,7 +94,7 @@ async fn test_auth_flow() {
     assert_eq!(key_handshake_event.main_key, client_keys.public_key());
 
     // 5. Service sends auth challenge
-    let mut auth_response_event = service_router
+    let (mut auth_response_event, _) = service_router
         .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
             key_handshake_event.main_key,
             vec![],
@@ -187,7 +187,7 @@ async fn test_auth_with_subkey_client() {
     let client_router = network.get_node("client").unwrap();
 
     // 1. Client sets up to listen for auth challenge
-    let mut challenge_notifications = client_router
+    let (mut challenge_notifications, _) = client_router
         .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
             AuthChallengeListenerConversation::new(client_keys.public_key()),
             Some(client_subkey_proof.clone()),
@@ -196,7 +196,7 @@ async fn test_auth_with_subkey_client() {
         .unwrap();
 
     // 2. Service sends auth challenge (we explicitly don't set the subkey here so that the client has to negotiate it)
-    let mut auth_response_event = service_router
+    let (mut auth_response_event, _) = service_router
         .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
             client_keys_master.public_key(),
             vec![],
@@ -292,7 +292,7 @@ async fn test_auth_with_subkey_service() {
     let client_router = network.get_node("client").unwrap();
 
     // 1. Client sets up to listen for auth challenge
-    let mut challenge_notifications = client_router
+    let (mut challenge_notifications, _) = client_router
         .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
             AuthChallengeListenerConversation::new(client_keys.public_key()),
             None,
@@ -301,7 +301,7 @@ async fn test_auth_with_subkey_service() {
         .unwrap();
 
     // 2. Service sends auth challenge (we explicitly don't set the subkey here so that the client has to negotiate it)
-    let mut auth_response_event = service_router
+    let (mut auth_response_event, _) = service_router
         .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
             client_keys.public_key(),
             vec![],

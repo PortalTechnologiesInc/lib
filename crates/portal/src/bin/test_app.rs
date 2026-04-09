@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // auth init sent
 
     let inner = AuthChallengeListenerConversation::new(router.keypair().public_key());
-    let mut rx: portal::router::NotificationStream<portal::conversation::app::auth::AuthChallengeEvent> = router
+    let (mut rx, _outcomes): (portal::router::NotificationStream<portal::conversation::app::auth::AuthChallengeEvent>, _) = router
         .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
             inner,
             router.keypair().subkey_proof().cloned(),
