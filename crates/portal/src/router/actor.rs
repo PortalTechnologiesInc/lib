@@ -35,6 +35,13 @@ pub enum SendOutcome {
     Dropped,
 }
 
+/// Result of sending a single Nostr event, pairing the event ID with its delivery outcome.
+#[derive(Debug, Clone)]
+pub struct EventSendResult {
+    pub event_id: nostr::EventId,
+    pub outcome: SendOutcome,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum MessageRouterActorError {
     #[error("Channel error: {0}")]
@@ -52,12 +59,12 @@ pub enum MessageRouterActorMessage {
     Shutdown(oneshot::Sender<Result<(), ConversationError>>),
     AddConversation(
         ConversationBox,
-        oneshot::Sender<Result<(PortalConversationId, Vec<SendOutcome>), ConversationError>>,
+        oneshot::Sender<Result<(PortalConversationId, Vec<EventSendResult>), ConversationError>>,
     ),
     AddConversationWithRelays(
         ConversationBox,
         Vec<String>,
-        oneshot::Sender<Result<(PortalConversationId, Vec<SendOutcome>), ConversationError>>,
+        oneshot::Sender<Result<(PortalConversationId, Vec<EventSendResult>), ConversationError>>,
     ),
     SubscribeToServiceRequest(
         PortalConversationId,
@@ -65,7 +72,7 @@ pub enum MessageRouterActorMessage {
     ),
     AddAndSubscribe(
         ConversationBox,
-        oneshot::Sender<Result<(NotificationStream<serde_json::Value>, Vec<SendOutcome>), ConversationError>>,
+        oneshot::Sender<Result<(NotificationStream<serde_json::Value>, Vec<EventSendResult>), ConversationError>>,
     ),
     Ping(oneshot::Sender<()>),
 
@@ -286,7 +293,7 @@ where
     pub async fn add_conversation(
         &self,
         conversation: ConversationBox,
-    ) -> Result<(PortalConversationId, Vec<SendOutcome>), MessageRouterActorError> {
+    ) -> Result<(PortalConversationId, Vec<EventSendResult>), MessageRouterActorError> {
         self.ping().await?;
         self.ping().await?;
 
@@ -301,7 +308,7 @@ where
         &self,
         conversation: ConversationBox,
         relays: Vec<String>,
-    ) -> Result<(PortalConversationId, Vec<SendOutcome>), MessageRouterActorError> {
+    ) -> Result<(PortalConversationId, Vec<EventSendResult>), MessageRouterActorError> {
         let (tx, rx) = oneshot::channel();
         self.send_message(MessageRouterActorMessage::AddConversationWithRelays(
             conversation,
@@ -364,7 +371,7 @@ where
     pub async fn add_and_subscribe<T: DeserializeOwned + Serialize>(
         &self,
         conversation: ConversationBox,
-    ) -> Result<(NotificationStream<T>, Vec<SendOutcome>), MessageRouterActorError> {
+    ) -> Result<(NotificationStream<T>, Vec<EventSendResult>), MessageRouterActorError> {
         let (raw_stream, outcomes) = self.add_and_subscribe_raw(conversation).await?;
         let NotificationStream { stream } = raw_stream;
         let typed_stream =
@@ -376,7 +383,7 @@ where
     async fn add_and_subscribe_raw(
         &self,
         conversation: ConversationBox,
-    ) -> Result<(NotificationStream<serde_json::Value>, Vec<SendOutcome>), MessageRouterActorError> {
+    ) -> Result<(NotificationStream<serde_json::Value>, Vec<EventSendResult>), MessageRouterActorError> {
         let (tx, rx) = oneshot::channel();
         self.send_message(MessageRouterActorMessage::AddAndSubscribe(conversation, tx))
             .await?;
@@ -766,7 +773,7 @@ impl MessageRouterActorState {
         log::debug!("Processing response for conversation: {}", conversation_id);
         let outcomes = self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
-        if outcomes.iter().any(|o| *o == SendOutcome::Queued) {
+        if outcomes.iter().any(|r| r.outcome == SendOutcome::Queued) {
             log::warn!("One or more events for conversation {} were queued (no relay connected)", conversation_id);
         }
 
@@ -779,7 +786,7 @@ impl MessageRouterActorState {
         id: &PortalConversationId,
         response: Response,
         subscription_id: PortalSubscriptionId,
-    ) -> Result<Vec<SendOutcome>, ConversationError>
+    ) -> Result<Vec<EventSendResult>, ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
@@ -927,10 +934,12 @@ impl MessageRouterActorState {
         channel: &Arc<C>,
         event: Event,
         relays: Option<HashSet<String>>,
-    ) -> Result<SendOutcome, ConversationError>
+    ) -> Result<EventSendResult, ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
+        let event_id = event.id;
+
         let (failed, all_targeted) = if let Some(ref target_relays) = relays {
             let num_targets = target_relays.len();
             let failed_set = channel
@@ -950,7 +959,7 @@ impl MessageRouterActorState {
         };
 
         if failed.is_empty() {
-            return Ok(SendOutcome::Delivered);
+            return Ok(EventSendResult { event_id, outcome: SendOutcome::Delivered });
         }
 
         log::warn!(
@@ -968,16 +977,16 @@ impl MessageRouterActorState {
                 MAX_PENDING_RELAY_EVENTS,
                 event.id
             );
-            return Ok(SendOutcome::Dropped);
+            return Ok(EventSendResult { event_id, outcome: SendOutcome::Dropped });
         }
 
         self.pending_events.push((event, Some(failed.clone())));
 
         if failed.len() >= all_targeted {
-            Ok(SendOutcome::Queued)
+            Ok(EventSendResult { event_id, outcome: SendOutcome::Queued })
         } else {
             // At least one relay received the event
-            Ok(SendOutcome::Delivered)
+            Ok(EventSendResult { event_id, outcome: SendOutcome::Delivered })
         }
     }
 
@@ -1108,7 +1117,7 @@ impl MessageRouterActorState {
         &mut self,
         channel: &Arc<C>,
         conversation: ConversationBox,
-    ) -> Result<(PortalConversationId, Vec<SendOutcome>), ConversationError>
+    ) -> Result<(PortalConversationId, Vec<EventSendResult>), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
@@ -1127,7 +1136,7 @@ impl MessageRouterActorState {
         channel: &Arc<C>,
         conversation: ConversationBox,
         relays: Vec<String>,
-    ) -> Result<(PortalConversationId, Vec<SendOutcome>), ConversationError>
+    ) -> Result<(PortalConversationId, Vec<EventSendResult>), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
@@ -1191,7 +1200,7 @@ impl MessageRouterActorState {
         &mut self,
         channel: &Arc<C>,
         conversation: ConversationBox,
-    ) -> Result<(NotificationStream<T>, Vec<SendOutcome>), ConversationError>
+    ) -> Result<(NotificationStream<T>, Vec<EventSendResult>), ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
