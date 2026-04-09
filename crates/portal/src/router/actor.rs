@@ -24,6 +24,17 @@ use crate::{
 /// Max events waiting for relay retry; avoids unbounded memory if a relay stays down.
 const MAX_PENDING_RELAY_EVENTS: usize = 512;
 
+/// Outcome of attempting to send an event to relays.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SendOutcome {
+    /// At least one relay received the event.
+    Delivered,
+    /// No relay was available; the event has been queued for retry.
+    Queued,
+    /// The pending queue was full and the event was dropped.
+    Dropped,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum MessageRouterActorError {
     #[error("Channel error: {0}")]
@@ -753,8 +764,11 @@ impl MessageRouterActorState {
         };
 
         log::debug!("Processing response for conversation: {}", conversation_id);
-        self.process_response(channel, &conversation_id, response, subscription_id)
+        let outcomes = self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
+        if outcomes.iter().any(|o| *o == SendOutcome::Queued) {
+            log::warn!("One or more events for conversation {} were queued (no relay connected)", conversation_id);
+        }
 
         Ok(())
     }
@@ -765,7 +779,7 @@ impl MessageRouterActorState {
         id: &PortalConversationId,
         response: Response,
         subscription_id: PortalSubscriptionId,
-    ) -> Result<(), ConversationError>
+    ) -> Result<Vec<SendOutcome>, ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
@@ -884,14 +898,17 @@ impl MessageRouterActorState {
         }
 
         // check if Response has selected relays
+        let mut outcomes = Vec::new();
         if let Some(selected_relays) = selected_relays_optional {
             for event in events_to_broadcast {
-                self.queue_event(channel, event, Some(selected_relays.clone()))
+                let outcome = self.queue_event(channel, event, Some(selected_relays.clone()))
                     .await?;
+                outcomes.push(outcome);
             }
         } else {
             for event in events_to_broadcast {
-                self.queue_event(channel, event, None).await?;
+                let outcome = self.queue_event(channel, event, None).await?;
+                outcomes.push(outcome);
             }
 
             // TODO: wait for confirmation from relays
@@ -902,7 +919,7 @@ impl MessageRouterActorState {
             self.cleanup_conversation(channel, id).await?;
         }
 
-        Ok(())
+        Ok(outcomes)
     }
 
     async fn queue_event<C: Channel>(
@@ -910,42 +927,58 @@ impl MessageRouterActorState {
         channel: &Arc<C>,
         event: Event,
         relays: Option<HashSet<String>>,
-    ) -> Result<(), ConversationError>
+    ) -> Result<SendOutcome, ConversationError>
     where
         C::Error: From<nostr::types::url::Error>,
     {
-        let failed = if let Some(ref target_relays) = relays {
-            channel
+        let (failed, all_targeted) = if let Some(ref target_relays) = relays {
+            let num_targets = target_relays.len();
+            let failed_set = channel
                 .broadcast_to(target_relays.clone(), event.clone())
                 .await
-                .map_err(|e| ConversationError::Inner(Box::new(e)))?
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+            (failed_set, num_targets)
         } else {
-            channel
+            let failed_set = channel
                 .broadcast(event.clone())
                 .await
-                .map_err(|e| ConversationError::Inner(Box::new(e)))?
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
+            // broadcast targets all known relays; when all fail,
+            // failed.len() == total relay count, so the comparison below holds.
+            let n = failed_set.len();
+            (failed_set, n)
         };
 
-        if !failed.is_empty() {
-            log::warn!(
-                "Event {:?} failed on {} relay(s), queuing for retry: {:?}",
-                event.id,
-                failed.len(),
-                failed
-            );
-            // Queue only for the failed relays (surgical retry), but keep memory bounded.
-            if self.pending_events.len() >= MAX_PENDING_RELAY_EVENTS {
-                log::error!(
-                    "pending relay event queue is full (max {}), dropping retry for event {:?}",
-                    MAX_PENDING_RELAY_EVENTS,
-                    event.id
-                );
-            } else {
-                self.pending_events.push((event, Some(failed)));
-            }
+        if failed.is_empty() {
+            return Ok(SendOutcome::Delivered);
         }
 
-        Ok(())
+        log::warn!(
+            "Event {:?} failed on {} of {} relay(s), queuing for retry: {:?}",
+            event.id,
+            failed.len(),
+            all_targeted,
+            failed
+        );
+
+        // Queue only for the failed relays (surgical retry), but keep memory bounded.
+        if self.pending_events.len() >= MAX_PENDING_RELAY_EVENTS {
+            log::error!(
+                "pending relay event queue is full (max {}), dropping retry for event {:?}",
+                MAX_PENDING_RELAY_EVENTS,
+                event.id
+            );
+            return Ok(SendOutcome::Dropped);
+        }
+
+        self.pending_events.push((event, Some(failed.clone())));
+
+        if failed.len() >= all_targeted {
+            Ok(SendOutcome::Queued)
+        } else {
+            // At least one relay received the event
+            Ok(SendOutcome::Delivered)
+        }
     }
 
     /// Attempt to flush any events that were queued while the relay was disconnected.
@@ -1083,8 +1116,11 @@ impl MessageRouterActorState {
 
         let subscription_id = PortalSubscriptionId::generate();
         let response = self.internal_add_with_id(&conversation_id, subscription_id.clone(), conversation, None, None)?;
-        self.process_response(channel, &conversation_id, response, subscription_id)
+        let outcomes = self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
+        if outcomes.iter().any(|o| *o == SendOutcome::Queued) {
+            log::warn!("One or more events for conversation {} were queued (no relay connected)", conversation_id);
+        }
 
         Ok(conversation_id)
     }
@@ -1103,8 +1139,11 @@ impl MessageRouterActorState {
         let subscription_id = PortalSubscriptionId::generate();
         let response =
             self.internal_add_with_id(&conversation_id, subscription_id.clone(), conversation, Some(relays), None)?;
-        self.process_response(channel, &conversation_id, response, subscription_id)
+        let outcomes = self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
+        if outcomes.iter().any(|o| *o == SendOutcome::Queued) {
+            log::warn!("One or more events for conversation {} were queued (no relay connected)", conversation_id);
+        }
 
         Ok(conversation_id)
     }
@@ -1174,8 +1213,11 @@ impl MessageRouterActorState {
         // Now add the conversation
         let subscription_id = PortalSubscriptionId::generate();
         let response = self.internal_add_with_id(&conversation_id, subscription_id.clone(), conversation, None, Some(tx))?;
-        self.process_response(channel, &conversation_id, response, subscription_id)
+        let outcomes = self.process_response(channel, &conversation_id, response, subscription_id)
             .await?;
+        if outcomes.iter().any(|o| *o == SendOutcome::Queued) {
+            log::warn!("One or more events for conversation {} were queued (no relay connected)", conversation_id);
+        }
 
         Ok(rx)
     }
