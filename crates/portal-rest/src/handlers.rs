@@ -969,7 +969,6 @@ pub async fn get_events(
 }
 
 // ── Age Verification constants ────────────────────────────────────────────────
-const VERIFICATION_SERVICE_URL: &str = "https://verify.getportal.cc/verify/sessions";
 const VERIFICATION_MINT_URL: &str = "https://mint.getportal.cc";
 const VERIFICATION_TICKET_UNIT: &str = "multi";
 const VERIFICATION_TOKEN_AMOUNT: u64 = 1;
@@ -1000,9 +999,11 @@ pub async fn create_verification_session(
         expires_at: u64,
     }
 
+    let sessions_url = format!("{}/verify/sessions", verification.service_url.trim_end_matches('/'));
+
     let client = reqwest::Client::new();
     let resp = client
-        .post(VERIFICATION_SERVICE_URL)
+        .post(&sessions_url)
         .header("X-Api-Key", &verification.api_key)
         .json(&VerifySessionRequest { relays })
         .send()

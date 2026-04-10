@@ -25,6 +25,14 @@ pub struct Settings {
 #[derive(Deserialize, Debug, Clone)]
 pub struct VerificationSettings {
     pub api_key: String,
+    /// Base URL for the verification service (without trailing path).
+    /// Defaults to `https://verify.getportal.cc`.
+    #[serde(default = "default_verification_service_url")]
+    pub service_url: String,
+}
+
+fn default_verification_service_url() -> String {
+    "https://verify.getportal.cc".to_string()
 }
 
 #[derive(Deserialize, Debug, Clone)]
