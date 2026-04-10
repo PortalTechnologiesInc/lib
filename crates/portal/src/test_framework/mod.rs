@@ -115,12 +115,13 @@ impl Channel for SimulatedChannel {
         Ok(())
     }
 
-    async fn broadcast(&self, event: Event) -> Result<HashSet<String>, Self::Error> {
+    async fn broadcast(&self, event: Event) -> Result<(HashSet<String>, usize), Self::Error> {
         // Store the event
         self.messages.lock().await.push(event.clone());
 
         // Broadcast to all subscribers
         let subscribers = self.subscribers.write().await;
+        let total = subscribers.len().max(1); // at least 1 simulated relay
         for (subscription_id, (filter, sender)) in subscribers.iter() {
             if filter.match_event(&event, MatchEventOptions::default()) {
                 let relay_url = RelayUrl::parse("wss://simulated").unwrap();
@@ -133,7 +134,7 @@ impl Channel for SimulatedChannel {
             }
         }
 
-        Ok(HashSet::new())
+        Ok((HashSet::new(), total))
     }
 
     async fn broadcast_to<I, U>(&self, urls: I, event: Event) -> Result<HashSet<String>, Self::Error>

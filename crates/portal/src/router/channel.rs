@@ -40,7 +40,7 @@ pub trait Channel: Send + 'static {
     fn broadcast(
         &self,
         event: nostr::Event,
-    ) -> impl std::future::Future<Output = Result<HashSet<String>, Self::Error>> + Send;
+    ) -> impl std::future::Future<Output = Result<(HashSet<String>, usize), Self::Error>> + Send;
     fn broadcast_to<I, U>(
         &self,
         urls: I,
@@ -115,10 +115,11 @@ impl Channel for RelayPool {
         Ok(())
     }
 
-    async fn broadcast(&self, event: nostr::Event) -> Result<HashSet<String>, Self::Error> {
+    async fn broadcast(&self, event: nostr::Event) -> Result<(HashSet<String>, usize), Self::Error> {
         let output = self.send_event(&event).await?;
+        let total = output.success.len() + output.failed.len();
         let failed: HashSet<String> = output.failed.keys().map(|u| u.to_string()).collect();
-        Ok(failed)
+        Ok((failed, total))
     }
     async fn broadcast_to<I, U>(&self, urls: I, event: nostr::Event) -> Result<HashSet<String>, Self::Error>
     where
@@ -171,7 +172,7 @@ impl<C: Channel + Send + Sync> Channel for std::sync::Arc<C> {
         <C as Channel>::unsubscribe(self, id).await
     }
 
-    async fn broadcast(&self, event: nostr::Event) -> Result<HashSet<String>, Self::Error> {
+    async fn broadcast(&self, event: nostr::Event) -> Result<(HashSet<String>, usize), Self::Error> {
         <C as Channel>::broadcast(self, event).await
     }
 

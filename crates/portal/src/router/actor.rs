@@ -948,14 +948,11 @@ impl MessageRouterActorState {
                 .map_err(|e| ConversationError::Inner(Box::new(e)))?;
             (failed_set, num_targets)
         } else {
-            let failed_set = channel
+            let (failed_set, total) = channel
                 .broadcast(event.clone())
                 .await
                 .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-            // broadcast targets all known relays; when all fail,
-            // failed.len() == total relay count, so the comparison below holds.
-            let n = failed_set.len();
-            (failed_set, n)
+            (failed_set, total)
         };
 
         if failed.is_empty() {
@@ -1043,6 +1040,7 @@ impl MessageRouterActorState {
                 channel
                     .broadcast(event.clone())
                     .await
+                    .map(|(failed, _total)| failed)
                     .map_err(|e| ConversationError::Inner(Box::new(e)))
             };
 
