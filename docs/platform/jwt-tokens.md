@@ -74,4 +74,4 @@ sdk.sendCommand(
 
 ---
 
-**Next:** [Relay Management](relays.md)
+**Next:** [Relay Management](../advanced/relays.md)

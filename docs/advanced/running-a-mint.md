@@ -72,7 +72,7 @@ Verify: `curl http://localhost:3338/v1/info`
 - **portal_wallet.unit_info.<unit>** — title, description, show_individually (false = fungible, true = tickets), optional front_card_background, back_card_background; kind.Event with date, location
 - **auth** — enabled_mint, enabled_melt, etc.; auth.method.Static — token for mint auth
 
-Use the static token from config when calling `mintCashu` / `burnCashu` with your mint URL (see [Cashu Tokens](cashu-tokens.md)).
+Use the static token from config when calling `mintCashu` / `burnCashu` with your mint URL (see [Cashu Tokens](../platform/cashu-tokens.md)).
 
 ## Build from source
 
@@ -84,4 +84,4 @@ Run behind HTTPS (reverse proxy). Use Docker Compose or mount config and data; s
 
 ---
 
-**Next:** [Cashu Tokens](cashu-tokens.md) · [Docker Deployment](../getting-started/docker-deployment.md)
+**Next:** [Cashu Tokens](../platform/cashu-tokens.md) · [Docker Deployment](docker-deployment.md)

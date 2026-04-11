@@ -1,15 +1,27 @@
-# Quick Start
+# Platform — Getting Started
 
-Use Portal from any language over HTTP, or install an SDK for JavaScript or Java.
+Set up Portal for authentication, payments, profiles, and more. This guide gets you running in minutes.
 
-## 1. Run the Portal daemon
+> **Just need age verification?** See the [Age Verification Quick Start](../age-verification/getting-started.md) instead — it's simpler.
 
-You need a Nostr private key (hex) and a secret auth token. Then:
+## 1. Get a Portal instance
+
+### Option A: PortalHub (recommended)
+
+Sign up at [hub.getportal.cc](https://hub.getportal.cc) and create a Portal instance. PortalHub hosts and runs it for you — no servers needed.
+
+You'll get:
+- An **instance URL** (e.g. `https://your-instance.hub.getportal.cc`)
+- An **API auth token**
+
+### Option B: Self-host with Docker
+
+If you prefer to run your own instance:
 
 ```bash
 docker run -d -p 3000:3000 \
   -e PORTAL__AUTH__AUTH_TOKEN=my-secret-token \
-  -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
+  -e PORTAL__NOSTR__PRIVATE_KEY=$(openssl rand -hex 32) \
   getportal/sdk-daemon:0.4.1
 ```
 
@@ -19,7 +31,11 @@ curl http://localhost:3000/health
 # → OK
 ```
 
-## 2. Install (optional — only if using an SDK)
+See [Docker Deployment](../advanced/docker-deployment.md) for production setup.
+
+## 3. Install an SDK (optional)
+
+Portal exposes a standard HTTP REST API — you can use any language. SDKs add convenience.
 
 <custom-tabs category="sdk">
 
@@ -42,8 +58,7 @@ export AUTH_TOKEN=my-secret-token
 npm install portal-sdk
 ```
 
-- Node.js 18+
-- See [SDK Installation](../sdk/installation.md).
+Node.js 18+ required.
 
 </section>
 
@@ -51,7 +66,6 @@ npm install portal-sdk
 <section>
 
 **Gradle:**
-
 ```groovy
 repositories {
     maven { url 'https://jitpack.io' }
@@ -62,7 +76,6 @@ dependencies {
 ```
 
 **Maven:**
-
 ```xml
 <repository>
     <id>jitpack.io</id>
@@ -75,15 +88,13 @@ dependencies {
 </dependency>
 ```
 
-See [SDK Installation](../sdk/installation.md).
-
 </section>
 
 </custom-tabs>
 
-## 3. First request — key handshake URL
+## 4. First request — authenticate a user
 
-Generate a URL for a user to authenticate with their Nostr wallet:
+Generate a URL for a user to log in:
 
 <custom-tabs category="sdk">
 
@@ -112,7 +123,7 @@ See [REST API](../sdk/rest-api.md) for the full async polling pattern.
 <div slot="title">JavaScript</div>
 <section>
 
-```javascript
+```typescript
 import { PortalClient } from 'portal-sdk';
 
 const client = new PortalClient({
@@ -144,16 +155,21 @@ PortalClient client = new PortalClient(
 var operation = client.newKeyHandshakeUrl();
 System.out.println("Share with user: " + operation.url());
 
-// Poll until the user completes the handshake
 var result = client.pollUntilComplete(operation);
 System.out.println("User key: " + result.main_key());
 ```
 
-See [API Reference](../sdk/api-reference.md) and [Authentication guide](../guides/authentication.md).
-
 </section>
 
 </custom-tabs>
+
+## What's next?
+
+- **[Authentication](authentication.md)** — Full auth flow with subkeys and static tokens
+- **[Single Payments](single-payments.md)** — Accept one-time payments
+- **[Recurring Payments](recurring-payments.md)** — Set up subscriptions
+- **[Docker Deployment](../advanced/docker-deployment.md)** — Production deployment
+- **[Environment Variables](../advanced/environment-variables.md)** — All configuration options
 
 ## Common issues
 
@@ -161,8 +177,8 @@ See [API Reference](../sdk/api-reference.md) and [Authentication guide](../guide
 |-------|-----|
 | Connection refused | Portal not running or wrong port. Check `docker ps`. |
 | 401 Unauthorized | Token must match `PORTAL__AUTH__AUTH_TOKEN`. |
-| Invalid Nostr key | Use hex; convert nsec with e.g. `nak decode nsec ...`. |
+| Invalid Nostr key | Use hex (64 chars); convert nsec with `nak decode nsec1...`. |
 
 ---
 
-- [REST API](../sdk/rest-api.md) · [Authentication](../guides/authentication.md) · [Single payments](../guides/single-payments.md) · [Troubleshooting](../advanced/troubleshooting.md)
+**Troubleshooting:** [Full troubleshooting guide](../resources/troubleshooting.md)

@@ -18,7 +18,7 @@ Portal is free and open-source (MIT license).
 
 ### Can I use Portal without Docker?
 
-Yes! You can build and run from source using Cargo. See [Building from Source](../getting-started/building-from-source.md).
+Yes! You can build and run from source using Cargo. See [Building from Source](../advanced/building-from-source.md).
 
 ### Do I need to run a Lightning node?
 
@@ -26,7 +26,7 @@ Not necessarily. You can use Nostr Wallet Connect (NWC) with a hosted wallet ser
 
 ### How do I handle user sessions?
 
-Use JWT tokens issued by Portal for session management. See [JWT Tokens Guide](../guides/jwt-tokens.md).
+Use JWT tokens issued by Portal for session management. See [JWT Tokens Guide](../platform/jwt-tokens.md).
 
 ## Payment Questions
 
@@ -78,5 +78,5 @@ Portal is designed with privacy in mind. Nostr relays don't require registration
 
 ---
 
-**Need more help?** Check [Troubleshooting Guide](../advanced/troubleshooting.md)
+**Need more help?** Check [Troubleshooting Guide](troubleshooting.md)
 

@@ -61,4 +61,4 @@ Common relays: `wss://relay.damus.io`, `wss://relay.snort.social`, `wss://nos.lo
 
 ---
 
-**Next:** [SDK](../sdk/installation.md)
+**Next:** [SDK](../sdk/javascript.md)
