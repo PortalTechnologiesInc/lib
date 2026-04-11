@@ -81,13 +81,9 @@ const result = await client.poll(session, {
 });
 ```
 
-### Method 2: Request token from an already-verified user
+### Method 2: Request token from a Portal app user
 
-If the user has **already verified** — either through a previous browser session or through the Portal mobile app — you can request their verification proof directly, no redirect needed. This is useful for:
-
-- Returning users who verified on a previous visit
-- Users who verified on a different service that uses Portal
-- Users of the Portal mobile app (pre-verified)
+If the user has the **Portal mobile app** and has already verified their age through it, you can request their verification proof directly — no browser redirect needed. The app holds a multi-use verification token, so the user can prove their age across multiple services without re-verifying each time.
 
 <custom-tabs category="sdk">
 
@@ -127,10 +123,9 @@ const result = await client.poll(op, {
 
 | Scenario | Method |
 |----------|--------|
-| First-time user, no Portal app | Browser session |
-| Returning user (previously verified) | Request token |
-| User with Portal app installed | Either — request token is faster |
-| You don't know if they're verified | Offer both — browser session + QR for app users |
+| User without Portal app | Browser session |
+| User with Portal app (pre-verified) | Request token — faster, no redirect |
+| You don't know | Offer both — browser session + QR for app users |
 
 The [portal-video-demo](https://github.com/PortalTechnologiesInc/portal-video-demo) shows how to offer both methods simultaneously.
 
