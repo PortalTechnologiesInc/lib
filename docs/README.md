@@ -1,6 +1,24 @@
+<div style="text-align: center;">
+    <h1>
+        <code>Portal</code>
+    </h1>
+    <h4>
+        <a href="https://github.com/PortalTechnologiesInc">Project Homepage</a>
+        <span> | </span>
+        <a href="https://github.com/PortalTechnologiesInc/lib">Repository</a>
+        <span> | </span>
+        <a href="./donate.md">Become a supporter</a>
+    </h4>
+    <h2 style="font-size: 16px; font-weight: normal;">
+        Portal lets you add <b>age verification</b>, <b>authentication</b>, and <b>payments</b> to your app — without collecting personal data.
+    </h2>
+</div>
+
+<!--
 # Portal
 
 Portal lets you add **age verification**, **authentication**, and **payments** to your app — without collecting personal data.
+-->
 
 ## What do you need?
 
