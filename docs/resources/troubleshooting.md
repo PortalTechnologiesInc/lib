@@ -195,7 +195,7 @@ docker run -d --name portal-sdk-daemon \
   -p 3000:3000 \
   -e PORTAL__AUTH__AUTH_TOKEN=$PORTAL__AUTH__AUTH_TOKEN \
   -e PORTAL__NOSTR__PRIVATE_KEY=$PORTAL__NOSTR__PRIVATE_KEY \
-  getportal/sdk-daemon:0.3.0
+  getportal/sdk-daemon:0.4.1
 ```
 
 ### Health Check Failing
@@ -312,7 +312,7 @@ For Docker daemon:
 docker run -d \
   -e RUST_LOG=debug \
   ...
-  getportal/sdk-daemon:0.3.0
+  getportal/sdk-daemon:0.4.1
 
 # View debug logs
 docker logs -f portal-sdk-daemon

@@ -18,7 +18,7 @@ All Portal components use **semantic versioning** (`major.minor.patch`):
 
 In other words:
 
-- SDK `0.3.0` ↔ SDK Daemon `0.3.0` ✅
+- SDK `0.4.1` ↔ SDK Daemon `0.4.1` ✅
 - SDK `0.3.4` ↔ SDK Daemon `0.3.1` ✅ (patch is irrelevant)
 - SDK `0.3.x` ↔ SDK Daemon `0.4.x` ❌ (minor mismatch)
 
@@ -53,6 +53,6 @@ implementation 'com.github.PortalTechnologiesInc:java-sdk:0.4.1'
 
 | Component | Version |
 |-----------|---------|
-| SDK Daemon (`getportal/sdk-daemon`) | `0.3.0` |
-| TypeScript SDK (`portal-sdk`) | `0.3.0` |
-| Java SDK | `0.3.0` |
+| SDK Daemon (`getportal/sdk-daemon`) | `0.4.1` |
+| TypeScript SDK (`portal-sdk`) | `0.4.1` |
+| Java SDK | `0.4.1` |

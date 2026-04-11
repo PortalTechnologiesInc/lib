@@ -6,10 +6,10 @@
 docker run -d -p 3000:3000 \
   -e PORTAL__AUTH__AUTH_TOKEN=your-secret-token \
   -e PORTAL__NOSTR__PRIVATE_KEY=your-nostr-private-key-hex \
-  getportal/sdk-daemon:0.3.0
+  getportal/sdk-daemon:0.4.1
 ```
 
-> **Tip:** pin a specific version in production (e.g. `0.3.0`) rather than `:latest` to avoid unexpected updates. The image is multi-arch (amd64 + arm64) — Docker pulls the right variant automatically. See [Versioning & Compatibility](../resources/versioning.md).
+> **Tip:** pin a specific version in production (e.g. `0.4.1`) rather than `:latest` to avoid unexpected updates. The image is multi-arch (amd64 + arm64) — Docker pulls the right variant automatically. See [Versioning & Compatibility](../resources/versioning.md).
 
 Check: curl http://localhost:3000/health, curl http://localhost:3000/version. WebSocket API: ws://localhost:3000/ws (auth required).
 
@@ -20,7 +20,7 @@ docker-compose.yml:
 ```yaml
 services:
   portal:
-    image: getportal/sdk-daemon:0.3.0
+    image: getportal/sdk-daemon:0.4.1
     ports: ["3000:3000"]
     environment:
       - PORTAL__AUTH__AUTH_TOKEN=${PORTAL__AUTH__AUTH_TOKEN}
