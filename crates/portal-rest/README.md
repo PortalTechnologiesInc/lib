@@ -34,4 +34,6 @@ cargo build --release
 ./target/release/rest
 ```
 
-**Configuration:** Config file `~/.portal-rest/config.toml` (see `example.config.toml`) and environment variables `PORTAL__<SECTION>__<KEY>`. Full options: [Environment Variables](https://portaltechnologiesinc.github.io/lib/getting-started/environment-variables.html) and [Docker / Building](https://portaltechnologiesinc.github.io/lib/getting-started/docker-deployment.html).
+**Configuration:** Config file `~/.portal-rest/config.toml` (see `example.config.toml`) and environment variables `PORTAL__<SECTION>__<KEY>`. Full options: [Environment Variables](https://portaltechnologiesinc.github.io/lib/advanced/environment-variables.html) and [Docker Deployment](https://portaltechnologiesinc.github.io/lib/advanced/docker-deployment.html).
+
+> **Don't want to self-host?** Use [PortalHub](https://hub.getportal.cc) — create a hosted Portal instance in seconds.

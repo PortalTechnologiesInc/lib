@@ -106,4 +106,4 @@ Or use a `.env` file: `docker run --env-file .env ...`. Don't commit `.env`.
 
 ---
 
-- [Docker](docker-deployment.md) · [Building from source](building-from-source.md) · [Quick start](quick-start.md)
+- [Docker](docker-deployment.md) · [Building from source](building-from-source.md) · [Quick start](../platform/getting-started.md)

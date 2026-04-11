@@ -32,6 +32,10 @@ Your backend  ←— REST API —→  sdk-daemon  ←— Nostr —→  Portal ap
 
 ## Quick start
 
+The fastest way to get started is with [PortalHub](https://hub.getportal.cc) — create an instance in seconds, no servers needed.
+
+Or self-host with Docker:
+
 ```bash
 docker run -d -p 3000:3000 \
   -e PORTAL__AUTH__AUTH_TOKEN=$(openssl rand -hex 32) \
@@ -39,7 +43,7 @@ docker run -d -p 3000:3000 \
   getportal/sdk-daemon:0.4.1
 ```
 
-Then follow the [Quick Start guide](https://portaltechnologiesinc.github.io/lib/getting-started/quick-start.html) or jump to the [REST API reference](https://portaltechnologiesinc.github.io/lib/sdk/rest-api.html).
+Then follow the [Age Verification guide](https://portaltechnologiesinc.github.io/lib/age-verification/getting-started.html) or the [Platform guide](https://portaltechnologiesinc.github.io/lib/platform/getting-started.html).
 
 ## SDKs
 
@@ -53,7 +57,7 @@ Then follow the [Quick Start guide](https://portaltechnologiesinc.github.io/lib/
 
 Full docs: **[portaltechnologiesinc.github.io/lib](https://portaltechnologiesinc.github.io/lib/)**
 
-Guides: [Authentication](https://portaltechnologiesinc.github.io/lib/guides/authentication.html) · [Age Verification](https://portaltechnologiesinc.github.io/lib/guides/age-verification.html) · [Payments](https://portaltechnologiesinc.github.io/lib/guides/single-payments.html) · [Cashu](https://portaltechnologiesinc.github.io/lib/guides/cashu-tokens.html) · [JWT](https://portaltechnologiesinc.github.io/lib/guides/jwt-tokens.html) · [Docker](https://portaltechnologiesinc.github.io/lib/getting-started/docker-deployment.html)
+Guides: [Age Verification](https://portaltechnologiesinc.github.io/lib/age-verification/getting-started.html) · [Authentication](https://portaltechnologiesinc.github.io/lib/platform/authentication.html) · [Payments](https://portaltechnologiesinc.github.io/lib/platform/single-payments.html) · [Cashu](https://portaltechnologiesinc.github.io/lib/platform/cashu-tokens.html) · [JWT](https://portaltechnologiesinc.github.io/lib/platform/jwt-tokens.html) · [Docker](https://portaltechnologiesinc.github.io/lib/advanced/docker-deployment.html)
 
 ## Repository structure
 

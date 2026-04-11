@@ -9,7 +9,7 @@ docker run -d -p 3000:3000 \
   getportal/sdk-daemon:0.3.0
 ```
 
-> **Tip:** pin a specific version in production (e.g. `0.3.0`) rather than `:latest` to avoid unexpected updates. The image is multi-arch (amd64 + arm64) — Docker pulls the right variant automatically. See [Versioning & Compatibility](versioning.md).
+> **Tip:** pin a specific version in production (e.g. `0.3.0`) rather than `:latest` to avoid unexpected updates. The image is multi-arch (amd64 + arm64) — Docker pulls the right variant automatically. See [Versioning & Compatibility](../resources/versioning.md).
 
 Check: curl http://localhost:3000/health, curl http://localhost:3000/version. WebSocket API: ws://localhost:3000/ws (auth required).
 
@@ -68,4 +68,4 @@ Use HTTPS and a reverse proxy in production; don’t commit secrets.
 
 ---
 
-- [Environment variables](environment-variables.md) · [SDK](../sdk/installation.md) · [Building from source](building-from-source.md) · [Versioning](versioning.md)
+- [Environment variables](environment-variables.md) · [SDK](../sdk/javascript.md) · [Building from source](building-from-source.md) · [Versioning](../resources/versioning.md)

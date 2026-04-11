@@ -86,13 +86,10 @@ Output will be in `portal-docs/book/`.
 docs/
 ├── README.md                 # Home page
 ├── SUMMARY.md               # Table of contents
-├── book.json                # GitBook configuration
-├── .gitbook.yaml            # GitBook.com configuration
-├── introduction/            # Concept explanations
-├── getting-started/         # Setup guides
-├── sdk/                     # SDK docs
-├── guides/                  # Feature guides
-├── api/                     # API reference
+├── age-verification/        # Age verification guides
+├── platform/                # Auth, payments, profiles
+├── advanced/                # Self-hosting, deployment
+├── sdk/                     # SDK docs & API reference
 └── resources/               # FAQ, glossary, etc.
 ```
 

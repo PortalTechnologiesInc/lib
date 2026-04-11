@@ -61,7 +61,7 @@ Terminal events (no more polling needed): status `paid`, `approved`, `declined`,
 
 ### Webhooks (alternative to polling)
 
-Instead of polling, configure a webhook URL and the daemon will `POST` events to your endpoint as they arrive. See [Configuration](../getting-started/environment-variables.md) for `PORTAL__WEBHOOK_URL` and `PORTAL__WEBHOOK_SECRET`.
+Instead of polling, configure a webhook URL and the daemon will `POST` events to your endpoint as they arrive. See [Configuration](../advanced/environment-variables.md) for `PORTAL__WEBHOOK_URL` and `PORTAL__WEBHOOK_SECRET`.
 
 ## Key endpoints
 
@@ -130,4 +130,4 @@ curl -s $BASE_URL/profile/USER_PUBKEY_HEX \
 
 ---
 
-- [API Reference (OpenAPI)](api-reference-rest.md) · [Configuration](../getting-started/environment-variables.md) · [SDK Installation](installation.md)
+- [API Reference (OpenAPI)](api-reference-rest.md) · [Configuration](../advanced/environment-variables.md) · [SDK Installation](javascript.md)

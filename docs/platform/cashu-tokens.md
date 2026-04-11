@@ -106,7 +106,7 @@ sdk.sendCommand(
 
 </custom-tabs>
 
-Burn tokens immediately after receiving to prevent reuse. For your own mint and custom units, see [Running a Mint](running-a-mint.md). Public mints: e.g. minibits.cash, bitcoinmints.com — see [bitcoinmints.com](https://bitcoinmints.com/).
+Burn tokens immediately after receiving to prevent reuse. For your own mint and custom units, see [Running a Mint](../advanced/running-a-mint.md). Public mints: e.g. minibits.cash, bitcoinmints.com — see [bitcoinmints.com](https://bitcoinmints.com/).
 
 ---
 
