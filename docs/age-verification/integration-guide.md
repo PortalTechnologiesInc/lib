@@ -58,13 +58,15 @@ app.get('/api/verify-age/status/:streamId', async (req, res) => {
 app.listen(8080);
 ```
 
-## Mobile flow
+## Two verification methods
 
-For mobile apps, you have two options:
+There are two ways a user can verify their age:
 
-### Option A: In-app browser
+### Method 1: Browser verification session
 
-Open the `session_url` in a WebView or system browser, then poll for the result:
+The user completes identity verification directly in their browser. This is the standard web flow described above — you create a session, redirect the user, and poll for the result.
+
+For mobile apps, you can open the `session_url` in a WebView or system browser:
 
 ```typescript
 const session = await client.createVerificationSession();
@@ -79,9 +81,9 @@ const result = await client.poll(session, {
 });
 ```
 
-### Option B: Request token from already-verified user
+### Method 2: Request token from a Portal app user
 
-If the user has already verified through the Portal mobile app, you can request their verification proof directly — no redirect needed:
+If the user has the **Portal mobile app** and has already verified their age through it, you can request their verification proof directly — no browser redirect needed. The app holds a multi-use verification token, so the user can prove their age across multiple services without re-verifying each time.
 
 <custom-tabs category="sdk">
 
@@ -116,6 +118,16 @@ const result = await client.poll(op, {
 </section>
 
 </custom-tabs>
+
+### Which method to use?
+
+| Scenario | Method |
+|----------|--------|
+| User without Portal app | Browser session |
+| User with Portal app (pre-verified) | Request token — faster, no redirect |
+| You don't know | Offer both — browser session + QR for app users |
+
+The [portal-video-demo](https://github.com/PortalTechnologiesInc/portal-video-demo) shows how to offer both methods simultaneously.
 
 ## Handling verification results
 
