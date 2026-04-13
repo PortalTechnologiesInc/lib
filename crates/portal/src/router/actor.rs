@@ -27,8 +27,8 @@ const MAX_PENDING_RELAY_EVENTS: usize = 512;
 /// Outcome of attempting to send an event to relays.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SendOutcome {
-    /// At least one relay received the event.
-    Delivered,
+    /// At least one relay accepted the send; `relays` lists those URLs (from the pool send result).
+    Delivered { relays: Vec<String> },
     /// No relay was available; the event has been queued for retry.
     Queued,
     /// The pending queue was full and the event was dropped.
@@ -940,23 +940,25 @@ impl MessageRouterActorState {
     {
         let event_id = event.id;
 
-        let (failed, all_targeted) = if let Some(ref target_relays) = relays {
-            let num_targets = target_relays.len();
-            let failed_set = channel
+        let (failed, succeeded) = if let Some(ref target_relays) = relays {
+            channel
                 .broadcast_to(target_relays.clone(), event.clone())
                 .await
-                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-            (failed_set, num_targets)
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?
         } else {
-            let (failed_set, total) = channel
+            channel
                 .broadcast(event.clone())
                 .await
-                .map_err(|e| ConversationError::Inner(Box::new(e)))?;
-            (failed_set, total)
+                .map_err(|e| ConversationError::Inner(Box::new(e)))?
         };
 
+        let all_targeted = failed.len() + succeeded.len();
+
         if failed.is_empty() {
-            return Ok(EventSendResult { event_id, outcome: SendOutcome::Delivered });
+            return Ok(EventSendResult {
+                event_id,
+                outcome: SendOutcome::Delivered { relays: succeeded },
+            });
         }
 
         log::warn!(
@@ -982,8 +984,10 @@ impl MessageRouterActorState {
         if failed.len() >= all_targeted {
             Ok(EventSendResult { event_id, outcome: SendOutcome::Queued })
         } else {
-            // At least one relay received the event
-            Ok(EventSendResult { event_id, outcome: SendOutcome::Delivered })
+            Ok(EventSendResult {
+                event_id,
+                outcome: SendOutcome::Delivered { relays: succeeded },
+            })
         }
     }
 
@@ -1037,18 +1041,14 @@ impl MessageRouterActorState {
                     .await
                     .map_err(|e| ConversationError::Inner(Box::new(e)))
             } else {
-                channel
-                    .broadcast(event.clone())
-                    .await
-                    .map(|(failed, _total)| failed)
-                    .map_err(|e| ConversationError::Inner(Box::new(e)))
+                channel.broadcast(event.clone()).await.map_err(|e| ConversationError::Inner(Box::new(e)))
             };
 
             match result {
-                Ok(f) if f.is_empty() => { /* success, event dropped */ }
-                Ok(f) => {
-                    log::warn!("Still failed on relay(s) {:?}, keeping queued", f);
-                    still_pending.push((event, Some(f)));
+                Ok((failed, _succeeded)) if failed.is_empty() => { /* success, event dropped */ }
+                Ok((failed, _)) => {
+                    log::warn!("Still failed on relay(s) {:?}, keeping queued", failed);
+                    still_pending.push((event, Some(failed)));
                 }
                 Err(e) => {
                     log::warn!("Flush error for event {:?}: {:?}, keeping queued", event.id, e);
