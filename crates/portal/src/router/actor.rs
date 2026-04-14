@@ -979,9 +979,10 @@ impl MessageRouterActorState {
             return Ok(EventSendResult { event_id, outcome: SendOutcome::Dropped });
         }
 
-        self.pending_events.push((event, Some(failed.clone())));
+        let all_failed = failed.len() >= all_targeted;
+        self.pending_events.push((event, Some(failed)));
 
-        if failed.len() >= all_targeted {
+        if all_failed {
             Ok(EventSendResult { event_id, outcome: SendOutcome::Queued })
         } else {
             Ok(EventSendResult {
