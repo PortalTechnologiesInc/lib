@@ -414,48 +414,48 @@ impl PortalApp {
             router.add_relay(relay.clone(), false).await?;
         }
 
-        let auth_challenge_rx: NotificationStream<AuthChallengeEvent> = router
+        let (auth_challenge_rx, _outcomes): (NotificationStream<AuthChallengeEvent>, _) = router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 AuthChallengeListenerConversation::new(router.keypair().public_key()),
                 router.keypair().subkey_proof().cloned(),
             )))
             .await?;
-        let payment_request_rx: NotificationStream<PaymentRequestEvent> =
+        let (payment_request_rx, _outcomes): (NotificationStream<PaymentRequestEvent>, _) =
             router
                 .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                     PaymentRequestListenerConversation::new(router.keypair().public_key()),
                     router.keypair().subkey_proof().cloned(),
                 )))
                 .await?;
-        let closed_recurring_payment_rx: NotificationStream<
+        let (closed_recurring_payment_rx, _outcomes): (NotificationStream<
             portal::protocol::model::payment::CloseRecurringPaymentResponse,
-        > = router
+        >, _) = router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 CloseRecurringPaymentReceiverConversation::new(router.keypair().public_key()),
                 router.keypair().subkey_proof().cloned(),
             )))
             .await?;
-        let invoice_request_rx: NotificationStream<
+        let (invoice_request_rx, _outcomes): (NotificationStream<
             portal::protocol::model::payment::InvoiceRequestContentWithKey,
-        > = router
+        >, _) = router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 InvoiceReceiverConversation::new(router.keypair().public_key()),
                 router.keypair().subkey_proof().cloned(),
             )))
             .await?;
-        let cashu_request_rx: NotificationStream<CashuRequestContentWithKey> = router
+        let (cashu_request_rx, _outcomes): (NotificationStream<CashuRequestContentWithKey>, _) = router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 CashuRequestReceiverConversation::new(router.keypair().public_key()),
                 router.keypair().subkey_proof().cloned(),
             )))
             .await?;
-        let cashu_direct_rx: NotificationStream<CashuDirectContentWithKey> = router
+        let (cashu_direct_rx, _outcomes): (NotificationStream<CashuDirectContentWithKey>, _) = router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 CashuDirectReceiverConversation::new(router.keypair().public_key()),
                 router.keypair().subkey_proof().cloned(),
             )))
             .await?;
-        let nip46_rx: NotificationStream<Nip46Request> = router
+        let (nip46_rx, _outcomes): (NotificationStream<Nip46Request>, _) = router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 Nip46RequestListenerConversation::new(router.keypair().public_key()),
                 router.keypair().subkey_proof().cloned(),
@@ -554,7 +554,7 @@ impl PortalApp {
             }
         }
 
-        let _id = self
+        let (_id, _outcomes) = self
             .router
             .add_conversation_with_relays(
                 Box::new(OneShotSenderAdapter::new_with_user(
@@ -606,7 +606,7 @@ impl PortalApp {
             self.router.keypair().subkey_proof().cloned(),
             status,
         );
-        self.router
+        let _ = self.router
             .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
                 recipient.into(),
                 vec![],
@@ -697,7 +697,7 @@ impl PortalApp {
 
     pub async fn fetch_profile(&self, pubkey: PublicKey) -> Result<Option<Profile>, AppError> {
         let conv = FetchProfileInfoConversation::new(pubkey.into());
-        let mut notification: NotificationStream<Option<portal::conversation::profile::Profile>> =
+        let (mut notification, _outcomes): (NotificationStream<Option<portal::conversation::profile::Profile>>, _) =
             self.router.add_and_subscribe(Box::new(conv)).await?;
         let metadata = notification
             .next()
@@ -733,8 +733,7 @@ impl PortalApp {
         }
 
         let conv = SetProfileConversation::new(profile);
-        let _ = self
-            .router
+        let _ = self.router
             .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
                 self.router.keypair().public_key().into(),
                 vec![],
@@ -765,7 +764,7 @@ impl PortalApp {
         };
 
         let conv = CloseRecurringPaymentConversation::new(content);
-        self.router
+        let _ = self.router
             .add_conversation(Box::new(MultiKeySenderAdapter::new_with_user(
                 service_key.into(),
                 vec![],
@@ -916,7 +915,7 @@ impl PortalApp {
             nostr_connect_message.id().to_string(),
             conversation_result,
         );
-        router
+        let _ = router
             .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
                 event.nostr_client_pubkey.into(),
                 vec![],
@@ -983,7 +982,7 @@ impl PortalApp {
 
         let conv = InvoiceSenderConversation::new(invoice_response);
 
-        self.router
+        let _ = self.router
             .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
                 recipient,
                 vec![],
@@ -1013,7 +1012,7 @@ impl PortalApp {
             self.router.keypair().subkey_proof().cloned(),
             content,
         );
-        let mut rx: NotificationStream<portal::protocol::model::payment::InvoiceResponse> = self
+        let (mut rx, _outcomes): (NotificationStream<portal::protocol::model::payment::InvoiceResponse>, _) = self
             .router
             .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
                 recipient.into(),
@@ -1049,7 +1048,7 @@ impl PortalApp {
         let recipient = request.recipient.clone().into();
         let response = CashuResponseContent { request, status };
         let conv = CashuResponseSenderConversation::new(response);
-        self.router
+        let _ = self.router
             .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
                 recipient,
                 vec![],
@@ -1088,7 +1087,7 @@ impl PortalApp {
         )
         .map_err(AppError::RequestSinglePaymentError)?;
 
-        self.router
+        let _ = self.router
             .add_conversation(Box::new(MultiKeySenderAdapter::new_with_user(
                 receiver_pubkey,
                 vec![],

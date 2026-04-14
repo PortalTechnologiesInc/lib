@@ -89,7 +89,7 @@ impl PortalSDK {
             self.router.keypair().public_key(),
             token.clone(),
         );
-        let event = self
+        let (event, _outcomes) = self
             .router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 inner,
@@ -127,7 +127,7 @@ impl PortalSDK {
             self.router.keypair().subkey_proof().cloned(),
         );
 
-        let mut event = self
+        let (mut event, _outcomes) = self
             .router
             .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
                 main_key, subkeys, conv,
@@ -149,7 +149,7 @@ impl PortalSDK {
         )
         .map_err(PortalSDKError::ProtocolError)?;
 
-        let mut event = self
+        let (mut event, _outcomes) = self
             .router
             .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
                 main_key, subkeys, conv,
@@ -171,7 +171,7 @@ impl PortalSDK {
         )
         .map_err(PortalSDKError::ProtocolError)?;
 
-        let event = self
+        let (event, _outcomes) = self
             .router
             .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
                 main_key, subkeys, conv,
@@ -185,7 +185,7 @@ impl PortalSDK {
         main_key: PublicKey,
     ) -> Result<Option<Profile>, PortalSDKError> {
         let conv = FetchProfileInfoConversation::new(main_key);
-        let mut event = self.router.add_and_subscribe(Box::new(conv)).await?;
+        let (mut event, _outcomes) = self.router.add_and_subscribe(Box::new(conv)).await?;
         let profile: Option<Profile> = event.next().await.ok_or(PortalSDKError::Timeout)??;
 
         if let Some(mut profile) = profile {
@@ -224,7 +224,7 @@ impl PortalSDK {
     ) -> Result<NotificationStream<CloseRecurringPaymentResponse>, PortalSDKError> {
         let inner =
             CloseRecurringPaymentReceiverConversation::new(self.router.keypair().public_key());
-        let event = self
+        let (event, _outcomes) = self
             .router
             .add_and_subscribe(Box::new(MultiKeyListenerAdapter::new(
                 inner,
@@ -266,7 +266,7 @@ impl PortalSDK {
             self.router.keypair().subkey_proof().cloned(),
             content,
         );
-        let mut rx = self
+        let (mut rx, _outcomes) = self
             .router
             .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
                 recipient, subkeys, conv,
@@ -312,7 +312,7 @@ impl PortalSDK {
             self.router.keypair().subkey_proof().cloned(),
             content,
         );
-        let mut rx: NotificationStream<CashuResponseContent> = self
+        let (mut rx, _outcomes): (NotificationStream<CashuResponseContent>, _) = self
             .router
             .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
                 main_key, subkeys, conv,

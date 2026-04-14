@@ -115,12 +115,13 @@ impl Channel for SimulatedChannel {
         Ok(())
     }
 
-    async fn broadcast(&self, event: Event) -> Result<HashSet<String>, Self::Error> {
+    async fn broadcast(&self, event: Event) -> Result<(HashSet<String>, Vec<String>), Self::Error> {
         // Store the event
         self.messages.lock().await.push(event.clone());
 
         // Broadcast to all subscribers
         let subscribers = self.subscribers.write().await;
+        let n = subscribers.len().max(1); // at least 1 simulated relay
         for (subscription_id, (filter, sender)) in subscribers.iter() {
             if filter.match_event(&event, MatchEventOptions::default()) {
                 let relay_url = RelayUrl::parse("wss://simulated").unwrap();
@@ -133,16 +134,22 @@ impl Channel for SimulatedChannel {
             }
         }
 
-        Ok(HashSet::new())
+        let succeeded: Vec<String> = (0..n).map(|_| "wss://simulated".to_string()).collect();
+        Ok((HashSet::new(), succeeded))
     }
 
-    async fn broadcast_to<I, U>(&self, urls: I, event: Event) -> Result<HashSet<String>, Self::Error>
+    async fn broadcast_to<I, U>(&self, urls: I, event: Event) -> Result<(HashSet<String>, Vec<String>), Self::Error>
     where
         <I as IntoIterator>::IntoIter: Send,
         I: IntoIterator<Item = U> + Send,
         U: nostr::types::TryIntoUrl,
         Self::Error: From<<U as nostr::types::TryIntoUrl>::Err>,
     {
+        let url_strings: Vec<String> = urls
+            .into_iter()
+            .map(|u| Ok::<_, Self::Error>(u.try_into_url()?.to_string()))
+            .collect::<Result<Vec<_>, _>>()?;
+
         // Store the event
         self.messages.lock().await.push(event.clone());
 
@@ -160,7 +167,7 @@ impl Channel for SimulatedChannel {
             }
         }
 
-        Ok(HashSet::new())
+        Ok((HashSet::new(), url_strings))
     }
 
     async fn receive(&self) -> Result<RelayPoolNotification, Self::Error> {

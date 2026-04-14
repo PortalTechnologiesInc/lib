@@ -99,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Auth init URL: {}", url);
 
     let inner = KeyHandshakeReceiverConversation::new(router.keypair().public_key(), token);
-    let id = router
+    let (id, _outcomes) = router
         .add_conversation(Box::new(MultiKeyListenerAdapter::new(
             inner,
             router.keypair().subkey_proof().cloned(),
@@ -116,7 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         router.keypair().public_key(),
         router.keypair().subkey_proof().cloned(),
     );
-    let id = router
+    let (id, _outcomes) = router
         .add_conversation(Box::new(MultiKeySenderAdapter::new_with_user(
             event.main_key,
             vec![],

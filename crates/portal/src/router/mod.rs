@@ -23,7 +23,7 @@ pub use adapters::multi_key_sender::{MultiKeySender, MultiKeySenderAdapter};
 pub use ids::{PortalConversationId, PortalSubscriptionId};
 
 // Re-export MessageRouterActor as MessageRouter for backward compatibility
-pub use actor::{MessageRouterActor as MessageRouter, MessageRouterActorError};
+pub use actor::{MessageRouterActor as MessageRouter, MessageRouterActorError, SendOutcome, EventSendResult};
 
 #[derive(Debug)]
 struct ResponseEntry {
