@@ -102,6 +102,14 @@ impl Channel for RelayPool {
             .relays_with_flag(RelayServiceFlags::READ, FlagCheck::All)
             .await;
         for relay in relays.values() {
+            if !relay.is_connected() {
+                log::debug!(
+                    "Skipping unsubscribe {id} for disconnected relay {}",
+                    relay.url()
+                );
+                continue;
+            }
+
             if let Err(e) = relay
                 .unsubscribe(&SubscriptionId::new(id.to_string()))
                 .await
