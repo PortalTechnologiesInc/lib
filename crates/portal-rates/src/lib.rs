@@ -69,7 +69,7 @@ struct FiatUnit {
     // country: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
 enum Source {
     Yadio,
@@ -267,18 +267,23 @@ impl MarketAPI {
         Ok(Some(parsed))
     }
 
-    fn fallback_sources(primary: &Source) -> Vec<Source> {
+    fn fallback_sources(primary: &Source) -> &'static [Source] {
+        const KRAKEN_FALLBACKS: [Source; 2] = [Source::CoinGecko, Source::CoinDesk];
+        const COINGECKO_FALLBACKS: [Source; 2] = [Source::Kraken, Source::CoinDesk];
+        const YADIO_FALLBACKS: [Source; 2] = [Source::CoinGecko, Source::YadioConvert];
+        const COINGECKO_ONLY_FALLBACKS: [Source; 1] = [Source::CoinGecko];
+
         match primary {
-            Source::Kraken => vec![Source::CoinGecko, Source::CoinDesk],
-            Source::CoinGecko => vec![Source::Kraken, Source::CoinDesk],
-            Source::Yadio => vec![Source::CoinGecko, Source::YadioConvert],
-            Source::Exir => vec![Source::CoinGecko],
+            Source::Kraken => &KRAKEN_FALLBACKS,
+            Source::CoinGecko => &COINGECKO_FALLBACKS,
+            Source::Yadio => &YADIO_FALLBACKS,
+            Source::Exir => &COINGECKO_ONLY_FALLBACKS,
             Source::YadioConvert
             | Source::Coinpaprika
             | Source::Bitstamp
             | Source::Coinbase
             | Source::BNR
-            | Source::CoinDesk => vec![Source::CoinGecko],
+            | Source::CoinDesk => &COINGECKO_ONLY_FALLBACKS,
         }
     }
 
@@ -286,11 +291,9 @@ impl MarketAPI {
         self: Arc<Self>,
         unit: &FiatUnit,
     ) -> Result<(String, Source), RatesError> {
-        let mut attempts = Vec::with_capacity(1 + Self::fallback_sources(&unit.source).len());
-        attempts.push(unit.source.clone());
-        attempts.extend(Self::fallback_sources(&unit.source));
-
-        for source in attempts {
+        for source in std::iter::once(unit.source)
+            .chain(Self::fallback_sources(&unit.source).iter().copied())
+        {
             match self
                 .clone()
                 .fetch_price_for_source(&source, &unit.end_point_key)
@@ -327,11 +330,9 @@ impl MarketAPI {
         F: FnMut(&Source, &str) -> Fut,
         Fut: std::future::Future<Output = Result<Option<String>, RatesError>>,
     {
-        let mut attempts = Vec::with_capacity(1 + Self::fallback_sources(&unit.source).len());
-        attempts.push(unit.source.clone());
-        attempts.extend(Self::fallback_sources(&unit.source));
-
-        for source in attempts {
+        for source in std::iter::once(unit.source)
+            .chain(Self::fallback_sources(&unit.source).iter().copied())
+        {
             match fetcher(&source, &unit.end_point_key).await {
                 Ok(Some(price_str)) => return Ok((price_str, source)),
                 Ok(None) => {}
