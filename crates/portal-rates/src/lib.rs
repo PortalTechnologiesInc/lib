@@ -69,7 +69,7 @@ struct FiatUnit {
     // country: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
 enum Source {
     Yadio,
@@ -242,8 +242,12 @@ impl MarketAPI {
         }
     }
 
-    async fn fetch_price(self: Arc<Self>, unit: &FiatUnit) -> Result<Option<String>, RatesError> {
-        let url = Self::build_url(&unit.source, &unit.end_point_key);
+    async fn fetch_price_for_source(
+        self: Arc<Self>,
+        source: &Source,
+        key: &str,
+    ) -> Result<Option<String>, RatesError> {
+        let url = Self::build_url(source, key);
         let res = self
             .client
             .get(&url)
@@ -259,8 +263,59 @@ impl MarketAPI {
             .text()
             .await
             .map_err(|e| RatesError::HttpRequest(e.to_string()))?;
-        let parsed = Self::parse_price_json(&text, &unit.source, &unit.end_point_key)?;
+        let parsed = Self::parse_price_json(&text, source, key)?;
         Ok(Some(parsed))
+    }
+
+    fn fallback_sources(primary: &Source) -> Vec<Source> {
+        match primary {
+            Source::Kraken => vec![Source::CoinGecko, Source::CoinDesk],
+            Source::CoinGecko => vec![Source::Kraken, Source::CoinDesk],
+            Source::Yadio => vec![Source::CoinGecko, Source::YadioConvert],
+            Source::Exir => vec![Source::CoinGecko],
+            Source::YadioConvert
+            | Source::Coinpaprika
+            | Source::Bitstamp
+            | Source::Coinbase
+            | Source::BNR
+            | Source::CoinDesk => vec![Source::CoinGecko],
+        }
+    }
+
+    async fn resolve_price_with_fallback<F, Fut>(
+        unit: &FiatUnit,
+        mut fetcher: F,
+    ) -> Result<(String, Source), RatesError>
+    where
+        F: FnMut(&Source, &str) -> Fut,
+        Fut: std::future::Future<Output = Result<Option<String>, RatesError>>,
+    {
+        let mut attempts = Vec::with_capacity(1 + Self::fallback_sources(&unit.source).len());
+        attempts.push(unit.source.clone());
+        attempts.extend(Self::fallback_sources(&unit.source));
+
+        for source in attempts {
+            match fetcher(&source, &unit.end_point_key).await {
+                Ok(Some(price_str)) => return Ok((price_str, source)),
+                Ok(None) => {
+                    log::debug!(
+                        "No price from source={} for key={}",
+                        source,
+                        unit.end_point_key
+                    );
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Price fetch failed from source={} for key={}: {}",
+                        source,
+                        unit.end_point_key,
+                        e
+                    );
+                }
+            }
+        }
+
+        Err(RatesError::MarketDataFetchFailed)
     }
 
     async fn fetch_market_data_internal(
@@ -274,21 +329,25 @@ impl MarketAPI {
             None => return Err(RatesError::UnsupportedCurrency),
         };
 
-        if let Some(price_str) = self.fetch_price(&unit).await? {
-            if let Ok(rate) = price_str.parse::<f64>() {
-                let data = MarketData {
-                    price: format!("{} {:.0}", unit.symbol, rate),
-                    rate: rate,
-                    source: unit.source.to_string(),
-                };
-                log::debug!("Market data fetched in {:?}", start.elapsed());
-                return Ok(data);
-            } else {
-                return Err(RatesError::PriceParseFailed(price_str));
-            }
+        let (price_str, used_source) = Self::resolve_price_with_fallback(&unit, |source, key| {
+            let api = self.clone();
+            let source = source.clone();
+            let key = key.to_string();
+            async move { api.fetch_price_for_source(&source, &key).await }
+        })
+        .await?;
+
+        if let Ok(rate) = price_str.parse::<f64>() {
+            let data = MarketData {
+                price: format!("{} {:.0}", unit.symbol, rate),
+                rate: rate,
+                source: used_source.to_string(),
+            };
+            log::debug!("Market data fetched in {:?}", start.elapsed());
+            return Ok(data);
         }
 
-        Err(RatesError::MarketDataFetchFailed)
+        Err(RatesError::PriceParseFailed(price_str))
     }
 }
 
@@ -326,6 +385,99 @@ impl MarketAPI {
             self.fetch_market_data_internal(currency).await
         }
     }
+}
+
+#[tokio::test]
+async fn test_fallback_primary_success() -> Result<(), RatesError> {
+    let unit = FiatUnit {
+        end_point_key: "USD".to_string(),
+        source: Source::Kraken,
+        symbol: "$".to_string(),
+    };
+
+    let attempts = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Source>::new()));
+    let attempts_closure = attempts.clone();
+
+    let (price, used_source) = MarketAPI::resolve_price_with_fallback(&unit, move |source, _key| {
+        let attempts = attempts_closure.clone();
+        let source = source.clone();
+        async move {
+            attempts.lock().unwrap().push(source.clone());
+            if source == Source::Kraken {
+                Ok(Some("60000.0".to_string()))
+            } else {
+                Ok(None)
+            }
+        }
+    })
+    .await?;
+
+    assert_eq!(price, "60000.0");
+    assert_eq!(used_source, Source::Kraken);
+    assert_eq!(attempts.lock().unwrap().as_slice(), &[Source::Kraken]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_fallback_primary_fail_then_success() -> Result<(), RatesError> {
+    let unit = FiatUnit {
+        end_point_key: "USD".to_string(),
+        source: Source::Kraken,
+        symbol: "$".to_string(),
+    };
+
+    let attempts = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Source>::new()));
+    let attempts_closure = attempts.clone();
+
+    let (price, used_source) = MarketAPI::resolve_price_with_fallback(&unit, move |source, _key| {
+        let attempts = attempts_closure.clone();
+        let source = source.clone();
+        async move {
+            attempts.lock().unwrap().push(source.clone());
+            match source {
+                Source::Kraken => Err(RatesError::HttpRequest("kraken down".to_string())),
+                Source::CoinGecko => Ok(Some("61000.0".to_string())),
+                _ => Ok(None),
+            }
+        }
+    })
+    .await?;
+
+    assert_eq!(price, "61000.0");
+    assert_eq!(used_source, Source::CoinGecko);
+    assert_eq!(
+        attempts.lock().unwrap().as_slice(),
+        &[Source::Kraken, Source::CoinGecko]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_fallback_all_fail() {
+    let unit = FiatUnit {
+        end_point_key: "USD".to_string(),
+        source: Source::Kraken,
+        symbol: "$".to_string(),
+    };
+
+    let attempts = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Source>::new()));
+    let attempts_closure = attempts.clone();
+
+    let result = MarketAPI::resolve_price_with_fallback(&unit, move |source, _key| {
+        let attempts = attempts_closure.clone();
+        let source = source.clone();
+        async move {
+            attempts.lock().unwrap().push(source);
+            Ok(None)
+        }
+    })
+    .await;
+
+    assert!(matches!(result, Err(RatesError::MarketDataFetchFailed)));
+    assert_eq!(
+        attempts.lock().unwrap().as_slice(),
+        &[Source::Kraken, Source::CoinGecko, Source::CoinDesk]
+    );
 }
 
 #[tokio::test]
