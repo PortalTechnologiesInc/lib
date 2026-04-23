@@ -282,20 +282,20 @@ impl MarketAPI {
         }
     }
 
-    async fn resolve_price_with_fallback<F, Fut>(
+    async fn resolve_price_with_fallback(
+        self: Arc<Self>,
         unit: &FiatUnit,
-        mut fetcher: F,
-    ) -> Result<(String, Source), RatesError>
-    where
-        F: FnMut(&Source, &str) -> Fut,
-        Fut: std::future::Future<Output = Result<Option<String>, RatesError>>,
-    {
+    ) -> Result<(String, Source), RatesError> {
         let mut attempts = Vec::with_capacity(1 + Self::fallback_sources(&unit.source).len());
         attempts.push(unit.source.clone());
         attempts.extend(Self::fallback_sources(&unit.source));
 
         for source in attempts {
-            match fetcher(&source, &unit.end_point_key).await {
+            match self
+                .clone()
+                .fetch_price_for_source(&source, &unit.end_point_key)
+                .await
+            {
                 Ok(Some(price_str)) => return Ok((price_str, source)),
                 Ok(None) => {
                     log::debug!(
@@ -318,6 +318,30 @@ impl MarketAPI {
         Err(RatesError::MarketDataFetchFailed)
     }
 
+    #[cfg(test)]
+    async fn resolve_price_with_fallback_with_fetcher<F, Fut>(
+        unit: &FiatUnit,
+        mut fetcher: F,
+    ) -> Result<(String, Source), RatesError>
+    where
+        F: FnMut(&Source, &str) -> Fut,
+        Fut: std::future::Future<Output = Result<Option<String>, RatesError>>,
+    {
+        let mut attempts = Vec::with_capacity(1 + Self::fallback_sources(&unit.source).len());
+        attempts.push(unit.source.clone());
+        attempts.extend(Self::fallback_sources(&unit.source));
+
+        for source in attempts {
+            match fetcher(&source, &unit.end_point_key).await {
+                Ok(Some(price_str)) => return Ok((price_str, source)),
+                Ok(None) => {}
+                Err(_) => {}
+            }
+        }
+
+        Err(RatesError::MarketDataFetchFailed)
+    }
+
     async fn fetch_market_data_internal(
         self: Arc<Self>,
         currency: &str,
@@ -329,13 +353,10 @@ impl MarketAPI {
             None => return Err(RatesError::UnsupportedCurrency),
         };
 
-        let (price_str, used_source) = Self::resolve_price_with_fallback(&unit, |source, key| {
-            let api = self.clone();
-            let source = source.clone();
-            let key = key.to_string();
-            async move { api.fetch_price_for_source(&source, &key).await }
-        })
-        .await?;
+        let (price_str, used_source) = self
+            .clone()
+            .resolve_price_with_fallback(&unit)
+            .await?;
 
         if let Ok(rate) = price_str.parse::<f64>() {
             let data = MarketData {
@@ -398,7 +419,7 @@ async fn test_fallback_primary_success() -> Result<(), RatesError> {
     let attempts = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Source>::new()));
     let attempts_closure = attempts.clone();
 
-    let (price, used_source) = MarketAPI::resolve_price_with_fallback(&unit, move |source, _key| {
+    let (price, used_source) = MarketAPI::resolve_price_with_fallback_with_fetcher(&unit, move |source, _key| {
         let attempts = attempts_closure.clone();
         let source = source.clone();
         async move {
@@ -429,7 +450,7 @@ async fn test_fallback_primary_fail_then_success() -> Result<(), RatesError> {
     let attempts = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Source>::new()));
     let attempts_closure = attempts.clone();
 
-    let (price, used_source) = MarketAPI::resolve_price_with_fallback(&unit, move |source, _key| {
+    let (price, used_source) = MarketAPI::resolve_price_with_fallback_with_fetcher(&unit, move |source, _key| {
         let attempts = attempts_closure.clone();
         let source = source.clone();
         async move {
@@ -463,7 +484,7 @@ async fn test_fallback_all_fail() {
     let attempts = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Source>::new()));
     let attempts_closure = attempts.clone();
 
-    let result = MarketAPI::resolve_price_with_fallback(&unit, move |source, _key| {
+    let result = MarketAPI::resolve_price_with_fallback_with_fetcher(&unit, move |source, _key| {
         let attempts = attempts_closure.clone();
         let source = source.clone();
         async move {
