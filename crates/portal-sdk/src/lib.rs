@@ -16,8 +16,10 @@ use portal::{
         model::payment::{
             CashuDirectContent, CashuRequestContent, CashuResponseContent,
             CloseRecurringPaymentContent, CloseRecurringPaymentResponse, InvoiceRequestContent,
-            InvoiceResponse, PaymentResponseContent, RecurringPaymentRequestContent,
+            InvoiceRequestTyped, InvoiceResponse, PaymentCurrencyKind, PaymentResponseContent,
+            RecurringPaymentRequestContent, RecurringPaymentRequestTyped,
             RecurringPaymentResponseContent, SinglePaymentRequestContent,
+            SinglePaymentRequestTyped,
         },
     },
     router::{
@@ -136,7 +138,29 @@ impl PortalSDK {
         Ok(event.next().await.ok_or(PortalSDKError::Timeout)??)
     }
 
-    pub async fn request_recurring_payment(
+    pub async fn request_recurring_payment<C: PaymentCurrencyKind>(
+        &self,
+        main_key: PublicKey,
+        subkeys: Vec<PublicKey>,
+        payment_request: RecurringPaymentRequestTyped<C>,
+    ) -> Result<RecurringPaymentResponseContent, PortalSDKError> {
+        let conv = RecurringPaymentRequestSenderConversation::new(
+            self.router.keypair().public_key(),
+            self.router.keypair().subkey_proof().cloned(),
+            payment_request.into(),
+        )
+        .map_err(PortalSDKError::ProtocolError)?;
+
+        let (mut event, _outcomes) = self
+            .router
+            .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
+                main_key, subkeys, conv,
+            )))
+            .await?;
+        Ok(event.next().await.ok_or(PortalSDKError::Timeout)??)
+    }
+
+    pub async fn request_recurring_payment_legacy(
         &self,
         main_key: PublicKey,
         subkeys: Vec<PublicKey>,
@@ -158,7 +182,29 @@ impl PortalSDK {
         Ok(event.next().await.ok_or(PortalSDKError::Timeout)??)
     }
 
-    pub async fn request_single_payment(
+    pub async fn request_single_payment<C: PaymentCurrencyKind>(
+        &self,
+        main_key: PublicKey,
+        subkeys: Vec<PublicKey>,
+        payment_request: SinglePaymentRequestTyped<C>,
+    ) -> Result<NotificationStream<PaymentResponseContent>, PortalSDKError> {
+        let conv = SinglePaymentRequestSenderConversation::new(
+            self.router.keypair().public_key(),
+            self.router.keypair().subkey_proof().cloned(),
+            payment_request.into(),
+        )
+        .map_err(PortalSDKError::ProtocolError)?;
+
+        let (event, _outcomes) = self
+            .router
+            .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
+                main_key, subkeys, conv,
+            )))
+            .await?;
+        Ok(event)
+    }
+
+    pub async fn request_single_payment_legacy(
         &self,
         main_key: PublicKey,
         subkeys: Vec<PublicKey>,
@@ -255,7 +301,32 @@ impl PortalSDK {
         Ok(())
     }
 
-    pub async fn request_invoice(
+    pub async fn request_invoice<C: PaymentCurrencyKind>(
+        &self,
+        recipient: PublicKey,
+        subkeys: Vec<PublicKey>,
+        content: InvoiceRequestTyped<C>,
+    ) -> Result<Option<InvoiceResponse>, PortalSDKError> {
+        let conv = InvoiceRequestConversation::new(
+            self.router.keypair().public_key(),
+            self.router.keypair().subkey_proof().cloned(),
+            content.into(),
+        );
+        let (mut rx, _outcomes) = self
+            .router
+            .add_and_subscribe(Box::new(MultiKeySenderAdapter::new_with_user(
+                recipient, subkeys, conv,
+            )))
+            .await?;
+
+        if let Ok(invoice_response) = rx.next().await.ok_or(PortalSDKError::Timeout)? {
+            return Ok(Some(invoice_response));
+        }
+
+        Ok(None)
+    }
+
+    pub async fn request_invoice_legacy(
         &self,
         recipient: PublicKey,
         subkeys: Vec<PublicKey>,

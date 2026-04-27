@@ -286,12 +286,181 @@ pub mod payment {
         }
     }
 
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[serde(transparent)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
+    pub struct Millisats {
+        pub value: u64,
+    }
+
+    impl Millisats {
+        pub const fn new(value: u64) -> Self {
+            Self { value }
+        }
+
+        pub const fn as_u64(self) -> u64 {
+            self.value
+        }
+    }
+
+    impl From<u64> for Millisats {
+        fn from(value: u64) -> Self {
+            Self::new(value)
+        }
+    }
+
+    impl From<Millisats> for u64 {
+        fn from(value: Millisats) -> Self {
+            value.value
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[serde(transparent)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
+    pub struct FiatCents {
+        pub value: u64,
+    }
+
+    impl FiatCents {
+        pub const fn new(value: u64) -> Self {
+            Self { value }
+        }
+
+        pub const fn as_u64(self) -> u64 {
+            self.value
+        }
+    }
+
+    impl From<u64> for FiatCents {
+        fn from(value: u64) -> Self {
+            Self::new(value)
+        }
+    }
+
+    impl From<FiatCents> for u64 {
+        fn from(value: FiatCents) -> Self {
+            value.value
+        }
+    }
+
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
     #[cfg_attr(feature = "bindings", derive(uniffi::Enum))]
     pub enum Currency {
         Millisats,
         #[serde(untagged)]
         Fiat(String),
+    }
+
+    /// Type-system mapping between currency and amount unit.
+    pub trait PaymentCurrencyKind {
+        type Amount: Into<u64> + Copy;
+        fn into_currency(self) -> Currency;
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct MillisatsCurrency;
+
+    impl PaymentCurrencyKind for MillisatsCurrency {
+        type Amount = Millisats;
+
+        fn into_currency(self) -> Currency {
+            Currency::Millisats
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct FiatCurrency {
+        pub code: String,
+    }
+
+    impl PaymentCurrencyKind for FiatCurrency {
+        type Amount = FiatCents;
+
+        fn into_currency(self) -> Currency {
+            Currency::Fiat(self.code)
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct SinglePaymentRequestTyped<C: PaymentCurrencyKind> {
+        pub amount: C::Amount,
+        pub currency: C,
+        pub current_exchange_rate: Option<ExchangeRate>,
+        pub invoice: String,
+        pub auth_token: Option<String>,
+        pub expires_at: Timestamp,
+        pub subscription_id: Option<String>,
+        pub description: Option<String>,
+        pub request_id: String,
+    }
+
+    impl<C: PaymentCurrencyKind> From<SinglePaymentRequestTyped<C>> for SinglePaymentRequestContent {
+        fn from(value: SinglePaymentRequestTyped<C>) -> Self {
+            Self {
+                amount: value.amount.into(),
+                currency: value.currency.into_currency(),
+                current_exchange_rate: value.current_exchange_rate,
+                invoice: value.invoice,
+                auth_token: value.auth_token,
+                expires_at: value.expires_at,
+                subscription_id: value.subscription_id,
+                description: value.description,
+                request_id: value.request_id,
+            }
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct RecurringPaymentRequestTyped<C: PaymentCurrencyKind> {
+        pub amount: C::Amount,
+        pub currency: C,
+        pub recurrence: RecurrenceInfo,
+        pub current_exchange_rate: Option<ExchangeRate>,
+        pub expires_at: Timestamp,
+        pub auth_token: Option<String>,
+        pub description: Option<String>,
+        pub request_id: String,
+    }
+
+    impl<C: PaymentCurrencyKind> From<RecurringPaymentRequestTyped<C>> for RecurringPaymentRequestContent {
+        fn from(value: RecurringPaymentRequestTyped<C>) -> Self {
+            Self {
+                amount: value.amount.into(),
+                currency: value.currency.into_currency(),
+                recurrence: value.recurrence,
+                current_exchange_rate: value.current_exchange_rate,
+                expires_at: value.expires_at,
+                auth_token: value.auth_token,
+                description: value.description,
+                request_id: value.request_id,
+            }
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct InvoiceRequestTyped<C: PaymentCurrencyKind> {
+        pub request_id: String,
+        pub amount: C::Amount,
+        pub currency: C,
+        pub current_exchange_rate: Option<ExchangeRate>,
+        pub expires_at: Timestamp,
+        pub description: Option<String>,
+        pub refund_invoice: Option<String>,
+    }
+
+    impl<C: PaymentCurrencyKind> From<InvoiceRequestTyped<C>> for InvoiceRequestContent {
+        fn from(value: InvoiceRequestTyped<C>) -> Self {
+            Self {
+                request_id: value.request_id,
+                amount: value.amount.into(),
+                currency: value.currency.into_currency(),
+                current_exchange_rate: value.current_exchange_rate,
+                expires_at: value.expires_at,
+                description: value.description,
+                refund_invoice: value.refund_invoice,
+            }
+        }
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -305,6 +474,38 @@ pub mod payment {
         pub auth_token: Option<String>,
         pub description: Option<String>,
         pub request_id: String,
+    }
+
+    impl SinglePaymentRequestContent {
+        pub fn amount_millisats(&self) -> Option<Millisats> {
+            match self.currency {
+                Currency::Millisats => Some(Millisats::new(self.amount)),
+                Currency::Fiat(_) => None,
+            }
+        }
+
+        pub fn amount_fiat_cents(&self) -> Option<FiatCents> {
+            match self.currency {
+                Currency::Fiat(_) => Some(FiatCents::new(self.amount)),
+                Currency::Millisats => None,
+            }
+        }
+    }
+
+    impl RecurringPaymentRequestContent {
+        pub fn amount_millisats(&self) -> Option<Millisats> {
+            match self.currency {
+                Currency::Millisats => Some(Millisats::new(self.amount)),
+                Currency::Fiat(_) => None,
+            }
+        }
+
+        pub fn amount_fiat_cents(&self) -> Option<FiatCents> {
+            match self.currency {
+                Currency::Fiat(_) => Some(FiatCents::new(self.amount)),
+                Currency::Millisats => None,
+            }
+        }
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -353,6 +554,30 @@ pub mod payment {
         */
     }
 
+    impl RecurringPaymentStatus {
+        pub fn authorized_amount_millisats(&self) -> Option<Millisats> {
+            match self {
+                Self::Confirmed {
+                    authorized_amount,
+                    authorized_currency: Currency::Millisats,
+                    ..
+                } => Some(Millisats::new(*authorized_amount)),
+                _ => None,
+            }
+        }
+
+        pub fn authorized_amount_fiat_cents(&self) -> Option<FiatCents> {
+            match self {
+                Self::Confirmed {
+                    authorized_amount,
+                    authorized_currency: Currency::Fiat(_),
+                    ..
+                } => Some(FiatCents::new(*authorized_amount)),
+                _ => None,
+            }
+        }
+    }
+
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
     pub struct CloseRecurringPaymentContent {
@@ -379,6 +604,22 @@ pub mod payment {
         pub expires_at: Timestamp,
         pub description: Option<String>,
         pub refund_invoice: Option<String>,
+    }
+
+    impl InvoiceRequestContent {
+        pub fn amount_millisats(&self) -> Option<Millisats> {
+            match self.currency {
+                Currency::Millisats => Some(Millisats::new(self.amount)),
+                Currency::Fiat(_) => None,
+            }
+        }
+
+        pub fn amount_fiat_cents(&self) -> Option<FiatCents> {
+            match self.currency {
+                Currency::Fiat(_) => Some(FiatCents::new(self.amount)),
+                Currency::Millisats => None,
+            }
+        }
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]

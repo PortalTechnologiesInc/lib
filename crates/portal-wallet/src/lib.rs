@@ -2,6 +2,7 @@ mod breez;
 mod nwc;
 
 use axum::async_trait;
+use portal::protocol::model::payment::Millisats;
 
 pub use breez::BreezSparkWallet;
 pub use nwc::NwcWallet;
@@ -16,6 +17,27 @@ pub trait PortalWallet: Send + Sync {
     async fn get_balance(&self) -> Result<u64>;
     /// Pay invoice, returns (preimage, fees_paid_msat)
     async fn pay_invoice(&self, invoice: String) -> Result<(String, u64)>;
+
+    /// Typed helper (non-breaking): same as `make_invoice` but explicit unit.
+    async fn make_invoice_msat(
+        &self,
+        amount: Millisats,
+        description: Option<String>,
+    ) -> Result<String> {
+        self.make_invoice(amount.as_u64(), description).await
+    }
+
+    /// Typed helper (non-breaking): balance in explicit msat unit.
+    async fn get_balance_msat(&self) -> Result<Millisats> {
+        self.get_balance().await.map(Millisats::new)
+    }
+
+    /// Typed helper (non-breaking): returns typed fees in explicit msat unit.
+    async fn pay_invoice_msat(&self, invoice: String) -> Result<(String, Millisats)> {
+        self.pay_invoice(invoice)
+            .await
+            .map(|(preimage, fees_msat)| (preimage, Millisats::new(fees_msat)))
+    }
 }
 
 /// Result type for Portal Wallet operations

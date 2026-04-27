@@ -18,8 +18,10 @@ use portal::nostr_relay_pool::RelayOptions;
 use portal::protocol::calendar::Calendar;
 use portal::protocol::jwt::CustomClaims;
 use portal::protocol::model::payment::{
-    CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, InvoiceRequestContent,
-    PaymentStatus, RecurringPaymentRequestContent, SinglePaymentRequestContent,
+    CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, FiatCents, FiatCurrency,
+    InvoiceRequestContent, InvoiceRequestTyped, Millisats, MillisatsCurrency, PaymentStatus,
+    RecurringPaymentRequestContent, RecurringPaymentRequestTyped, SinglePaymentRequestContent,
+    SinglePaymentRequestTyped,
 };
 use portal::protocol::model::Timestamp;
 use portal::utils::fetch_nip05_profile as portal_fetch_nip05;
@@ -75,9 +77,9 @@ async fn resolve_amount_and_exchange_rate(
     amount: u64,
     currency: &Currency,
     market_api: Arc<portal_rates::MarketAPI>,
-) -> Result<(u64, Option<ExchangeRate>), portal_rates::RatesError> {
+) -> Result<(Millisats, Option<ExchangeRate>), portal_rates::RatesError> {
     match currency {
-        Currency::Millisats => Ok((amount, None)),
+        Currency::Millisats => Ok((Millisats::new(amount), None)),
         Currency::Fiat(currency_code) => {
             let market_data = market_api.fetch_market_data(currency_code).await?;
             let fiat_amount = amount as f64 / 100.0;
@@ -87,7 +89,7 @@ async fn resolve_amount_and_exchange_rate(
                 source: market_data.source,
                 time: Timestamp::now(),
             };
-            Ok((msat, Some(exchange_rate)))
+            Ok((Millisats::new(msat), Some(exchange_rate)))
         }
     }
 }
@@ -323,15 +325,29 @@ pub async fn request_recurring_payment(
     .await
     .map_err(|e| internal_error(format!("Failed to fetch market data: {e}")))?;
 
-    let payment_request = RecurringPaymentRequestContent {
-        description: req.payment_request.description,
-        amount: req.payment_request.amount,
-        currency: req.payment_request.currency,
-        auth_token: req.payment_request.auth_token,
-        recurrence: req.payment_request.recurrence,
-        expires_at: req.payment_request.expires_at,
-        request_id: Uuid::new_v4().to_string(),
-        current_exchange_rate,
+    let payment_request: RecurringPaymentRequestContent = match req.payment_request.currency {
+        Currency::Millisats => RecurringPaymentRequestTyped {
+            description: req.payment_request.description,
+            amount: Millisats::new(req.payment_request.amount),
+            currency: MillisatsCurrency,
+            auth_token: req.payment_request.auth_token,
+            recurrence: req.payment_request.recurrence,
+            expires_at: req.payment_request.expires_at,
+            request_id: Uuid::new_v4().to_string(),
+            current_exchange_rate,
+        }
+        .into(),
+        Currency::Fiat(code) => RecurringPaymentRequestTyped {
+            description: req.payment_request.description,
+            amount: FiatCents::new(req.payment_request.amount),
+            currency: FiatCurrency { code },
+            auth_token: req.payment_request.auth_token,
+            recurrence: req.payment_request.recurrence,
+            expires_at: req.payment_request.expires_at,
+            request_id: Uuid::new_v4().to_string(),
+            current_exchange_rate,
+        }
+        .into(),
     };
 
     let stream_id = state.events.new_stream("recurring_payment", None).await;
@@ -341,7 +357,7 @@ pub async fn request_recurring_payment(
     let sid = stream_id.clone();
     tokio::spawn(async move {
         match sdk
-            .request_recurring_payment(main_key, subkeys, payment_request)
+            .request_recurring_payment_legacy(main_key, subkeys, payment_request)
             .await
         {
             Ok(status) => {
@@ -391,27 +407,46 @@ pub async fn request_single_payment(
     .map_err(|e| internal_error(format!("Failed to fetch market data: {e}")))?;
 
     let invoice = wallet
-        .make_invoice(msat_amount, Some(req.payment_request.description.clone()))
+        .make_invoice_msat(msat_amount, Some(req.payment_request.description.clone()))
         .await
         .map_err(|e| internal_error(format!("Failed to make invoice: {e}")))?;
 
-    let request_id = req.payment_request.request_id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
+    let request_id = req
+        .payment_request
+        .request_id
+        .clone()
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
     let expires_at = Timestamp::now_plus_seconds(300);
-    let payment_request = SinglePaymentRequestContent {
-        amount,
-        currency: req.payment_request.currency,
-        expires_at,
-        invoice: invoice.clone(),
-        current_exchange_rate,
-        subscription_id: req.payment_request.subscription_id,
-        auth_token: req.payment_request.auth_token,
-        request_id,
-        description: Some(req.payment_request.description),
+    let payment_request: SinglePaymentRequestContent = match req.payment_request.currency {
+        Currency::Millisats => SinglePaymentRequestTyped {
+            amount: Millisats::new(amount),
+            currency: MillisatsCurrency,
+            expires_at,
+            invoice: invoice.clone(),
+            current_exchange_rate,
+            subscription_id: req.payment_request.subscription_id,
+            auth_token: req.payment_request.auth_token,
+            request_id,
+            description: Some(req.payment_request.description),
+        }
+        .into(),
+        Currency::Fiat(code) => SinglePaymentRequestTyped {
+            amount: FiatCents::new(amount),
+            currency: FiatCurrency { code },
+            expires_at,
+            invoice: invoice.clone(),
+            current_exchange_rate,
+            subscription_id: req.payment_request.subscription_id,
+            auth_token: req.payment_request.auth_token,
+            request_id,
+            description: Some(req.payment_request.description),
+        }
+        .into(),
     };
 
     let mut notifications = state
         .sdk
-        .request_single_payment(main_key, subkeys, payment_request)
+        .request_single_payment_legacy(main_key, subkeys, payment_request)
         .await
         .map_err(|e| internal_error(format!("Failed to request single payment: {e}")))?;
 
@@ -489,7 +524,7 @@ pub async fn request_payment_raw(
 
     let mut notifications = state
         .sdk
-        .request_single_payment(main_key, subkeys, req.payment_request)
+        .request_single_payment_legacy(main_key, subkeys, req.payment_request)
         .await
         .map_err(|e| internal_error(format!("Failed to request payment: {e}")))?;
 
@@ -582,14 +617,27 @@ pub async fn request_invoice(
     .await
     .map_err(|e| internal_error(format!("Failed to fetch market data: {e}")))?;
 
-    let sdk_content = InvoiceRequestContent {
-        request_id,
-        amount: req.content.amount,
-        currency: req.content.currency.clone(),
-        current_exchange_rate,
-        expires_at: req.content.expires_at,
-        description: req.content.description.clone(),
-        refund_invoice: req.content.refund_invoice.clone(),
+    let sdk_content: InvoiceRequestContent = match req.content.currency.clone() {
+        Currency::Millisats => InvoiceRequestTyped {
+            request_id,
+            amount: Millisats::new(req.content.amount),
+            currency: MillisatsCurrency,
+            current_exchange_rate,
+            expires_at: req.content.expires_at,
+            description: req.content.description.clone(),
+            refund_invoice: req.content.refund_invoice.clone(),
+        }
+        .into(),
+        Currency::Fiat(code) => InvoiceRequestTyped {
+            request_id,
+            amount: FiatCents::new(req.content.amount),
+            currency: FiatCurrency { code },
+            current_exchange_rate,
+            expires_at: req.content.expires_at,
+            description: req.content.description.clone(),
+            refund_invoice: req.content.refund_invoice.clone(),
+        }
+        .into(),
     };
 
     let stream_id = state.events.new_stream("invoice_request", None).await;
@@ -599,7 +647,7 @@ pub async fn request_invoice(
     let sid = stream_id.clone();
     tokio::spawn(async move {
         match sdk
-            .request_invoice(recipient_key.into(), subkeys, sdk_content)
+            .request_invoice_legacy(recipient_key.into(), subkeys, sdk_content)
             .await
         {
             Ok(Some(resp)) => {
@@ -630,15 +678,16 @@ pub async fn request_invoice(
                     }
                 };
 
+                let expected_amount_msat_u64 = expected_amount_msat.as_u64();
                 let amount_diff =
-                    (invoice_amount_msat as i128 - expected_amount_msat as i128).abs();
+                    (invoice_amount_msat as i128 - expected_amount_msat_u64 as i128).abs();
                 if amount_diff > 1 {
                     events
                         .push(
                             &sid,
                             NotificationData::Error {
                                 reason: format!(
-                                    "Invoice amount mismatch: got {invoice_amount_msat} msat, expected {expected_amount_msat} msat (diff: {amount_diff} msat)"
+                                    "Invoice amount mismatch: got {invoice_amount_msat} msat, expected {expected_amount_msat_u64} msat (diff: {amount_diff} msat)"
                                 ),
                             },
                         )
