@@ -16,10 +16,10 @@ use portal::{
         model::payment::{
             CashuDirectContent, CashuRequestContent, CashuResponseContent,
             CloseRecurringPaymentContent, CloseRecurringPaymentResponse, InvoiceRequestContent,
-            InvoiceRequestTyped, InvoiceResponse, PaymentCurrencyKind, PaymentResponseContent,
-            RecurringPaymentRequestContent, RecurringPaymentRequestTyped,
+            InvoiceRequest, InvoiceResponse, PaymentCurrencyKind, PaymentResponseContent,
+            RecurringPaymentRequestContent, RecurringPaymentRequest,
             RecurringPaymentResponseContent, SinglePaymentRequestContent,
-            SinglePaymentRequestTyped,
+            SinglePaymentRequest,
         },
     },
     router::{
@@ -142,7 +142,7 @@ impl PortalSDK {
         &self,
         main_key: PublicKey,
         subkeys: Vec<PublicKey>,
-        payment_request: RecurringPaymentRequestTyped<C>,
+        payment_request: RecurringPaymentRequest<C>,
     ) -> Result<RecurringPaymentResponseContent, PortalSDKError> {
         let conv = RecurringPaymentRequestSenderConversation::new(
             self.router.keypair().public_key(),
@@ -186,7 +186,7 @@ impl PortalSDK {
         &self,
         main_key: PublicKey,
         subkeys: Vec<PublicKey>,
-        payment_request: SinglePaymentRequestTyped<C>,
+        payment_request: SinglePaymentRequest<C>,
     ) -> Result<NotificationStream<PaymentResponseContent>, PortalSDKError> {
         let conv = SinglePaymentRequestSenderConversation::new(
             self.router.keypair().public_key(),
@@ -305,7 +305,7 @@ impl PortalSDK {
         &self,
         recipient: PublicKey,
         subkeys: Vec<PublicKey>,
-        content: InvoiceRequestTyped<C>,
+        content: InvoiceRequest<C>,
     ) -> Result<Option<InvoiceResponse>, PortalSDKError> {
         let conv = InvoiceRequestConversation::new(
             self.router.keypair().public_key(),

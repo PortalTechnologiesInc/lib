@@ -383,7 +383,7 @@ pub mod payment {
     }
 
     #[derive(Debug, Clone)]
-    pub struct SinglePaymentRequestTyped<C: PaymentCurrencyKind> {
+    pub struct SinglePaymentRequest<C: PaymentCurrencyKind> {
         pub amount: C::Amount,
         pub currency: C,
         pub current_exchange_rate: Option<ExchangeRate>,
@@ -395,8 +395,8 @@ pub mod payment {
         pub request_id: String,
     }
 
-    impl<C: PaymentCurrencyKind> From<SinglePaymentRequestTyped<C>> for SinglePaymentRequestContent {
-        fn from(value: SinglePaymentRequestTyped<C>) -> Self {
+    impl<C: PaymentCurrencyKind> From<SinglePaymentRequest<C>> for SinglePaymentRequestContent {
+        fn from(value: SinglePaymentRequest<C>) -> Self {
             Self {
                 amount: value.amount.into(),
                 currency: value.currency.into_currency(),
@@ -412,7 +412,7 @@ pub mod payment {
     }
 
     #[derive(Debug, Clone)]
-    pub struct RecurringPaymentRequestTyped<C: PaymentCurrencyKind> {
+    pub struct RecurringPaymentRequest<C: PaymentCurrencyKind> {
         pub amount: C::Amount,
         pub currency: C,
         pub recurrence: RecurrenceInfo,
@@ -423,8 +423,8 @@ pub mod payment {
         pub request_id: String,
     }
 
-    impl<C: PaymentCurrencyKind> From<RecurringPaymentRequestTyped<C>> for RecurringPaymentRequestContent {
-        fn from(value: RecurringPaymentRequestTyped<C>) -> Self {
+    impl<C: PaymentCurrencyKind> From<RecurringPaymentRequest<C>> for RecurringPaymentRequestContent {
+        fn from(value: RecurringPaymentRequest<C>) -> Self {
             Self {
                 amount: value.amount.into(),
                 currency: value.currency.into_currency(),
@@ -439,7 +439,7 @@ pub mod payment {
     }
 
     #[derive(Debug, Clone)]
-    pub struct InvoiceRequestTyped<C: PaymentCurrencyKind> {
+    pub struct InvoiceRequest<C: PaymentCurrencyKind> {
         pub request_id: String,
         pub amount: C::Amount,
         pub currency: C,
@@ -449,8 +449,8 @@ pub mod payment {
         pub refund_invoice: Option<String>,
     }
 
-    impl<C: PaymentCurrencyKind> From<InvoiceRequestTyped<C>> for InvoiceRequestContent {
-        fn from(value: InvoiceRequestTyped<C>) -> Self {
+    impl<C: PaymentCurrencyKind> From<InvoiceRequest<C>> for InvoiceRequestContent {
+        fn from(value: InvoiceRequest<C>) -> Self {
             Self {
                 request_id: value.request_id,
                 amount: value.amount.into(),

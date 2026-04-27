@@ -19,9 +19,9 @@ use portal::protocol::calendar::Calendar;
 use portal::protocol::jwt::CustomClaims;
 use portal::protocol::model::payment::{
     CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, FiatCents, FiatCurrency,
-    InvoiceRequestContent, InvoiceRequestTyped, Millisats, MillisatsCurrency, PaymentStatus,
-    RecurringPaymentRequestContent, RecurringPaymentRequestTyped, SinglePaymentRequestContent,
-    SinglePaymentRequestTyped,
+    InvoiceRequestContent, InvoiceRequest, Millisats, MillisatsCurrency, PaymentStatus,
+    RecurringPaymentRequestContent, RecurringPaymentRequest, SinglePaymentRequestContent,
+    SinglePaymentRequest,
 };
 use portal::protocol::model::Timestamp;
 use portal::utils::fetch_nip05_profile as portal_fetch_nip05;
@@ -326,7 +326,7 @@ pub async fn request_recurring_payment(
     .map_err(|e| internal_error(format!("Failed to fetch market data: {e}")))?;
 
     let payment_request: RecurringPaymentRequestContent = match req.payment_request.currency {
-        Currency::Millisats => RecurringPaymentRequestTyped {
+        Currency::Millisats => RecurringPaymentRequest {
             description: req.payment_request.description,
             amount: Millisats::new(req.payment_request.amount),
             currency: MillisatsCurrency,
@@ -337,7 +337,7 @@ pub async fn request_recurring_payment(
             current_exchange_rate,
         }
         .into(),
-        Currency::Fiat(code) => RecurringPaymentRequestTyped {
+        Currency::Fiat(code) => RecurringPaymentRequest {
             description: req.payment_request.description,
             amount: FiatCents::new(req.payment_request.amount),
             currency: FiatCurrency { code },
@@ -418,7 +418,7 @@ pub async fn request_single_payment(
         .unwrap_or_else(|| Uuid::new_v4().to_string());
     let expires_at = Timestamp::now_plus_seconds(300);
     let payment_request: SinglePaymentRequestContent = match req.payment_request.currency {
-        Currency::Millisats => SinglePaymentRequestTyped {
+        Currency::Millisats => SinglePaymentRequest {
             amount: Millisats::new(amount),
             currency: MillisatsCurrency,
             expires_at,
@@ -430,7 +430,7 @@ pub async fn request_single_payment(
             description: Some(req.payment_request.description),
         }
         .into(),
-        Currency::Fiat(code) => SinglePaymentRequestTyped {
+        Currency::Fiat(code) => SinglePaymentRequest {
             amount: FiatCents::new(amount),
             currency: FiatCurrency { code },
             expires_at,
@@ -618,7 +618,7 @@ pub async fn request_invoice(
     .map_err(|e| internal_error(format!("Failed to fetch market data: {e}")))?;
 
     let sdk_content: InvoiceRequestContent = match req.content.currency.clone() {
-        Currency::Millisats => InvoiceRequestTyped {
+        Currency::Millisats => InvoiceRequest {
             request_id,
             amount: Millisats::new(req.content.amount),
             currency: MillisatsCurrency,
@@ -628,7 +628,7 @@ pub async fn request_invoice(
             refund_invoice: req.content.refund_invoice.clone(),
         }
         .into(),
-        Currency::Fiat(code) => InvoiceRequestTyped {
+        Currency::Fiat(code) => InvoiceRequest {
             request_id,
             amount: FiatCents::new(req.content.amount),
             currency: FiatCurrency { code },
