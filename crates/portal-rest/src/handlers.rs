@@ -18,8 +18,9 @@ use portal::nostr_relay_pool::RelayOptions;
 use portal::protocol::calendar::Calendar;
 use portal::protocol::jwt::CustomClaims;
 use portal::protocol::model::payment::{
-    CashuDirectContent, CashuRequestContent, Currency, ExchangeRate, InvoiceRequestContent,
-    PaymentStatus, RecurringPaymentRequestContent, SinglePaymentRequestContent,
+    Amount, CashuDirectContent, CashuRequestContent, Currency, ExchangeRate,
+    InvoiceRequestContent, PaymentStatus, RecurringPaymentRequestContent,
+    SinglePaymentRequestContent,
 };
 use portal::protocol::model::Timestamp;
 use portal::utils::fetch_nip05_profile as portal_fetch_nip05;
@@ -72,22 +73,22 @@ fn parse_subkeys(subkeys: &[String]) -> Result<Vec<PublicKey>, String> {
 /// Resolve amount and exchange rate: for Millisats returns (amount, None);
 /// for Fiat fetches market data and returns (amount_msat, Some(ExchangeRate)).
 async fn resolve_amount_and_exchange_rate(
-    amount: u64,
+    amount: Amount,
     currency: &Currency,
     market_api: Arc<portal_rates::MarketAPI>,
-) -> Result<(u64, Option<ExchangeRate>), portal_rates::RatesError> {
+) -> Result<(Amount, Option<ExchangeRate>), portal_rates::RatesError> {
     match currency {
         Currency::Millisats => Ok((amount, None)),
         Currency::Fiat(currency_code) => {
             let market_data = market_api.fetch_market_data(currency_code).await?;
-            let fiat_amount = amount as f64 / 100.0;
+            let fiat_amount = amount.as_fiat_major();
             let msat = (market_data.calculate_millisats(fiat_amount) as i64).max(0) as u64;
             let exchange_rate = ExchangeRate {
                 rate: market_data.rate,
                 source: market_data.source,
                 time: Timestamp::now(),
             };
-            Ok((msat, Some(exchange_rate)))
+            Ok((Amount::new(msat), Some(exchange_rate)))
         }
     }
 }
@@ -316,7 +317,7 @@ pub async fn request_recurring_payment(
     let subkeys = parse_subkeys(&req.subkeys).map_err(|e| bad_request(format!("Invalid subkeys: {e}")))?;
 
     let (_, current_exchange_rate) = resolve_amount_and_exchange_rate(
-        req.payment_request.amount,
+        Amount::new(req.payment_request.amount),
         &req.payment_request.currency,
         state.market_api.clone(),
     )
@@ -383,7 +384,7 @@ pub async fn request_single_payment(
 
     let amount = req.payment_request.amount;
     let (msat_amount, current_exchange_rate) = resolve_amount_and_exchange_rate(
-        amount,
+        Amount::new(amount),
         &req.payment_request.currency,
         state.market_api.clone(),
     )
@@ -391,7 +392,7 @@ pub async fn request_single_payment(
     .map_err(|e| internal_error(format!("Failed to fetch market data: {e}")))?;
 
     let invoice = wallet
-        .make_invoice(msat_amount, Some(req.payment_request.description.clone()))
+        .make_invoice(msat_amount.as_millisats(), Some(req.payment_request.description.clone()))
         .await
         .map_err(|e| internal_error(format!("Failed to make invoice: {e}")))?;
 
@@ -575,7 +576,7 @@ pub async fn request_invoice(
 
     // Resolve amount/exchange rate synchronously — errors returned as 400
     let (expected_amount_msat, current_exchange_rate) = resolve_amount_and_exchange_rate(
-        req.content.amount,
+        Amount::new(req.content.amount),
         &req.content.currency,
         state.market_api.clone(),
     )
@@ -630,15 +631,15 @@ pub async fn request_invoice(
                     }
                 };
 
-                let amount_diff =
-                    (invoice_amount_msat as i128 - expected_amount_msat as i128).abs();
+                let expected_msat = expected_amount_msat.as_millisats();
+                let amount_diff = (invoice_amount_msat as i128 - expected_msat as i128).abs();
                 if amount_diff > 1 {
                     events
                         .push(
                             &sid,
                             NotificationData::Error {
                                 reason: format!(
-                                    "Invoice amount mismatch: got {invoice_amount_msat} msat, expected {expected_amount_msat} msat (diff: {amount_diff} msat)"
+                                    "Invoice amount mismatch: got {invoice_amount_msat} msat, expected {expected_msat} msat (diff: {amount_diff} msat)"
                                 ),
                             },
                         )

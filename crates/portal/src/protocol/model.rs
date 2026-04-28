@@ -245,6 +245,47 @@ pub mod payment {
 
     use super::*;
 
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[serde(transparent)]
+    #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
+    pub struct Amount {
+        pub value: u64,
+    }
+
+    impl Amount {
+        pub const fn new(value: u64) -> Self {
+            Self { value }
+        }
+
+        pub const fn as_u64(self) -> u64 {
+            self.value
+        }
+
+        pub const fn as_millisats(self) -> u64 {
+            self.value
+        }
+
+        pub const fn as_fiat_cents(self) -> u64 {
+            self.value
+        }
+
+        pub fn as_fiat_major(self) -> f64 {
+            self.value as f64 / 100.0
+        }
+    }
+
+    impl From<u64> for Amount {
+        fn from(value: u64) -> Self {
+            Self::new(value)
+        }
+    }
+
+    impl From<Amount> for u64 {
+        fn from(value: Amount) -> Self {
+            value.value
+        }
+    }
+
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
     pub struct SinglePaymentRequestContent {
