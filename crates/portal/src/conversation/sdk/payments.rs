@@ -32,7 +32,7 @@ impl RecurringPaymentRequestSenderConversation {
         subkey_proof: Option<SubkeyProof>,
         payment_request: RecurringPaymentRequestContent,
     ) -> Result<Self, String> {
-        if payment_request.amount == 0 {
+        if payment_request.amount.as_u64() == 0 {
             return Err("Recurring payment amount must be greater than zero".to_string());
         }
 
@@ -125,7 +125,7 @@ impl SinglePaymentRequestSenderConversation {
         subkey_proof: Option<SubkeyProof>,
         payment_request: SinglePaymentRequestContent,
     ) -> Result<Self, String> {
-        if payment_request.amount == 0 {
+        if payment_request.amount.as_u64() == 0 {
             return Err("Payment amount must be greater than zero".to_string());
         }
 

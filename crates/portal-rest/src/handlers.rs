@@ -326,7 +326,7 @@ pub async fn request_recurring_payment(
 
     let payment_request = RecurringPaymentRequestContent {
         description: req.payment_request.description,
-        amount: req.payment_request.amount,
+        amount: Amount::new(req.payment_request.amount),
         currency: req.payment_request.currency,
         auth_token: req.payment_request.auth_token,
         recurrence: req.payment_request.recurrence,
@@ -399,7 +399,7 @@ pub async fn request_single_payment(
     let request_id = req.payment_request.request_id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     let expires_at = Timestamp::now_plus_seconds(300);
     let payment_request = SinglePaymentRequestContent {
-        amount,
+        amount: Amount::new(amount),
         currency: req.payment_request.currency,
         expires_at,
         invoice: invoice.clone(),
@@ -585,7 +585,7 @@ pub async fn request_invoice(
 
     let sdk_content = InvoiceRequestContent {
         request_id,
-        amount: req.content.amount,
+        amount: Amount::new(req.content.amount),
         currency: req.content.currency.clone(),
         current_exchange_rate,
         expires_at: req.content.expires_at,
@@ -727,7 +727,7 @@ pub async fn request_cashu(
     let content = CashuRequestContent {
         mint_url: req.mint_url,
         unit: req.unit,
-        amount: req.amount,
+        amount: Amount::new(req.amount),
         request_id: Uuid::new_v4().to_string(),
         expires_at,
     };
@@ -1057,7 +1057,7 @@ async fn spawn_verification_token_request(
     let content = CashuRequestContent {
         mint_url: VERIFICATION_MINT_URL.to_string(),
         unit: VERIFICATION_TICKET_UNIT.to_string(),
-        amount: VERIFICATION_TOKEN_AMOUNT,
+        amount: Amount::new(VERIFICATION_TOKEN_AMOUNT),
         request_id: Uuid::new_v4().to_string(),
         expires_at,
     };

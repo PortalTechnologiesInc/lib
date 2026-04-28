@@ -289,7 +289,7 @@ pub mod payment {
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
     pub struct SinglePaymentRequestContent {
-        pub amount: u64,
+        pub amount: Amount,
         pub currency: Currency,
         pub current_exchange_rate: Option<ExchangeRate>,
         pub invoice: String,
@@ -338,7 +338,7 @@ pub mod payment {
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
     pub struct RecurringPaymentRequestContent {
-        pub amount: u64,
+        pub amount: Amount,
         pub currency: Currency,
         pub recurrence: RecurrenceInfo,
         pub current_exchange_rate: Option<ExchangeRate>,
@@ -379,7 +379,7 @@ pub mod payment {
     pub enum RecurringPaymentStatus {
         Confirmed {
             subscription_id: String,
-            authorized_amount: u64,
+            authorized_amount: Amount,
             authorized_currency: Currency,
             authorized_recurrence: RecurrenceInfo,
         },
@@ -414,7 +414,7 @@ pub mod payment {
     #[cfg_attr(feature = "bindings", derive(uniffi::Record))]
     pub struct InvoiceRequestContent {
         pub request_id: String,
-        pub amount: u64,
+        pub amount: Amount,
         pub currency: Currency,
         pub current_exchange_rate: Option<ExchangeRate>,
         pub expires_at: Timestamp,
@@ -444,7 +444,7 @@ pub mod payment {
         pub request_id: String,
         pub mint_url: String,
         pub unit: String,
-        pub amount: u64,
+        pub amount: Amount,
         pub expires_at: Timestamp,
     }
 
