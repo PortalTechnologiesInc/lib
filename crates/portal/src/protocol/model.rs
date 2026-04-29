@@ -444,7 +444,7 @@ pub mod payment {
         pub request_id: String,
         pub mint_url: String,
         pub unit: String,
-        pub amount: Amount,
+        pub amount: u64,
         pub expires_at: Timestamp,
     }
 

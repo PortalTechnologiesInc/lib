@@ -727,7 +727,7 @@ pub async fn request_cashu(
     let content = CashuRequestContent {
         mint_url: req.mint_url,
         unit: req.unit,
-        amount: Amount::new(req.amount),
+        amount: req.amount,
         request_id: Uuid::new_v4().to_string(),
         expires_at,
     };
@@ -1057,7 +1057,7 @@ async fn spawn_verification_token_request(
     let content = CashuRequestContent {
         mint_url: VERIFICATION_MINT_URL.to_string(),
         unit: VERIFICATION_TICKET_UNIT.to_string(),
-        amount: Amount::new(VERIFICATION_TOKEN_AMOUNT),
+        amount: VERIFICATION_TOKEN_AMOUNT,
         request_id: Uuid::new_v4().to_string(),
         expires_at,
     };
