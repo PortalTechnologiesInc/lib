@@ -133,8 +133,8 @@ impl PaymentRequestContent {
 
     pub fn amount(&self) -> u64 {
         match self {
-            Self::Single(content) => content.amount,
-            Self::Recurring(content) => content.amount,
+            Self::Single(content) => content.amount.as_u64(),
+            Self::Recurring(content) => content.amount.as_u64(),
         }
     }
 }
