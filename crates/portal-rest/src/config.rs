@@ -18,13 +18,6 @@ pub struct Settings {
     pub profile: ProfileSettings,
     #[serde(default)]
     pub logging: LoggingSettings,
-    #[serde(default)]
-    pub verification: Option<VerificationSettings>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct VerificationSettings {
-    pub api_key: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
