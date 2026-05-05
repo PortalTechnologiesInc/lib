@@ -2,8 +2,6 @@
 
 Set up Portal for authentication, payments, profiles, and more. This guide gets you running in minutes.
 
-> **Just need age verification?** See the [Age Verification Quick Start](../age-verification/getting-started.md) instead — it's simpler.
-
 ## 1. Get a Portal instance
 
 ### Option A: PortalHub (recommended)

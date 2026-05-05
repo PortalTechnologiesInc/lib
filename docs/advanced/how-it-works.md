@@ -78,7 +78,7 @@ Compatible wallets include [Alby](https://getalby.com/), [Mutiny](https://www.mu
 
 ## Cashu — Digital Tickets & Vouchers
 
-[Cashu](https://cashu.space/) is an ecash protocol. Portal uses Cashu tokens as **digital tickets and vouchers** — for example, age verification proofs are Cashu tokens.
+[Cashu](https://cashu.space/) is an ecash protocol. Portal uses Cashu tokens as **digital tickets and vouchers**.
 
 Key properties:
 - **Bearer tokens**: Whoever holds the token can use it

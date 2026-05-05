@@ -110,13 +110,6 @@ All commands use `sdk.sendCommand(request, (response, err) -> { ... })`.
 | `IssueJwtRequest(targetKey, durationHours)` | Issue a JWT. Response: `IssueJwtResponse.token()` |
 | `VerifyJwtRequest(publicKey, token)` | Verify a JWT. Response: `VerifyJwtResponse` |
 
-### Verification
-
-| Request class | Description |
-|---------------|-------------|
-| `CreateVerificationSessionRequest(relays?)` | Create an age verification session. |
-| `RequestVerificationTokenRequest(recipientKey, subkeys)` | Request a verification token from a user. |
-
 ### Cashu & Relays
 
 | Request class | Description |
