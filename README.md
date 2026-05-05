@@ -15,13 +15,12 @@ No accounts. No KYC. No payment processor.
 
 ---
 
-Portal lets you add **age verification**, **authentication**, and **payments** to your app — without collecting personal data.
+Portal lets you add **authentication** and **payments** to your app — without collecting personal data.
 
 > **New here?** Start with the [documentation](https://portaltechnologiesinc.github.io/lib/) or create a free instance on [PortalHub](https://hub.getportal.cc).
 
 ## What can you build?
 
-- **Age verification** — verify users' age for compliance, no personal data stored → [Guide](https://portaltechnologiesinc.github.io/lib/age-verification/getting-started.html)
 - **Authentication** — passwordless login via the Portal app → [Guide](https://portaltechnologiesinc.github.io/lib/platform/authentication.html)
 - **Payments** — single, recurring, invoice-based; BTC or fiat → [Guide](https://portaltechnologiesinc.github.io/lib/platform/single-payments.html)
 - **Digital tickets** — issue and verify Cashu tokens → [Guide](https://portaltechnologiesinc.github.io/lib/platform/cashu-tokens.html)
