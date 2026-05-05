@@ -14,6 +14,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `MessageRouter` now exposes `SendOutcome` / `EventSendResult` from the underlying `portal` crate, giving relay delivery feedback per event. `SendOutcome::Delivered { relays }` includes the URLs of relays that accepted the event. Not yet surfaced on the REST API; wiring will follow in a future release (#85)
 - `portal-rates`: added fallback-only market source failover in `MarketAPI` (tries fallback providers when the primary source fails). No `fiatUnits` mapping changes in this update (#129).
 
+#### Changed
+- Payment request amount fields now use `Amount` wrapper (`serde(transparent)` over `u64`) in core request models; wire JSON format remains unchanged.
+
+#### Removed
+- Verification-specific REST endpoints:
+  - `POST /verification/sessions`
+  - `POST /verification/token`
+- Verification-specific runtime settings from `portal-rest` config (`[verification]` / `PORTAL__VERIFICATION__API_KEY`).
+- Verification-specific entries from `portal-rest` OpenAPI spec and generated TS client/types.
+
 ---
 
 ### [0.4.1] - 2026-04-01
@@ -105,6 +115,7 @@ First release — Docker image available at [`getportal/sdk-daemon`](https://hub
 
 #### Changed
 - `register_nip05()` now delegates to `portal::register_nip05()` (moved to `portal` crate). UniFFI bindings unchanged.
+- Payment request amount fields now use `Amount` wrapper (`serde(transparent)` over `u64`) in core models; wire format and app compatibility unchanged.
 
 ---
 
