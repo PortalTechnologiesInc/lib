@@ -35,7 +35,7 @@ Or self-host:
 docker run -d -p 3000:3000 \
   -e PORTAL__AUTH__AUTH_TOKEN=$(openssl rand -hex 32) \
   -e PORTAL__NOSTR__PRIVATE_KEY=<your-64-char-hex-key> \
-  getportal/sdk-daemon:0.4.1
+  getportal/sdk-daemon:0.4.2
 ```
 
 ## SDKs
