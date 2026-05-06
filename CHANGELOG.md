@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Unreleased
 
+---
+
+### [0.4.2] - 2026-05-06
+
 #### Added
 - `MessageRouter` now exposes `SendOutcome` / `EventSendResult` from the underlying `portal` crate, giving relay delivery feedback per event. `SendOutcome::Delivered { relays }` includes the URLs of relays that accepted the event. Not yet surfaced on the REST API; wiring will follow in a future release (#85)
 - `portal-rates`: added fallback-only market source failover in `MarketAPI` (tries fallback providers when the primary source fails). No `fiatUnits` mapping changes in this update (#129).
