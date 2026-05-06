@@ -101,13 +101,6 @@ const client = new PortalClient({
 | `issueJwt(target_key, duration_hours)` | Issue a JWT for the given key. |
 | `verifyJwt(public_key, token)` | Verify a JWT and return claims. |
 
-### Verification
-
-| Method | Description |
-|--------|-------------|
-| `createVerificationSession(relays?)` | Create an age verification session. Returns `session_url`. |
-| `requestVerificationToken(recipientKey, subkeys)` | Request a verification token from a user who already holds one. |
-
 ### Cashu & Relays
 
 | Method | Description |

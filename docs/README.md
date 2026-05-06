@@ -10,21 +10,17 @@
         <a href="./donate.md">Become a supporter</a>
     </h4>
     <h2 style="font-size: 16px; font-weight: normal;">
-        Portal lets you add <b>age verification</b>, <b>authentication</b>, and <b>payments</b> to your app — without collecting personal data.
+        Portal lets you add <b>authentication</b> and <b>payments</b> to your app — without collecting personal data.
     </h2>
 </div>
 
 <!--
 # Portal
 
-Portal lets you add **age verification**, **authentication**, and **payments** to your app — without collecting personal data.
+Portal lets you add **authentication**, and **payments** to your app — without collecting personal data.
 -->
 
 ## What do you need?
-
-**I need age verification →** [Get started in 5 minutes](age-verification/getting-started.md)
-
-Verify your users' age for regulatory compliance. No personal data stored. Works with any website or app.
 
 **I need authentication & payments →** [Build with Portal](platform/getting-started.md)
 

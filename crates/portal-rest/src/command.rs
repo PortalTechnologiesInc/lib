@@ -74,18 +74,6 @@ pub struct RequestCashuRequest {
     pub amount: u64,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct CreateVerificationSessionRequest {
-    /// Relay URLs to use for the verification session. Defaults to
-    /// the relays configured in the `[nostr]` section of the config if not set.
-    pub relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct RequestVerificationTokenRequest {
-    pub recipient_key: String,
-    pub subkeys: Vec<String>,
-}
 
 #[derive(Debug, Deserialize)]
 pub struct SendCashuDirectRequest {
