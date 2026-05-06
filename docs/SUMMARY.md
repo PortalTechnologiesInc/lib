@@ -4,12 +4,6 @@
 
 * [What is Portal?](README.md)
 
-# Age Verification
-
-* [Getting Started](age-verification/getting-started.md)
-* [Integration Guide](age-verification/integration-guide.md)
-* [API Reference](age-verification/api-reference.md)
-
 # Authentication & Payments
 
 * [Getting Started](platform/getting-started.md)
