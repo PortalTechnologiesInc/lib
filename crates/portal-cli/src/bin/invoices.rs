@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use app::nwc::MakeInvoiceResponse;
 use portal_cli::{CliError, create_app_instance};
-use portal::protocol::model::{Timestamp, payment::InvoiceRequestContent};
+use portal::protocol::model::{Timestamp, payment::{Amount, InvoiceRequestContent}};
 
 #[tokio::main]
 async fn main() -> Result<(), CliError> {
@@ -62,7 +62,7 @@ async fn main() -> Result<(), CliError> {
                 receiver_key.public_key(),
                 InvoiceRequestContent {
                     request_id: String::from("my_id"),
-                    amount: 5000,
+                    amount: Amount::new(5000),
                     currency: portal::protocol::model::payment::Currency::Millisats,
                     current_exchange_rate: None,
                     expires_at: Timestamp::now_plus_seconds(120),

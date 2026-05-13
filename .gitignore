@@ -11,3 +11,5 @@ react-native/portal-app-lib-*.tgz
 
 result
 examples/.env
+
+.cursor/

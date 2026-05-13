@@ -34,7 +34,7 @@ use portal::protocol::model::auth::AuthResponseStatus;
 use portal::protocol::model::bindings::PublicKey;
 use portal::utils::fetch_nip05_profile;
 use portal::protocol::model::payment::{
-    Currency, ExchangeRate, InvoiceRequestContentWithKey, PaymentResponseContent, PaymentStatus,
+    Amount, Currency, ExchangeRate, InvoiceRequestContentWithKey, PaymentResponseContent, PaymentStatus
 };
 use portal_wallet::{NwcWallet, PortalWallet};
 use serde::{Deserialize, Serialize};
@@ -143,7 +143,7 @@ impl From<Profile> for ProfileDto {
 struct PaymentRequestDto {
     request_id: String,
     event_id: String,
-    amount: u64,
+    amount: Amount,
     amount_formatted: String,
     is_fiat: bool,
     currency: String,
@@ -167,7 +167,7 @@ struct ExchangeRateDto {
 #[derive(Serialize, Clone)]
 struct InvoiceRequestDto {
     request_id: String,
-    amount: u64,
+    amount: Amount,
     amount_formatted: String,
     is_fiat: bool,
     currency: String,
@@ -258,11 +258,11 @@ fn single_request_to_dto(r: &SinglePaymentRequest) -> PaymentRequestDto {
     let amount = r.content.amount;
     let (currency, amount_formatted, is_fiat, exchange_rate, equivalent_sats) = match &r.content.currency {
         Currency::Millisats => {
-            let sats = amount / 1000;
-            (String::from("msat"), format!("{} msat ({} sats)", amount, sats), false, None, None)
+            let sats = amount.as_millisats() / 1000;
+            (String::from("msat"), format!("{} msat ({} sats)", amount.as_millisats(), sats), false, None, None)
         }
         Currency::Fiat(code) => {
-            let major = amount as f64 / 100.0;
+            let major = amount.as_fiat_major();
             let formatted = format!("{:.2} {}", major, code);
             let (er, eq) = match &r.content.current_exchange_rate {
                 Some(ExchangeRate { rate, source, .. }) => {
@@ -296,11 +296,11 @@ fn invoice_request_to_dto(r: &InvoiceRequestContentWithKey) -> InvoiceRequestDto
     let amount = c.amount;
     let (currency, amount_formatted, is_fiat, exchange_rate, equivalent_sats) = match &c.currency {
         Currency::Millisats => {
-            let sats = amount / 1000;
-            (String::from("msat"), format!("{} msat ({} sats)", amount, sats), false, None, None)
+            let sats = amount.as_millisats() / 1000;
+            (String::from("msat"), format!("{} msat ({} sats)", amount.as_millisats(), sats), false, None, None)
         }
         Currency::Fiat(code) => {
-            let major = amount as f64 / 100.0;
+            let major = amount.as_fiat_major();
             let formatted = format!("{:.2} {}", major, code);
             let (er, eq) = match &c.current_exchange_rate {
                 Some(ExchangeRate { rate, source, .. }) => {
@@ -329,9 +329,9 @@ fn invoice_request_to_dto(r: &InvoiceRequestContentWithKey) -> InvoiceRequestDto
 fn invoice_request_amount_msat(r: &InvoiceRequestContentWithKey) -> Option<u64> {
     let c = &r.inner;
     match &c.currency {
-        Currency::Millisats => Some(c.amount),
+        Currency::Millisats => Some(c.amount.as_millisats()),
         Currency::Fiat(_) => {
-            let major = c.amount as f64 / 100.0;
+            let major = c.amount.as_fiat_major();
             c.current_exchange_rate.as_ref().map(|er| ((major / er.rate) * 100_000_000_000.0) as u64)
         }
     }
