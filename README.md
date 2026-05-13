@@ -2,11 +2,9 @@
 
 # Portal
 
-**Identity and payments for Bitcoin-native applications.**
+**Ship login and Lightning payments in Bitcoin apps—without accounts, KYC, or a card processor.**
 
-No accounts. No KYC. No payment processor.
-
-[📖 **Documentation**](https://portaltechnologiesinc.github.io/lib/) · [🚀 **Get Started**](https://hub.getportal.cc) · [🐳 Docker](https://hub.docker.com/r/getportal/sdk-daemon)
+[Documentation](https://portaltechnologiesinc.github.io/lib/) · [PortalHub](https://hub.getportal.cc) · [Docker image](https://hub.docker.com/r/getportal/sdk-daemon)
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-orange)](CHANGELOG.md)
@@ -15,21 +13,19 @@ No accounts. No KYC. No payment processor.
 
 ---
 
-Portal lets you add **authentication** and **payments** to your app — without collecting personal data.
+Users prove identity with keys. You charge in BTC (or priced in fiat) over Nostr. This repo is the **Rust workspace** behind the REST daemon, core protocol, and native building blocks.
 
-> **New here?** Start with the [documentation](https://portaltechnologiesinc.github.io/lib/) or create a free instance on [PortalHub](https://hub.getportal.cc).
-
-## What can you build?
-
-- **Authentication** — passwordless login via the Portal app → [Guide](https://portaltechnologiesinc.github.io/lib/platform/authentication.html)
-- **Payments** — single, recurring, invoice-based; BTC or fiat → [Guide](https://portaltechnologiesinc.github.io/lib/platform/single-payments.html)
-- **Digital tickets** — issue and verify Cashu tokens → [Guide](https://portaltechnologiesinc.github.io/lib/platform/cashu-tokens.html)
+| You want | Portal gives you |
+|----------|------------------|
+| Passwordless sign-in | Key handshake + Nostr; [auth guide](https://portaltechnologiesinc.github.io/lib/platform/authentication.html) |
+| One-off and recurring pay | Single and subscription flows; [payments](https://portaltechnologiesinc.github.io/lib/platform/single-payments.html) |
+| Tickets / tokens | Cashu paths; [tokens](https://portaltechnologiesinc.github.io/lib/platform/cashu-tokens.html) |
 
 ## Quick start
 
-The fastest way: create an instance on [PortalHub](https://hub.getportal.cc) — no servers needed.
+Fastest path: spin up a hosted instance on [PortalHub](https://hub.getportal.cc)—no server to run.
 
-Or self-host:
+Self-host the REST daemon:
 
 ```bash
 docker run -d -p 3000:3000 \
@@ -38,26 +34,33 @@ docker run -d -p 3000:3000 \
   getportal/sdk-daemon:0.4.2
 ```
 
-## SDKs
+Then `curl http://localhost:3000/health` should return `OK`.
 
-| Language | Install |
-|----------|---------|
-| TypeScript / JS | `npm install portal-sdk` |
+## Client SDKs
+
+| Where | Install / link |
+|-------|----------------|
+| TypeScript / JavaScript | `npm install portal-sdk` |
 | Java | [JitPack](https://jitpack.io/#PortalTechnologiesInc/java-sdk) |
-| Any language | [REST API](https://portaltechnologiesinc.github.io/lib/sdk/rest-api.html) — no SDK needed |
+| Anything with HTTP | [REST API](https://portaltechnologiesinc.github.io/lib/sdk/rest-api.html) |
 
-## Repository structure
+## Workspace layout
 
-| Crate | Description |
-|-------|-------------|
-| `portal-rest` | REST API daemon |
-| `portal` | Core protocol and conversation logic |
-| `portal-app` | App runtime and wallet integration |
-| `portal-wallet` | Wallet backends (NWC, Breez) |
-| `portal-rates` | Fiat/BTC exchange rates |
-| `clients/ts` | TypeScript SDK |
-| `portal-cli` | Dev/testing CLI tools |
+Rust crates live under `crates/`. The `portal` crate is not a top-level workspace member but is the shared core every service binary depends on.
+
+| Crate | What it is |
+|-------|------------|
+| [`portal`](crates/portal) | Protocol types, Nostr conversations, message router |
+| [`portal-rest`](crates/portal-rest) | `rest` binary: Bearer auth, streaming events, webhooks |
+| [`portal-app`](crates/portal-app) | Package **`app`**: UniFFI staticlib + runtime (wallet, relays, payment UI hooks) |
+| [`portal-wallet`](crates/portal-wallet) | `PortalWallet` implementations: NWC, Breez Spark |
+| [`portal-sdk`](crates/portal-sdk) | Async SDK: relay pool + high-level send/receive helpers |
+| [`portal-rates`](crates/portal-rates) | Fiat/BTC rates (multi-source, BlueWallet-style logic) |
+| [`portal-macros`](crates/portal-macros) | Build-time `fetch_git_hash!` and related macros |
+| [`portal-cli`](crates/portal-cli) | Small binaries for manual protocol and integration checks |
+| [`portal-app-demo`](crates/portal-app-demo) | Local Axum demo: multi-session HTTP API over `app` |
+| [`portal-rest/clients/ts`](crates/portal-rest/clients/ts) | TypeScript client |
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT — see [LICENSE](LICENSE).

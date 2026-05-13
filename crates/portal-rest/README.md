@@ -1,22 +1,6 @@
-# Portal REST API
+# `portal-rest`
 
-REST API server for Portal — authentication, payments,  and more. Use it via the [TypeScript SDK](https://www.npmjs.com/package/portal-sdk) or call the HTTP endpoints directly.
-
-> 📖 **[Full documentation](https://portaltechnologiesinc.github.io/lib/)** · 🚀 **[Get started with PortalHub](https://hub.getportal.cc)** (no self-hosting needed)
-
----
-
-## Architecture
-
-- **REST API** with Bearer token authentication
-- **Async operations** return a `stream_id`; poll via `GET /events/:stream_id?after=<index>`
-- **Webhook delivery** for real-time push notifications (HMAC-SHA256 signed)
-- **TypeScript SDK** available on npm (`portal-sdk`)
-- **Public endpoints** (no auth): `GET /health`, `GET /version`
-
-## Run the API
-
-**Docker (quick):**
+**HTTP surface for Portal:** Bearer-token auth, long-running jobs surfaced as pollable event streams, and optional webhooks (HMAC-signed). Ships as the `rest` binary.
 
 ```bash
 docker run -d -p 3000:3000 \
@@ -25,15 +9,26 @@ docker run -d -p 3000:3000 \
   getportal/sdk-daemon:latest
 ```
 
-Check: `curl http://localhost:3000/health` → `OK`, `curl http://localhost:3000/version` → `{"data":{"version":"...","git_commit":"..."}}`
+| Endpoint shape | What to expect |
+|----------------|----------------|
+| `GET /health` | Liveness, no auth |
+| `GET /version` | Build metadata, no auth |
+| Async work | Response includes `stream_id`; poll `GET /events/:stream_id?after=<index>` |
 
-**From source:**
+From this crate’s directory after a release build:
 
 ```bash
 cargo build --release
-./target/release/rest
+../../target/release/rest
 ```
 
-**Configuration:** Config file `~/.portal-rest/config.toml` (see `example.config.toml`) and environment variables `PORTAL__<SECTION>__<KEY>`. Full options: [Environment Variables](https://portaltechnologiesinc.github.io/lib/advanced/environment-variables.html) and [Docker Deployment](https://portaltechnologiesinc.github.io/lib/advanced/docker-deployment.html).
+Config: `~/.portal-rest/config.toml` plus `example.config.toml` in this folder. Environment keys use `PORTAL__<SECTION>__<KEY>`.
 
-> **Don't want to self-host?** Use [PortalHub](https://hub.getportal.cc) — create a hosted Portal instance in seconds.
+| Resource | Link |
+|----------|------|
+| Full docs | [portaltechnologiesinc.github.io/lib](https://portaltechnologiesinc.github.io/lib/) |
+| Env reference | [Environment variables](https://portaltechnologiesinc.github.io/lib/advanced/environment-variables.html) |
+| Docker | [Docker deployment](https://portaltechnologiesinc.github.io/lib/advanced/docker-deployment.html) |
+| TypeScript | npm package `portal-sdk` |
+
+Do not want to run a server? Use [PortalHub](https://hub.getportal.cc).
