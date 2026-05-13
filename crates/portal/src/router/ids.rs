@@ -112,11 +112,10 @@ impl FromStr for PortalConversationId {
             }
             CONVERSATION_ALIAS_ID_PREFIX => {
                 let rest = &s[2..];
-                if let Some((id, alias_str)) = rest.split_once('_') {
-                    if let Ok(alias) = alias_str.parse::<u64>() {
+                if let Some((id, alias_str)) = rest.split_once('_')
+                    && let Ok(alias) = alias_str.parse::<u64>() {
                         return Ok(PortalConversationId::ConversationAlias(id.to_string(), alias));
                     }
-                }
                 Err(ParseIdError)
             }
             _ => Err(ParseIdError),
@@ -192,7 +191,6 @@ impl PortalConversationId {
 /// assert_eq!(conv_id.to_string().len(), 33); // "p1" + 30 chars
 /// assert_eq!(alias_id.to_string(), "p2abc123_42");
 /// ```
-
 #[cfg(test)]
 mod tests {
     use super::*;

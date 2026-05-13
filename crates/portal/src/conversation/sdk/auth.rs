@@ -185,7 +185,7 @@ impl MultiKeySender for AuthChallengeSenderConversation {
         Ok(Response::new()
             .notify(AuthResponseEvent {
                 user_key,
-                recipient: event.pubkey.into(),
+                recipient: event.pubkey,
                 challenge: message.challenge.clone(),
                 status: message.status.clone(),
             })

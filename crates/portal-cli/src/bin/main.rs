@@ -223,7 +223,7 @@ async fn auth_challenge_loop(app: Arc<PortalApp>) {
         match app.next_auth_challenge().await {
             Ok(event) => {
                 info!("Received auth challenge: {:?}", event);
-                let _ = app.fetch_profile(event.service_key.clone()).await;
+                let _ = app.fetch_profile(event.service_key).await;
                 let status = AuthResponseStatus::Approved {
                     granted_permissions: vec![],
                     session_token: String::from("ABC"),

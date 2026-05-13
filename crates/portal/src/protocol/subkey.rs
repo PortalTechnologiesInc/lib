@@ -150,13 +150,10 @@ impl SubkeyMetadata {
         let tag = b"Portal/Subkey";
         let tag_hash: [u8; 32] = Sha256::digest(tag).into();
         let mut hasher = Sha256::new();
-        hasher.update(&tag_hash);
-        hasher.update(&tag_hash);
-        hasher.update(&self.canonical_bytes());
-        let hash: [u8; 32] = hasher
-            .finalize()
-            .try_into()
-            .map_err(|_| SubkeyError::InvalidMetadata)?;
+        hasher.update(tag_hash);
+        hasher.update(tag_hash);
+        hasher.update(self.canonical_bytes());
+        let hash: [u8; 32] = hasher.finalize().into();
         Scalar::from_be_bytes(hash).map_err(|_| SubkeyError::InvalidMetadata)
     }
 }

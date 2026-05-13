@@ -600,7 +600,7 @@ pub async fn request_invoice(
     let sid = stream_id.clone();
     tokio::spawn(async move {
         match sdk
-            .request_invoice(recipient_key.into(), subkeys, sdk_content)
+            .request_invoice(recipient_key, subkeys, sdk_content)
             .await
         {
             Ok(Some(resp)) => {

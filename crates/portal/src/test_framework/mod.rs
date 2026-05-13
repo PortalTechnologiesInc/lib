@@ -18,9 +18,12 @@ use crate::{
 
 pub mod logger;
 
+type SubscriberMap =
+    Arc<RwLock<HashMap<PortalConversationId, (Filter, mpsc::Sender<RelayPoolNotification>)>>>;
+
 /// A simulated channel that broadcasts messages to all connected nodes
 pub struct SimulatedChannel {
-    subscribers: Arc<RwLock<HashMap<PortalConversationId, (Filter, mpsc::Sender<RelayPoolNotification>)>>>,
+    subscribers: SubscriberMap,
     messages: Arc<Mutex<Vec<Event>>>,
     senders: Arc<Mutex<Vec<mpsc::Sender<RelayPoolNotification>>>>,
     receiver: Mutex<mpsc::Receiver<RelayPoolNotification>>,
@@ -70,7 +73,7 @@ pub enum SimulatedChannelError {
 impl Channel for SimulatedChannel {
     type Error = SimulatedChannelError;
 
-    async fn subscribe(&self, id: PortalSubscriptionId, filter: Filter) -> Result<usize, Self::Error> {
+    async fn subscribe(&self, _id: PortalSubscriptionId, filter: Filter) -> Result<usize, Self::Error> {
         let mut subscribers = self.subscribers.write().await;
         subscribers.insert(PortalConversationId::new_conversation(), (filter, self.my_sender.clone()));
         Ok(subscribers.len())
@@ -92,8 +95,8 @@ impl Channel for SimulatedChannel {
 
     async fn subscribe_to<I, U>(
         &self,
-        urls: I,
-        id: PortalSubscriptionId,
+        _urls: I,
+        _id: PortalSubscriptionId,
         filter: nostr::Filter,
     ) -> Result<(), Self::Error>
     where
@@ -110,7 +113,7 @@ impl Channel for SimulatedChannel {
         Ok(())
     }
 
-    async fn unsubscribe(&self, id: PortalSubscriptionId) -> Result<(), Self::Error> {
+    async fn unsubscribe(&self, _id: PortalSubscriptionId) -> Result<(), Self::Error> {
         self.subscribers.write().await.remove(&PortalConversationId::new_conversation());
         Ok(())
     }
@@ -174,7 +177,7 @@ impl Channel for SimulatedChannel {
         // Try to receive from our receiver
         let mut receiver = self.receiver.lock().await;
         if let Some(notification) = receiver.recv().await {
-            return Ok(notification);
+            Ok(notification)
         } else {
             Err(SimulatedChannelError::ChannelClosed)
         }
@@ -219,7 +222,7 @@ impl SimulatedNetwork {
 
     /// Start listening for messages on all nodes
     pub async fn start(&self) {
-        for (_, router) in self.nodes.iter() {
+        for router in self.nodes.values() {
             let router = Arc::clone(router);
             tokio::spawn(async move {
                 let _ = router.listen().await;
@@ -245,6 +248,7 @@ impl ScenarioBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub async fn with_conversation<C: Conversation + Send + Sync + 'static>(
         self,
         node_id: &str,
@@ -257,10 +261,10 @@ impl ScenarioBuilder {
                 .map_err(|e| match e {
                     MessageRouterActorError::Conversation(ce) => ce,
                     MessageRouterActorError::Channel(_) => ConversationError::Inner(Box::new(
-                        std::io::Error::new(std::io::ErrorKind::Other, "Channel error"),
+                        std::io::Error::other("Channel error"),
                     )),
                     MessageRouterActorError::Receiver(_) => ConversationError::Inner(Box::new(
-                        std::io::Error::new(std::io::ErrorKind::Other, "Receiver error"),
+                        std::io::Error::other("Receiver error"),
                     )),
                 })?;
         }

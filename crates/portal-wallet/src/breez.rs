@@ -169,26 +169,22 @@ impl PortalWallet for BreezSparkWallet {
                 })
                 .await?;
 
-            if list_payments_response.payments.len() == 0 {
+            if list_payments_response.payments.is_empty() {
                 break;
             }
 
             for payment in list_payments_response.payments.iter() {
-                match &payment.details {
-                    Some(PaymentDetails::Lightning {
+                if let Some(PaymentDetails::Lightning {
                         invoice: payment_invoice,
                         preimage,
                         ..
-                    }) => {
-                        if invoice == *payment_invoice {
-                            return Ok((
-                                payment.status == PaymentStatus::Completed,
-                                preimage.clone(),
-                            ));
-                        }
+                    }) = &payment.details
+                    && invoice == *payment_invoice {
+                        return Ok((
+                            payment.status == PaymentStatus::Completed,
+                            preimage.clone(),
+                        ));
                     }
-                    _ => {}
-                }
             }
 
             if list_payments_response.payments.len() < batch_size as usize {

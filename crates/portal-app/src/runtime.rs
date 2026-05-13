@@ -8,9 +8,18 @@ use std::{
 
 use tokio::sync::oneshot;
 
+type SpawnedTask = Pin<Box<dyn Future<Output = ()> + Send>>;
+type TaskQueue = Arc<Mutex<VecDeque<SpawnedTask>>>;
+
 pub struct BindingsRuntime {
-    tasks: Arc<Mutex<VecDeque<Pin<Box<dyn Future<Output = ()> + Send>>>>>,
+    tasks: TaskQueue,
     waker: Arc<Mutex<Option<Waker>>>,
+}
+
+impl Default for BindingsRuntime {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BindingsRuntime {
@@ -52,7 +61,7 @@ impl BindingsRuntime {
 }
 
 pub struct RuntimePoller {
-    tasks: Arc<Mutex<VecDeque<Pin<Box<dyn Future<Output = ()> + Send>>>>>,
+    tasks: TaskQueue,
     waker: Arc<Mutex<Option<Waker>>>,
 }
 

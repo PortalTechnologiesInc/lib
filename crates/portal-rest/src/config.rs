@@ -16,6 +16,8 @@ pub struct Settings {
     pub database: DatabaseSettings,
     #[serde(default)]
     pub profile: ProfileSettings,
+    /// Used when the `task-tracing` feature is off (see `main` tracing init).
+    #[cfg_attr(feature = "task-tracing", allow(dead_code))]
     #[serde(default)]
     pub logging: LoggingSettings,
 }
@@ -24,6 +26,7 @@ pub struct Settings {
 pub struct LoggingSettings {
     /// `tracing` / `RUST_LOG` filter (e.g. `info`, `debug`, `portal_rest=debug`).
     /// Used only when `RUST_LOG` is not set in the process environment.
+    #[cfg_attr(feature = "task-tracing", allow(dead_code))]
     #[serde(default = "default_log_filter")]
     pub filter: String,
 }
@@ -110,30 +113,19 @@ pub enum LnBackend {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[derive(Default)]
 pub struct NwcSettings {
     pub url: String,
 }
 
-impl Default for NwcSettings {
-    fn default() -> Self {
-        Self { url: String::new() }
-    }
-}
 
 #[derive(Deserialize, Debug, Clone)]
+#[derive(Default)]
 pub struct BreezSettings {
     pub api_key: String,
     pub mnemonic: String,
 }
 
-impl Default for BreezSettings {
-    fn default() -> Self {
-        Self {
-            api_key: String::new(),
-            mnemonic: String::new(),
-        }
-    }
-}
 
 impl Settings {
     pub fn load() -> anyhow::Result<Self> {

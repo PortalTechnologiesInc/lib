@@ -119,7 +119,7 @@ impl MultiKeyListener for InvoiceReceiverConversation {
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         let sender_key = if let Some(subkey_proof) = state.subkey_proof.clone() {
-            if let Err(_) = subkey_proof.verify(&event.pubkey) {
+            if subkey_proof.verify(&event.pubkey).is_err() {
                 return Ok(Response::default());
             }
 

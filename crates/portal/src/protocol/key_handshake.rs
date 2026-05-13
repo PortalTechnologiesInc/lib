@@ -127,7 +127,7 @@ impl FromStr for KeyHandshakeUrl {
             main_key: PublicKey::from(main_key),
             relays,
             token,
-            subkey: subkey.map(|k| PublicKey::from(k)),
+            subkey: subkey.map(PublicKey::from),
             no_request,
         })
     }

@@ -19,7 +19,7 @@ async fn main() -> Result<(), CliError> {
     )
     .await?;
 
-    let token = keypair0.issue_jwt(keypair1.public_key(), 1 as i64)?;
+    let token = keypair0.issue_jwt(keypair1.public_key(), 1_i64)?;
 
     log::info!("Token: {}", token);
 

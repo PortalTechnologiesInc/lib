@@ -80,6 +80,7 @@ enum Source {
     Bitstamp,
     Coinbase,
     CoinGecko,
+    #[allow(clippy::upper_case_acronyms)]
     BNR,
     Kraken,
     CoinDesk,
@@ -195,7 +196,7 @@ impl MarketAPI {
             Source::CoinGecko => {
                 let val = v
                     .get("bitcoin")
-                    .and_then(|btc| btc.get(&key.to_lowercase()))
+                    .and_then(|btc| btc.get(key.to_lowercase()))
                     .ok_or(RatesError::MissingCoinGeckoPrice)?;
                 Ok(val.to_string())
             }
@@ -225,7 +226,7 @@ impl MarketAPI {
             Source::Kraken => {
                 let val = v
                     .get("result")
-                    .and_then(|r| r.get(&format!("XXBTZ{}", key.to_uppercase())))
+                    .and_then(|r| r.get(format!("XXBTZ{}", key.to_uppercase())))
                     .and_then(|pair| pair.get("c"))
                     .and_then(|c| c.get(0))
                     .and_then(Value::as_str)
@@ -234,7 +235,7 @@ impl MarketAPI {
             }
             Source::CoinDesk => {
                 let val = v
-                    .get(&key.to_uppercase())
+                    .get(key.to_uppercase())
                     .ok_or(RatesError::MissingCoinDeskField)?;
                 Ok(val.to_string())
             }
@@ -362,7 +363,7 @@ impl MarketAPI {
         if let Ok(rate) = price_str.parse::<f64>() {
             let data = MarketData {
                 price: format!("{} {:.0}", unit.symbol, rate),
-                rate: rate,
+                rate,
                 source: used_source.to_string(),
             };
             log::debug!("Market data fetched in {:?}", start.elapsed());
@@ -422,9 +423,9 @@ async fn test_fallback_primary_success() -> Result<(), RatesError> {
 
     let (price, used_source) = MarketAPI::resolve_price_with_fallback_with_fetcher(&unit, move |source, _key| {
         let attempts = attempts_closure.clone();
-        let source = source.clone();
+        let source = *source;
         async move {
-            attempts.lock().unwrap().push(source.clone());
+            attempts.lock().unwrap().push(source);
             if source == Source::Kraken {
                 Ok(Some("60000.0".to_string()))
             } else {
@@ -453,9 +454,9 @@ async fn test_fallback_primary_fail_then_success() -> Result<(), RatesError> {
 
     let (price, used_source) = MarketAPI::resolve_price_with_fallback_with_fetcher(&unit, move |source, _key| {
         let attempts = attempts_closure.clone();
-        let source = source.clone();
+        let source = *source;
         async move {
-            attempts.lock().unwrap().push(source.clone());
+            attempts.lock().unwrap().push(source);
             match source {
                 Source::Kraken => Err(RatesError::HttpRequest("kraken down".to_string())),
                 Source::CoinGecko => Ok(Some("61000.0".to_string())),
@@ -487,7 +488,7 @@ async fn test_fallback_all_fail() {
 
     let result = MarketAPI::resolve_price_with_fallback_with_fetcher(&unit, move |source, _key| {
         let attempts = attempts_closure.clone();
-        let source = source.clone();
+        let source = *source;
         async move {
             attempts.lock().unwrap().push(source);
             Ok(None)

@@ -42,6 +42,10 @@ pub struct EventSendResult {
     pub outcome: SendOutcome,
 }
 
+type AddAndSubscribeResponseTx = oneshot::Sender<
+    Result<(NotificationStream<serde_json::Value>, Vec<EventSendResult>), ConversationError>,
+>;
+
 #[derive(thiserror::Error, Debug)]
 pub enum MessageRouterActorError {
     #[error("Channel error: {0}")]
@@ -53,6 +57,7 @@ pub enum MessageRouterActorError {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum MessageRouterActorMessage {
     AddRelay(String, bool, oneshot::Sender<Result<(), ConversationError>>),
     RemoveRelay(String, oneshot::Sender<Result<(), ConversationError>>),
@@ -70,10 +75,7 @@ pub enum MessageRouterActorMessage {
         PortalConversationId,
         oneshot::Sender<Result<NotificationStream<serde_json::Value>, ConversationError>>,
     ),
-    AddAndSubscribe(
-        ConversationBox,
-        oneshot::Sender<Result<(NotificationStream<serde_json::Value>, Vec<EventSendResult>), ConversationError>>,
-    ),
+    AddAndSubscribe(ConversationBox, AddAndSubscribeResponseTx),
     Ping(oneshot::Sender<()>),
 
     /// This is used to handle relay pool notifications.
@@ -260,7 +262,7 @@ where
         ))
         .await?;
         let result: Result<(), ConversationError> =
-            rx.await.map_err(|e| MessageRouterActorError::Receiver(e))?;
+            rx.await.map_err(MessageRouterActorError::Receiver)?;
         result.map_err(MessageRouterActorError::Conversation)
     }
 
@@ -269,7 +271,7 @@ where
         self.send_message(MessageRouterActorMessage::RemoveRelay(url, tx))
             .await?;
         let result: Result<(), ConversationError> =
-            rx.await.map_err(|e| MessageRouterActorError::Receiver(e))?;
+            rx.await.map_err(MessageRouterActorError::Receiver)?;
         result.map_err(MessageRouterActorError::Conversation)
     }
 
@@ -278,7 +280,7 @@ where
         self.send_message(MessageRouterActorMessage::Shutdown(tx))
             .await?;
         let result: Result<(), ConversationError> =
-            rx.await.map_err(|e| MessageRouterActorError::Receiver(e))?;
+            rx.await.map_err(MessageRouterActorError::Receiver)?;
         result.map_err(MessageRouterActorError::Conversation)
     }
 
@@ -286,8 +288,8 @@ where
         let (tx, rx) = oneshot::channel();
         self.send_message(MessageRouterActorMessage::Ping(tx))
             .await?;
-        let result = rx.await.map_err(|e| MessageRouterActorError::Receiver(e))?;
-        Ok(result)
+        rx.await.map_err(MessageRouterActorError::Receiver)?;
+        Ok(())
     }
 
     pub async fn add_conversation(
@@ -300,7 +302,7 @@ where
         let (tx, rx) = oneshot::channel();
         self.send_message(MessageRouterActorMessage::AddConversation(conversation, tx))
             .await?;
-        let result = rx.await.map_err(|e| MessageRouterActorError::Receiver(e))?;
+        let result = rx.await.map_err(MessageRouterActorError::Receiver)?;
         result.map_err(MessageRouterActorError::Conversation)
     }
 
@@ -316,7 +318,7 @@ where
             tx,
         ))
         .await?;
-        let result = rx.await.map_err(|e| MessageRouterActorError::Receiver(e))?;
+        let result = rx.await.map_err(MessageRouterActorError::Receiver)?;
         result.map_err(MessageRouterActorError::Conversation)
     }
 
@@ -363,7 +365,7 @@ where
         let (tx, rx) = oneshot::channel();
         self.send_message(MessageRouterActorMessage::SubscribeToServiceRequest(id, tx))
             .await?;
-        let result = rx.await.map_err(|e| MessageRouterActorError::Receiver(e))?;
+        let result = rx.await.map_err(MessageRouterActorError::Receiver)?;
         result.map_err(MessageRouterActorError::Conversation)
     }
 
@@ -387,7 +389,7 @@ where
         let (tx, rx) = oneshot::channel();
         self.send_message(MessageRouterActorMessage::AddAndSubscribe(conversation, tx))
             .await?;
-        let result = rx.await.map_err(|e| MessageRouterActorError::Receiver(e))?;
+        let result = rx.await.map_err(MessageRouterActorError::Receiver)?;
         result.map_err(MessageRouterActorError::Conversation)
     }
 }
@@ -433,18 +435,17 @@ impl MessageRouterActorState {
 
                     // Collect aliases
                     for alias in conv_state.aliases() {
-                        if let Some(alias_state) = self.conversations.get(&alias) {
-                            if let Some(filter) = &alias_state.filter {
+                        if let Some(alias_state) = self.conversations.get(alias)
+                            && let Some(filter) = &alias_state.filter {
                                 aliases_to_subscribe.push((alias, filter.clone(), conv_state.subscription_id.clone()));
                             }
-                        }
                     }
                 }
             }
 
             // Subscribe to the new relay
             for (conversation_id, filter, subscription_id) in global_conversations {
-                log::trace!("Subscribing {} to new relay = {:?}", conversation_id, &url);
+                log::trace!("Subscribing {} to new relay = {:?}", conversation_id, url);
                 channel
                     .subscribe_to(vec![url.clone()], subscription_id.clone(), filter)
                     .await
@@ -589,6 +590,7 @@ impl MessageRouterActorState {
         // Try to drain any events that were queued while we were disconnected.
         self.flush_pending_events(channel, opt_relay_url.as_ref()).await;
 
+        #[allow(clippy::large_enum_variant)]
         enum LocalEvent {
             Message(Event),
             EndOfStoredEvents,
@@ -666,9 +668,9 @@ impl MessageRouterActorState {
                 }
 
                 if let Ok(content) =
-                    nip44::decrypt(&self.keypair.secret_key(), &event.pubkey, &event.content)
+                    nip44::decrypt(self.keypair.secret_key(), &event.pubkey, &event.content)
                 {
-                    let cleartext = match CleartextEvent::new(&event, &content) {
+                    let cleartext = match CleartextEvent::new(event, &content) {
                         Ok(cleartext) => cleartext,
                         Err(e) => {
                             log::warn!("Invalid JSON in event: {:?}", e);
@@ -680,7 +682,7 @@ impl MessageRouterActorState {
                 } else if let Ok(cleartext) =
                     serde_json::from_str::<serde_json::Value>(&event.content)
                 {
-                    ConversationMessage::Cleartext(CleartextEvent::new_json(&event, cleartext))
+                    ConversationMessage::Cleartext(CleartextEvent::new_json(event, cleartext))
                 } else {
                     ConversationMessage::Encrypted(event.clone())
                 }
@@ -713,13 +715,11 @@ impl MessageRouterActorState {
                 continue;
             }
 
-            if let LocalEvent::Message(event) = &event {
-                if let Some(filter) = &conv_state.filter {
-                    if filter.match_event(&event, MatchEventOptions::default()) {
+            if let LocalEvent::Message(event) = &event
+                && let Some(filter) = &conv_state.filter
+                    && filter.match_event(event, MatchEventOptions::default()) {
                         other_conversations.push(conv_state.subscription_id.clone());
                     }
-                }
-            }
         }
 
         for id in to_cleanup {
@@ -842,8 +842,8 @@ impl MessageRouterActorState {
             } else {
                 for pubkey in response_entry.recepient_keys.iter() {
                     let content = nip44::encrypt(
-                        &self.keypair.secret_key(),
-                        &pubkey,
+                        self.keypair.secret_key(),
+                        pubkey,
                         serde_json::to_string(&response_entry.content)
                             .map_err(|e| ConversationError::Inner(Box::new(e)))?,
                         nip44::Version::V2,

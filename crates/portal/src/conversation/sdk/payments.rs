@@ -196,11 +196,10 @@ impl MultiKeySender for SinglePaymentRequestSenderConversation {
     ) -> Result<Response, Self::Error> {
         if message.request_id == state.payment_request.request_id {
             // TODO: it looks like we are getting duplicated messages, do this as a temporary measure
-            if let Some(last_status) = &state.last_status {
-                if last_status == &message.status {
+            if let Some(last_status) = &state.last_status
+                && last_status == &message.status {
                     return Ok(Response::default());
                 }
-            }
 
             let mut response = Response::new().notify(message.clone());
 

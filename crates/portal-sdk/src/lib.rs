@@ -210,7 +210,7 @@ impl PortalSDK {
         let _ = self
             .router
             .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                self.router.keypair().public_key().into(),
+                self.router.keypair().public_key(),
                 vec![],
                 conv,
             )))
@@ -286,7 +286,7 @@ impl PortalSDK {
         duration: Duration,
     ) -> Result<String, PortalSDKError> {
         let token =
-            portal::protocol::jwt::encode(&self.router.keypair().secret_key(), claims, duration)
+            portal::protocol::jwt::encode(self.router.keypair().secret_key(), claims, duration)
                 .map_err(PortalSDKError::JwtError)?;
         Ok(token)
     }

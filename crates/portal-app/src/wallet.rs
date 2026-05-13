@@ -103,11 +103,10 @@ pub async fn parse_cashu_token(token_str: &str) -> Result<TokenInfo, CashuWallet
             .unit()
             .ok_or_else(|| CashuWalletError::WalletError("Unit not found".to_string()))?
             .to_string(),
-        amount: token
+        amount: *token
             .value()
             .map_err(|e| CashuWalletError::WalletError(e.to_string()))?
-            .as_ref()
-            .clone(),
+            .as_ref(),
     })
 }
 
@@ -156,7 +155,7 @@ impl CashuWallet {
     pub async fn get_balance(self: Arc<Self>) -> Result<u64, CashuWalletError> {
         async_utility::task::spawn(async move {
             let balance = self.inner.total_balance().await?;
-            Ok(balance.as_ref().clone())
+            Ok(*balance.as_ref())
         })
         .join()
         .await
@@ -173,7 +172,7 @@ impl CashuWallet {
                 .inner
                 .receive(&token_str, cdk::wallet::ReceiveOptions::default())
                 .await?;
-            Ok(received_amount.as_ref().clone())
+            Ok(*received_amount.as_ref())
         })
         .join()
         .await
@@ -233,7 +232,7 @@ impl CashuWallet {
     pub async fn restore_proofs(self: Arc<Self>) -> Result<u64, CashuWalletError> {
         async_utility::task::spawn(async move {
             let restored_amount = self.inner.restore().await?;
-            Ok(restored_amount.as_ref().clone())
+            Ok(*restored_amount.as_ref())
         })
         .join()
         .await
@@ -365,8 +364,7 @@ impl WalletDatabase for AppCashuLocalStore {
             )
             .await
             .map_err(|e| {
-                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                     e.to_string(),
                 )))
             })?;
@@ -397,8 +395,7 @@ impl WalletDatabase for AppCashuLocalStore {
             .update_proofs(added_strings, removed_strings)
             .await
             .map_err(|e| {
-                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                     e.to_string(),
                 )))
             })
@@ -416,8 +413,7 @@ impl WalletDatabase for AppCashuLocalStore {
             .update_proofs_state(ys_strings, state_string)
             .await
             .map_err(|e| {
-                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                     e.to_string(),
                 )))
             })
@@ -438,8 +434,7 @@ impl WalletDatabase for AppCashuLocalStore {
             )
             .await
             .map_err(|e| {
-                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                     e.to_string(),
                 )))
             })
@@ -457,7 +452,7 @@ impl WalletDatabase for AppCashuLocalStore {
                 .map_err(|e| cdk::cdk_database::Error::Database(Box::new(e))),
             Ok(None) => Ok(None),
             Err(e) => Err(cdk::cdk_database::Error::Database(Box::new(
-                std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                std::io::Error::other(e.to_string()),
             ))),
         }
     }
@@ -477,8 +472,7 @@ impl WalletDatabase for AppCashuLocalStore {
             .list_transactions(mint_url_string, direction_string, unit_string)
             .await
             .map_err(|e| {
-                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                     e.to_string(),
                 )))
             })?;
@@ -502,8 +496,7 @@ impl WalletDatabase for AppCashuLocalStore {
             .remove_transaction(transaction_id_string)
             .await
             .map_err(|e| {
-                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                     e.to_string(),
                 )))
             })
@@ -522,8 +515,7 @@ impl WalletDatabase for AppCashuLocalStore {
             .add_mint(mint_url_string, mint_info_string)
             .await
             .map_err(|e| {
-                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                     e.to_string(),
                 )))
             })
@@ -533,8 +525,7 @@ impl WalletDatabase for AppCashuLocalStore {
         let mint_url_string = mint_url.to_string();
 
         self.inner.remove_mint(mint_url_string).await.map_err(|e| {
-            cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                 e.to_string(),
             )))
         })
@@ -552,7 +543,7 @@ impl WalletDatabase for AppCashuLocalStore {
                 .map_err(|e| cdk::cdk_database::Error::Database(Box::new(e))),
             Ok(None) => Ok(None),
             Err(e) => Err(cdk::cdk_database::Error::Database(Box::new(
-                std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                std::io::Error::other(e.to_string()),
             ))),
         }
     }
@@ -564,8 +555,7 @@ impl WalletDatabase for AppCashuLocalStore {
         Self::Err,
     > {
         let mint_urls = self.inner.get_mints().await.map_err(|e| {
-            cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                 e.to_string(),
             )))
         })?;
@@ -574,8 +564,7 @@ impl WalletDatabase for AppCashuLocalStore {
         for mint_url_string in mint_urls {
             let mint_url =
                 cdk_common::mint_url::MintUrl::from_str(&mint_url_string).map_err(|e| {
-                    cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
+                    cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                         e.to_string(),
                     )))
                 })?;
@@ -592,7 +581,7 @@ impl WalletDatabase for AppCashuLocalStore {
                 }
                 Err(e) => {
                     return Err(cdk::cdk_database::Error::Database(Box::new(
-                        std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                        std::io::Error::other(e.to_string()),
                     )));
                 }
             }
@@ -613,8 +602,7 @@ impl WalletDatabase for AppCashuLocalStore {
             .update_mint_url(old_mint_url_string, new_mint_url_string)
             .await
             .map_err(|e| {
-                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                     e.to_string(),
                 )))
             })
@@ -635,8 +623,7 @@ impl WalletDatabase for AppCashuLocalStore {
             .add_mint_keysets(mint_url_string, keysets_strings)
             .await
             .map_err(|e| {
-                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                     e.to_string(),
                 )))
             })
@@ -659,7 +646,7 @@ impl WalletDatabase for AppCashuLocalStore {
             }
             Ok(None) => Ok(None),
             Err(e) => Err(cdk::cdk_database::Error::Database(Box::new(
-                std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                std::io::Error::other(e.to_string()),
             ))),
         }
     }
@@ -676,7 +663,7 @@ impl WalletDatabase for AppCashuLocalStore {
                 .map_err(|e| cdk::cdk_database::Error::Database(Box::new(e))),
             Ok(None) => Ok(None),
             Err(e) => Err(cdk::cdk_database::Error::Database(Box::new(
-                std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                std::io::Error::other(e.to_string()),
             ))),
         }
     }
@@ -685,8 +672,7 @@ impl WalletDatabase for AppCashuLocalStore {
         let keyset_string = serde_json::to_string(&keyset).unwrap_or_default();
 
         self.inner.add_keys(keyset_string).await.map_err(|e| {
-            cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                 e.to_string(),
             )))
         })
@@ -701,7 +687,7 @@ impl WalletDatabase for AppCashuLocalStore {
                 .map_err(|e| cdk::cdk_database::Error::Database(Box::new(e))),
             Ok(None) => Ok(None),
             Err(e) => Err(cdk::cdk_database::Error::Database(Box::new(
-                std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                std::io::Error::other(e.to_string()),
             ))),
         }
     }
@@ -710,8 +696,7 @@ impl WalletDatabase for AppCashuLocalStore {
         let id_string = id.to_string();
 
         self.inner.remove_keys(id_string).await.map_err(|e| {
-            cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                 e.to_string(),
             )))
         })
@@ -728,8 +713,7 @@ impl WalletDatabase for AppCashuLocalStore {
             .increment_keyset_counter(keyset_id_string, count)
             .await
             .map_err(|e| {
-                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                     e.to_string(),
                 )))
             })
@@ -745,8 +729,7 @@ impl WalletDatabase for AppCashuLocalStore {
             .get_keyset_counter(keyset_id_string)
             .await
             .map_err(|e| {
-                cdk::cdk_database::Error::Database(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                cdk::cdk_database::Error::Database(Box::new(std::io::Error::other(
                     e.to_string(),
                 )))
             })

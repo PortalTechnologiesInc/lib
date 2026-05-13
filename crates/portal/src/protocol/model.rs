@@ -532,9 +532,9 @@ pub mod bindings {
             PublicKey(key)
         }
     }
-    impl Into<nostr::PublicKey> for PublicKey {
-        fn into(self) -> nostr::PublicKey {
-            self.0
+    impl From<PublicKey> for nostr::PublicKey {
+        fn from(val: PublicKey) -> Self {
+            val.0
         }
     }
 

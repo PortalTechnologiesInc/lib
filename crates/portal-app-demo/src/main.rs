@@ -945,7 +945,7 @@ async fn api_handshake(
         reply: r,
     })
     .await?;
-    result.map_err(|e| ApiError::internal(e))?;
+    result.map_err(ApiError::internal)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -962,7 +962,7 @@ async fn api_accept(
     Path(pubkey_hex): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let result = send_cmd(&global, &pubkey_hex, |r| ActorCmd::AcceptPayment { reply: r }).await?;
-    result.map_err(|e| ApiError::internal(e))?;
+    result.map_err(ApiError::internal)?;
     Ok(StatusCode::OK)
 }
 
@@ -976,7 +976,7 @@ async fn api_reject(
         reply: r,
     })
     .await?;
-    result.map_err(|e| ApiError::internal(e))?;
+    result.map_err(ApiError::internal)?;
     Ok(StatusCode::OK)
 }
 
@@ -998,7 +998,7 @@ async fn api_invoice_reply(
         reply: r,
     })
     .await?;
-    result.map_err(|e| ApiError::internal(e))?;
+    result.map_err(ApiError::internal)?;
     Ok(StatusCode::OK)
 }
 

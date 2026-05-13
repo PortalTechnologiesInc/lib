@@ -84,7 +84,7 @@ where
                         .into_iter()
                         .collect();
                     Ok(Response::new().reply_to(
-                        event.pubkey.into(),
+                        event.pubkey,
                         Kind::Custom(SUBKEY_PROOF),
                         tags,
                         subkey_proof,

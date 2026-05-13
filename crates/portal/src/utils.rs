@@ -30,7 +30,7 @@ pub async fn verify_nip05(nip05: &str, main_key: &PublicKey) -> bool {
         Err(_) => return false,
     };
 
-    nostr::nips::nip05::verify_from_json(&main_key, &address, &nip05)
+    nostr::nips::nip05::verify_from_json(main_key, &address, &nip05)
 }
 
 #[cfg(feature = "profile-service")]

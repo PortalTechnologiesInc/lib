@@ -16,6 +16,8 @@ use serde::Serialize;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn, error};
+#[cfg(not(feature = "task-tracing"))]
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod command;
 mod config;
@@ -27,8 +29,6 @@ mod webhook;
 
 // Re-export the portal types that we need
 pub use portal::nostr::key::PublicKey;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 use portal_wallet::PortalWallet;
 use portal_macros::fetch_git_hash;
@@ -39,6 +39,7 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_COMMIT: &str = fetch_git_hash!();
 
 #[derive(Debug, thiserror::Error)]
+#[allow(clippy::enum_variant_names)]
 enum ApiError {
     #[error("Authentication failed: {0}")]
     AuthenticationError(String),
@@ -252,7 +253,7 @@ async fn setup_background_listeners(state: &AppState) {
             let already_registered = match &registered_file {
                 Ok(path) => tokio::fs::read_to_string(path)
                     .await
-                    .map(|s| s.trim().to_string() == nip05.trim())
+                    .map(|s| s.trim() == nip05.trim())
                     .unwrap_or(false),
                 Err(_) => false,
             };

@@ -94,18 +94,14 @@ impl<const MIN: u32, const MAX: u32> TimeComponent<MIN, MAX> {
                 let step = step.unwrap_or(1);
                 if v < *start || v > *end {
                     false
-                } else if (v - *start) % step != 0 {
-                    false
-                } else {
-                    true
-                }
+                } else { (v - *start).is_multiple_of(step) }
             }
         }
     }
 
     pub fn iter(&self, from: Option<u32>) -> Box<dyn Iterator<Item = u32>> {
         match self {
-            TimeComponent::Any => Box::new((from.unwrap_or(MIN)..=MAX).into_iter()),
+            TimeComponent::Any => Box::new(from.unwrap_or(MIN)..=MAX),
             TimeComponent::Values(values) => {
                 let pos = match values.binary_search(&from.unwrap_or(MIN)) {
                     Ok(i) => i,
@@ -380,12 +376,12 @@ impl Calendar {
     pub fn minutely(timezone: Option<chrono_tz::Tz>) -> Self {
         Calendar {
             weekdays: None,
-            year: TimeComponent::Any.into(),
-            month: TimeComponent::Any.into(),
-            day: TimeComponent::Any.into(),
-            hour: TimeComponent::Any.into(),
-            minute: TimeComponent::Any.into(),
-            second: TimeComponent::Values(vec![0]).into(),
+            year: TimeComponent::Any,
+            month: TimeComponent::Any,
+            day: TimeComponent::Any,
+            hour: TimeComponent::Any,
+            minute: TimeComponent::Any,
+            second: TimeComponent::Values(vec![0]),
             timezone,
         }
     }
@@ -393,12 +389,12 @@ impl Calendar {
     pub fn hourly(timezone: Option<chrono_tz::Tz>) -> Self {
         Calendar {
             weekdays: None,
-            year: TimeComponent::Any.into(),
-            month: TimeComponent::Any.into(),
-            day: TimeComponent::Any.into(),
-            hour: TimeComponent::Any.into(),
-            minute: TimeComponent::Values(vec![0]).into(),
-            second: TimeComponent::Values(vec![0]).into(),
+            year: TimeComponent::Any,
+            month: TimeComponent::Any,
+            day: TimeComponent::Any,
+            hour: TimeComponent::Any,
+            minute: TimeComponent::Values(vec![0]),
+            second: TimeComponent::Values(vec![0]),
             timezone,
         }
     }
@@ -406,12 +402,12 @@ impl Calendar {
     pub fn daily(timezone: Option<chrono_tz::Tz>) -> Self {
         Calendar {
             weekdays: None,
-            year: TimeComponent::Any.into(),
-            month: TimeComponent::Any.into(),
-            day: TimeComponent::Any.into(),
-            hour: TimeComponent::Values(vec![0]).into(),
-            minute: TimeComponent::Values(vec![0]).into(),
-            second: TimeComponent::Values(vec![0]).into(),
+            year: TimeComponent::Any,
+            month: TimeComponent::Any,
+            day: TimeComponent::Any,
+            hour: TimeComponent::Values(vec![0]),
+            minute: TimeComponent::Values(vec![0]),
+            second: TimeComponent::Values(vec![0]),
             timezone,
         }
     }
@@ -419,12 +415,12 @@ impl Calendar {
     pub fn weekly(timezone: Option<chrono_tz::Tz>) -> Self {
         Calendar {
             weekdays: Some(vec![Weekday::Mon]),
-            year: TimeComponent::Any.into(),
-            month: TimeComponent::Any.into(),
-            day: TimeComponent::Any.into(),
-            hour: TimeComponent::Values(vec![0]).into(),
-            minute: TimeComponent::Values(vec![0]).into(),
-            second: TimeComponent::Values(vec![0]).into(),
+            year: TimeComponent::Any,
+            month: TimeComponent::Any,
+            day: TimeComponent::Any,
+            hour: TimeComponent::Values(vec![0]),
+            minute: TimeComponent::Values(vec![0]),
+            second: TimeComponent::Values(vec![0]),
             timezone,
         }
     }
@@ -432,12 +428,12 @@ impl Calendar {
     pub fn monthly(timezone: Option<chrono_tz::Tz>) -> Self {
         Calendar {
             weekdays: None,
-            year: TimeComponent::Any.into(),
-            month: TimeComponent::Any.into(),
-            day: TimeComponent::Values(vec![1]).into(),
-            hour: TimeComponent::Values(vec![0]).into(),
-            minute: TimeComponent::Values(vec![0]).into(),
-            second: TimeComponent::Values(vec![0]).into(),
+            year: TimeComponent::Any,
+            month: TimeComponent::Any,
+            day: TimeComponent::Values(vec![1]),
+            hour: TimeComponent::Values(vec![0]),
+            minute: TimeComponent::Values(vec![0]),
+            second: TimeComponent::Values(vec![0]),
             timezone,
         }
     }
@@ -445,12 +441,12 @@ impl Calendar {
     pub fn yearly(timezone: Option<chrono_tz::Tz>) -> Self {
         Calendar {
             weekdays: None,
-            year: TimeComponent::Any.into(),
-            month: TimeComponent::Values(vec![1]).into(),
-            day: TimeComponent::Values(vec![1]).into(),
-            hour: TimeComponent::Values(vec![0]).into(),
-            minute: TimeComponent::Values(vec![0]).into(),
-            second: TimeComponent::Values(vec![0]).into(),
+            year: TimeComponent::Any,
+            month: TimeComponent::Values(vec![1]),
+            day: TimeComponent::Values(vec![1]),
+            hour: TimeComponent::Values(vec![0]),
+            minute: TimeComponent::Values(vec![0]),
+            second: TimeComponent::Values(vec![0]),
             timezone,
         }
     }
@@ -458,12 +454,12 @@ impl Calendar {
     pub fn quarterly(timezone: Option<chrono_tz::Tz>) -> Self {
         Calendar {
             weekdays: None,
-            year: TimeComponent::Any.into(),
-            month: TimeComponent::Values(vec![1, 4, 7, 10]).into(),
-            day: TimeComponent::Values(vec![1]).into(),
-            hour: TimeComponent::Values(vec![0]).into(),
-            minute: TimeComponent::Values(vec![0]).into(),
-            second: TimeComponent::Values(vec![0]).into(),
+            year: TimeComponent::Any,
+            month: TimeComponent::Values(vec![1, 4, 7, 10]),
+            day: TimeComponent::Values(vec![1]),
+            hour: TimeComponent::Values(vec![0]),
+            minute: TimeComponent::Values(vec![0]),
+            second: TimeComponent::Values(vec![0]),
             timezone,
         }
     }
@@ -471,12 +467,12 @@ impl Calendar {
     pub fn semiannually(timezone: Option<chrono_tz::Tz>) -> Self {
         Calendar {
             weekdays: None,
-            year: TimeComponent::Any.into(),
-            month: TimeComponent::Values(vec![1, 7]).into(),
-            day: TimeComponent::Values(vec![1]).into(),
-            hour: TimeComponent::Values(vec![0]).into(),
-            minute: TimeComponent::Values(vec![0]).into(),
-            second: TimeComponent::Values(vec![0]).into(),
+            year: TimeComponent::Any,
+            month: TimeComponent::Values(vec![1, 7]),
+            day: TimeComponent::Values(vec![1]),
+            hour: TimeComponent::Values(vec![0]),
+            minute: TimeComponent::Values(vec![0]),
+            second: TimeComponent::Values(vec![0]),
             timezone,
         }
     }
@@ -517,35 +513,30 @@ impl Calendar {
             && matches!(self.month, TimeComponent::Any)
             && matches!(self.day, TimeComponent::Any)
             && matches!(self.hour, TimeComponent::Any)
-        {
-            if let TimeComponent::Range {
+            && let TimeComponent::Range {
                 step: Some(step), ..
             } = &self.minute
             {
                 return Some(format!("Every {} minutes", step));
             }
-        }
 
         if matches!(self.year, TimeComponent::Any)
             && matches!(self.month, TimeComponent::Any)
             && matches!(self.day, TimeComponent::Any)
-        {
-            if let TimeComponent::Range {
+            && let TimeComponent::Range {
                 step: Some(step), ..
             } = &self.hour
             {
                 return Some(format!("Every {} hours", step));
             }
-        }
 
-        if matches!(self.year, TimeComponent::Any) && matches!(self.month, TimeComponent::Any) {
-            if let TimeComponent::Range {
+        if matches!(self.year, TimeComponent::Any) && matches!(self.month, TimeComponent::Any)
+            && let TimeComponent::Range {
                 step: Some(step), ..
             } = &self.day
             {
                 return Some(format!("Every {} days", step));
             }
-        }
 
         if matches!(self.day, TimeComponent::Any)
             && matches!(self.month, TimeComponent::Any)
@@ -555,14 +546,13 @@ impl Calendar {
         }
 
         // Check for specific day of month
-        if let TimeComponent::Values(ref days) = self.day {
-            if days.len() == 1 {
+        if let TimeComponent::Values(ref days) = self.day
+            && days.len() == 1 {
                 return Some(format!(
                     "On the {} day of each month",
                     Self::ordinal(days[0])
                 ));
             }
-        }
 
         // For more complex patterns
         Some("On a custom schedule".to_string())
@@ -588,8 +578,7 @@ impl Calendar {
             TimeComponent::Values(mins),
             TimeComponent::Values(secs),
         ) = (&self.hour, &self.minute, &self.second)
-        {
-            if hours.len() == 1 && mins.len() == 1 && secs.len() == 1 {
+            && hours.len() == 1 && mins.len() == 1 && secs.len() == 1 {
                 let h = hours[0];
                 let m = mins[0];
 
@@ -613,7 +602,6 @@ impl Calendar {
 
                 return Some(format!("{:02}:{:02} {}", h12, m, period));
             }
-        }
 
         None
     }
@@ -628,7 +616,7 @@ impl Calendar {
             .expect("Invalid timestamp")
             .with_timezone(timezone);
 
-        let is_leap_year = |year: u32| year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+        let is_leap_year = |year: u32| year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
         let days_in_month = |year: u32, month: u32| match month {
             1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
             4 | 6 | 9 | 11 => 30,
@@ -644,13 +632,12 @@ impl Calendar {
 
         self.year
             .iter(Some(from.year() as u32))
-            .map(|y| {
+            .flat_map(|y| {
                 let is_current_year = y == from.year() as u32;
                 let from = (is_current_year).then_some(from.month());
                 self.month.iter(from).map(move |m| (is_current_year, y, m))
             })
-            .flatten()
-            .map(|(is_current_year, y, m)| {
+            .flat_map(|(is_current_year, y, m)| {
                 let is_current_month = is_current_year && m == from.month();
                 let from = (is_current_month).then_some(from.day());
                 let days_in_month = days_in_month(y, m);
@@ -659,7 +646,6 @@ impl Calendar {
                     .map(move |d| (is_current_month, y, m, d))
                     .filter(move |(_, _, _, d)| *d <= days_in_month)
             })
-            .flatten()
             .filter(|(_, y, m, d)| {
                 let weekday = NaiveDate::from_ymd_opt(*y as i32, *m, *d)
                     .expect("Invalid date")
@@ -669,34 +655,31 @@ impl Calendar {
                     .map(|l| l.iter().any(|d| *d as u8 == weekday))
                     .unwrap_or(true)
             })
-            .map(|(is_current_month, y, m, d)| {
+            .flat_map(|(is_current_month, y, m, d)| {
                 let is_current_day = is_current_month && d == from.day();
                 let from = (is_current_day).then_some(from.hour());
                 self.hour
                     .iter(from)
                     .map(move |h| (is_current_day, y, m, d, h))
             })
-            .flatten()
-            .map(|(is_current_day, y, m, d, h)| {
+            .flat_map(|(is_current_day, y, m, d, h)| {
                 let is_current_hour = is_current_day && h == from.hour();
                 let from = (is_current_hour).then_some(from.minute());
                 self.minute
                     .iter(from)
                     .map(move |mi| (is_current_hour, y, m, d, h, mi))
             })
-            .flatten()
-            .map(|(is_current_hour, y, m, d, h, mi)| {
+            .flat_map(|(is_current_hour, y, m, d, h, mi)| {
                 let is_current_minute = is_current_hour && mi == from.minute();
                 let from = (is_current_minute).then_some(from.second());
                 self.second
                     .iter(from)
                     .map(move |s| (is_current_minute, y, m, d, h, mi, s))
             })
-            .flatten()
             .filter_map(|(_, y, m, d, h, mi, s)| {
                 NaiveDateTime::new(
-                    NaiveDate::from_ymd_opt(y as i32, m as u32, d as u32).expect("Invalid date"),
-                    NaiveTime::from_hms_opt(h as u32, mi as u32, s as u32).expect("Invalid time"),
+                    NaiveDate::from_ymd_opt(y as i32, m, d).expect("Invalid date"),
+                    NaiveTime::from_hms_opt(h, mi, s).expect("Invalid time"),
                 )
                 .and_local_timezone(*timezone)
                 .earliest()
@@ -741,11 +724,10 @@ impl Calendar {
         }
 
         // Add timezone if present and requested
-        if show_timezone {
-            if let Some(tz) = &self.timezone {
+        if show_timezone
+            && let Some(tz) = &self.timezone {
                 parts.push(format!("({})", tz));
             }
-        }
 
         parts.join(" ")
     }
@@ -830,7 +812,7 @@ impl FromStr for Calendar {
         // Parse date components
         let (year, month, day) = match date_parts {
             Some(parts) => {
-                let year = parts.get(0).unwrap_or(&"*").parse()?;
+                let year = parts.first().unwrap_or(&"*").parse()?;
                 let month = parts.get(1).unwrap_or(&"*").parse()?;
                 let day = parts.get(2).unwrap_or(&"*").parse()?;
                 (year, month, day)
@@ -841,7 +823,7 @@ impl FromStr for Calendar {
         // Parse time components
         let (hour, minute, second) = match time_parts {
             Some(parts) => {
-                let hour = parts.get(0).unwrap_or(&"*").parse()?;
+                let hour = parts.first().unwrap_or(&"*").parse()?;
                 let minute = parts.get(1).unwrap_or(&"*").parse()?;
                 let second = parts.get(2).unwrap_or(&"0").parse()?;
 
@@ -856,12 +838,12 @@ impl FromStr for Calendar {
 
         Ok(Calendar {
             weekdays,
-            year: year.into(),
-            month: month.into(),
-            day: day.into(),
-            hour: hour.into(),
-            minute: minute.into(),
-            second: second.into(),
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
             timezone,
         })
     }
@@ -998,12 +980,12 @@ mod tests {
     fn test_format_calendar() {
         let cal = Calendar {
             weekdays: Some(vec![Weekday::Mon, Weekday::Wed, Weekday::Fri]),
-            year: TimeComponent::Any.into(),
-            month: TimeComponent::Any.into(),
-            day: TimeComponent::Any.into(),
-            hour: TimeComponent::Values(vec![0]).into(),
-            minute: TimeComponent::Values(vec![0]).into(),
-            second: TimeComponent::Values(vec![0]).into(),
+            year: TimeComponent::Any,
+            month: TimeComponent::Any,
+            day: TimeComponent::Any,
+            hour: TimeComponent::Values(vec![0]),
+            minute: TimeComponent::Values(vec![0]),
+            second: TimeComponent::Values(vec![0]),
             timezone: None,
         };
         assert_eq!(cal.to_string(), "Mon,Wed,Fri *-*-* 0:0:0");
@@ -1134,7 +1116,7 @@ mod tests {
 
         // Test with timezone
         let tz = Some(chrono_tz::US::Eastern);
-        assert_eq!(Calendar::daily(tz.clone()).to_human_readable(true), "Daily");
+        assert_eq!(Calendar::daily(tz).to_human_readable(true), "Daily");
 
         // Test timezone parameter
         let cal_with_tz = Calendar {

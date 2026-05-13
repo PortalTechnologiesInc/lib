@@ -112,7 +112,7 @@ impl MultiKeyListener for CloseRecurringPaymentReceiverConversation {
         message: &Self::Message,
     ) -> Result<Response, Self::Error> {
         let main_key = match &state.subkey_proof {
-            Some(subkey_proof) => subkey_proof.main_key.into(),
+            Some(subkey_proof) => subkey_proof.main_key,
             None => event.pubkey.into(),
         };
 

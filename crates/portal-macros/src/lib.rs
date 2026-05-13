@@ -5,7 +5,7 @@ use std::process::Command;
 
 fn get_hash() -> Option<String> {
     let stdout = Command::new("git")
-        .args(&["rev-parse", "--short=8", "HEAD"])
+        .args(["rev-parse", "--short=8", "HEAD"])
         .output()
         .ok()?
         .stdout;
@@ -16,7 +16,7 @@ fn get_hash() -> Option<String> {
 fn is_clean() -> Option<bool> {
     Some(
         Command::new("git")
-            .args(&["diff-index", "--quiet", "HEAD"])
+            .args(["diff-index", "--quiet", "HEAD"])
             .output()
             .ok()?
             .status

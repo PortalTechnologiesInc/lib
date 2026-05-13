@@ -138,7 +138,7 @@ async fn test_auth_flow() {
     assert_eq!(auth_response_event.user_key, client_keys.public_key());
     assert_eq!(
         auth_response_event.recipient,
-        client_keys.public_key().into()
+        client_keys.public_key()
     );
 }
 
@@ -243,7 +243,7 @@ async fn test_auth_with_subkey_client() {
     );
     assert_eq!(
         auth_response_event.recipient,
-        client_keys.public_key().into()
+        client_keys.public_key()
     );
 }
 
@@ -348,6 +348,6 @@ async fn test_auth_with_subkey_service() {
     assert_eq!(auth_response_event.user_key, client_keys.public_key());
     assert_eq!(
         auth_response_event.recipient,
-        client_keys.public_key().into()
+        client_keys.public_key()
     );
 }

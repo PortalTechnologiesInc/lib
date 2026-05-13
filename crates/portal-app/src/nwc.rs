@@ -223,13 +223,13 @@ pub struct MakeInvoiceRequest {
     pub expiry: Option<u64>,
 }
 
-impl Into<portal::nostr::nips::nip47::MakeInvoiceRequest> for MakeInvoiceRequest {
-    fn into(self) -> portal::nostr::nips::nip47::MakeInvoiceRequest {
+impl From<MakeInvoiceRequest> for portal::nostr::nips::nip47::MakeInvoiceRequest {
+    fn from(val: MakeInvoiceRequest) -> Self {
         portal::nostr::nips::nip47::MakeInvoiceRequest {
-            amount: self.amount,
-            description: self.description,
-            description_hash: self.description_hash,
-            expiry: self.expiry,
+            amount: val.amount,
+            description: val.description,
+            description_hash: val.description_hash,
+            expiry: val.expiry,
         }
     }
 }

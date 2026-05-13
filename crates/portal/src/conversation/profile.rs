@@ -99,13 +99,13 @@ impl From<nostr::nips::nip01::Metadata> for Profile {
         }
     }
 }
-impl Into<nostr::nips::nip01::Metadata> for Profile {
-    fn into(self) -> nostr::nips::nip01::Metadata {
+impl From<Profile> for nostr::nips::nip01::Metadata {
+    fn from(val: Profile) -> Self {
         nostr::nips::nip01::Metadata {
-            name: self.name,
-            display_name: self.display_name,
-            picture: self.picture,
-            nip05: self.nip05,
+            name: val.name,
+            display_name: val.display_name,
+            picture: val.picture,
+            nip05: val.nip05,
             ..Default::default()
         }
     }

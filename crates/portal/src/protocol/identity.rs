@@ -235,8 +235,8 @@ impl MerkleProofNode {
             MerkleProofNode::Blinded { hash } => hash.clone(),
             MerkleProofNode::Parent { left, right } => {
                 let mut hasher = Sha256::new();
-                hasher.update(&left.compute_hash());
-                hasher.update(&right.compute_hash());
+                hasher.update(left.compute_hash());
+                hasher.update(right.compute_hash());
                 hasher.finalize().to_vec()
             }
         }
@@ -342,7 +342,7 @@ impl Certificate {
         // Check that the merkle root matches
         let prepared = self.prepare_for_revealing()?;
         if self.metadata.merkle_root.0.as_slice()
-            != &prepared.compute_merkle_root(&self.metadata.salt_sequence)?
+            != prepared.compute_merkle_root(&self.metadata.salt_sequence)?
         {
             return Err(SignError::InvalidMerkleRoot);
         }
@@ -353,11 +353,11 @@ impl Certificate {
         }
 
         let certificate = serde_json::to_string(&self.get_signed_data())
-            .map_err(|e| SignError::Serialization(e))?;
+            .map_err(SignError::Serialization)?;
 
         let mut hasher = Sha256::new();
         hasher.update(certificate.as_bytes());
-        let message = nostr::secp256k1::Message::from_digest_slice(&hasher.finalize().to_vec())?;
+        let message = nostr::secp256k1::Message::from_digest_slice(&hasher.finalize())?;
         let signature = issuer_key.key_pair(&Secp256k1::new()).sign_schnorr(message);
 
         self.signature = hex::encode(signature.serialize());
@@ -379,10 +379,10 @@ impl PartialCertificate {
         use sha2::{Digest, Sha256};
 
         let certificate = serde_json::to_string(&self.get_signed_data())
-            .map_err(|e| VerifyError::Serialization(e))?;
+            .map_err(VerifyError::Serialization)?;
 
         // Check merkle root matches
-        if self.metadata.merkle_root.0.as_slice() != &self.merkle_proof.compute_hash() {
+        if self.metadata.merkle_root.0.as_slice() != self.merkle_proof.compute_hash() {
             return Err(VerifyError::InvalidMerkleRoot);
         }
 
@@ -392,11 +392,11 @@ impl PartialCertificate {
 
         let mut hasher = Sha256::new();
         hasher.update(certificate.as_bytes());
-        let message = nostr::secp256k1::Message::from_digest_slice(&hasher.finalize().to_vec())?;
+        let message = nostr::secp256k1::Message::from_digest_slice(&hasher.finalize())?;
         let signature = nostr::secp256k1::schnorr::Signature::from_slice(
             &hex::decode(&self.signature).map_err(|_| VerifyError::InvalidSignature)?,
         )
-        .map_err(|e| VerifyError::Secp256k1(e))?;
+        .map_err(VerifyError::Secp256k1)?;
         secp.verify_schnorr(&signature, &message, &self.metadata.issuer_pubkey.xonly()?)
             .map_err(|_| VerifyError::InvalidSignature)?;
 
@@ -517,7 +517,7 @@ impl PreparedCertificate {
 
         // Now build the Merkle tree bottom-up
         while field_hashes.len() > 1 {
-            let mut next_level = Vec::with_capacity((field_hashes.len() + 1) / 2);
+            let mut next_level = Vec::with_capacity(field_hashes.len().div_ceil(2));
 
             // Process pairs of hashes
             for pair in field_hashes.chunks(2) {
@@ -582,7 +582,7 @@ impl PreparedCertificate {
 
         // Now build the Merkle tree
         while leaves.len() > 1 {
-            let mut next_level = Vec::with_capacity((leaves.len() + 1) / 2);
+            let mut next_level = Vec::with_capacity(leaves.len().div_ceil(2));
 
             for pair in leaves.chunks(2) {
                 let left = pair[0].clone();
@@ -643,9 +643,9 @@ impl PreparedCertificate {
             }
 
             // Helper function to get or create an object
-            fn get_or_create_object<'a>(
-                value: &'a mut serde_json::Value,
-            ) -> Result<&'a mut serde_json::Map<String, serde_json::Value>, RevealError>
+            fn get_or_create_object(
+                value: &mut serde_json::Value,
+            ) -> Result<&mut serde_json::Map<String, serde_json::Value>, RevealError>
             {
                 match value {
                     serde_json::Value::Object(obj) => Ok(obj),

@@ -108,6 +108,12 @@ pub struct Mnemonic {
     inner: bip39::Mnemonic,
 }
 
+impl std::fmt::Display for Mnemonic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
 #[uniffi::export]
 impl Mnemonic {
     #[uniffi::constructor]
@@ -120,7 +126,7 @@ impl Mnemonic {
         let secp = bitcoin::secp256k1::Secp256k1::new();
 
         let seed = self.inner.to_seed("");
-        let path = format!("m/44'/1237'/0'/0/0");
+        let path = "m/44'/1237'/0'/0/0".to_string();
         let xprv = bip32::Xpriv::new_master(bitcoin::Network::Bitcoin, &seed)
             .map_err(|_| MnemonicError::InvalidMnemonic)?;
         let private_key = xprv
@@ -150,10 +156,6 @@ impl Mnemonic {
             .expect("Valid path");
 
         xpriv.private_key.secret_bytes().to_vec()
-    }
-
-    pub fn to_string(&self) -> String {
-        self.inner.to_string()
     }
 }
 
@@ -214,7 +216,7 @@ impl Keypair {
     }
 
     pub fn subkey_proof(&self) -> Option<SubkeyProof> {
-        self.inner.subkey_proof().map(|p| p.clone())
+        self.inner.subkey_proof().cloned()
     }
 
     pub fn nsec(&self) -> Result<String, KeypairError> {
@@ -229,8 +231,8 @@ impl Keypair {
         expires_in_hours: i64,
     ) -> Result<String, KeypairError> {
         let token = portal::protocol::jwt::encode(
-            &self.inner.secret_key(),
-            CustomClaims::new(target_key.into()),
+            self.inner.secret_key(),
+            CustomClaims::new(target_key),
             Duration::hours(expires_in_hours),
         )
         .map_err(|e| KeypairError::JwtError(e.to_string()))?;
@@ -570,12 +572,11 @@ impl PortalApp {
         let pool_relays = self.relay_pool.all_relays().await;
         for relay in new_relays {
             let relay = pool_relays.iter().find(|(url, _)| url.to_string() == relay);
-            if let Some((url, relay)) = relay {
-                if !relay.flags().has_read() {
+            if let Some((url, relay)) = relay
+                && !relay.flags().has_read() {
                     self.router.remove_relay(url.to_string()).await?;
                     self.relay_pool.disconnect_relay(url).await?;
                 }
-            }
         }
 
         Ok(())
@@ -599,7 +600,7 @@ impl PortalApp {
         event: AuthChallengeEvent,
         status: AuthResponseStatus,
     ) -> Result<(), AppError> {
-        let recipient = event.recipient.clone();
+        let recipient = event.recipient;
 
         let conv = AuthResponseConversation::new(
             event,
@@ -632,8 +633,8 @@ impl PortalApp {
         match &request.content {
             PaymentRequestContent::Single(content) => {
                 Ok(IncomingPaymentRequest::Single(SinglePaymentRequest {
-                    service_key: request.service_key.clone(),
-                    recipient: request.recipient.clone(),
+                    service_key: request.service_key,
+                    recipient: request.recipient,
                     expires_at: request.expires_at,
                     content: content.clone(),
                     event_id: request.event_id.clone(),
@@ -641,8 +642,8 @@ impl PortalApp {
             }
             PaymentRequestContent::Recurring(content) => {
                 Ok(IncomingPaymentRequest::Recurring(RecurringPaymentRequest {
-                    service_key: request.service_key.clone(),
-                    recipient: request.recipient.clone(),
+                    service_key: request.service_key,
+                    recipient: request.recipient,
                     expires_at: request.expires_at,
                     content: content.clone(),
                     event_id: request.event_id.clone(),
@@ -657,8 +658,8 @@ impl PortalApp {
         status: PaymentResponseContent,
     ) -> Result<(), AppError> {
         let conv = PaymentStatusSenderConversation::new(
-            request.service_key.clone().into(),
-            request.recipient.clone().into(),
+            request.service_key.into(),
+            request.recipient.into(),
             status,
         );
         let recipient = request.recipient.into();
@@ -679,8 +680,8 @@ impl PortalApp {
         status: RecurringPaymentResponseContent,
     ) -> Result<(), AppError> {
         let conv = RecurringPaymentStatusSenderConversation::new(
-            request.service_key.clone().into(),
-            request.recipient.clone().into(),
+            request.service_key.into(),
+            request.recipient.into(),
             status,
         );
         let recipient = request.recipient.into();
@@ -735,7 +736,7 @@ impl PortalApp {
         let conv = SetProfileConversation::new(profile);
         let _ = self.router
             .add_conversation(Box::new(OneShotSenderAdapter::new_with_user(
-                self.router.keypair().public_key().into(),
+                self.router.keypair().public_key(),
                 vec![],
                 conv,
             )))
@@ -800,7 +801,7 @@ impl PortalApp {
         let nip46_request = nip46_request.map_err(|e| AppError::ParseError(e.to_string()))?;
         log::debug!("Received nip46 request: {:?}", nip46_request);
 
-        let nostr_client_pubkey = nip46_request.nostr_client_pubkey.clone();
+        let nostr_client_pubkey = nip46_request.nostr_client_pubkey;
         let app_event = NostrConnectEvent {
             nostr_client_pubkey: PublicKey(nostr_client_pubkey),
             message: nip46_request.message.into(),
@@ -857,7 +858,7 @@ impl PortalApp {
                     .map_err(|e| {
                         AppError::Nip46OperationError(format!(
                             "Impossible to sign event: {}",
-                            e.to_string()
+                            e
                         ))
                     })?;
                 serde_json::to_string(&signed_event)
@@ -947,10 +948,10 @@ impl PortalApp {
 
     pub async fn register_nip05(&self, local_part: String) -> Result<(), AppError> {
         let nip05 = format!("{}@getportal.cc", local_part.trim().to_lowercase());
-        portal::register_nip05(&self.router.keypair().get_keys(), &nip05)
+        portal::register_nip05(self.router.keypair().get_keys(), &nip05)
             .await
             .map(|_| ())
-            .map_err(|e| AppError::ProfileRegistrationError(e))
+            .map_err(AppError::ProfileRegistrationError)
     }
 
     pub async fn next_invoice_request(
@@ -973,7 +974,7 @@ impl PortalApp {
         request: portal::protocol::model::payment::InvoiceRequestContentWithKey,
         invoice: MakeInvoiceResponse,
     ) -> Result<(), AppError> {
-        let recipient = request.recipient.clone().into();
+        let recipient = request.recipient.into();
         let invoice_response = InvoiceResponse {
             request,
             invoice: invoice.invoice,
@@ -1045,7 +1046,7 @@ impl PortalApp {
         request: CashuRequestContentWithKey,
         status: CashuResponseStatus,
     ) -> Result<(), AppError> {
-        let recipient = request.recipient.clone().into();
+        let recipient = request.recipient.into();
         let response = CashuResponseContent { request, status };
         let conv = CashuResponseSenderConversation::new(response);
         let _ = self.router
@@ -1106,7 +1107,7 @@ impl PortalApp {
         mut notifications: tokio::sync::broadcast::Receiver<MonitorNotification>,
         relay_status_listener: Arc<dyn RelayStatusListener>,
     ) {
-        let _ = runtime.add_task(async move {
+        std::mem::drop(runtime.add_task(async move {
             while let Ok(notification) = notifications.recv().await {
                 match notification {
                     MonitorNotification::StatusChanged { relay_url, status } => {
@@ -1124,12 +1125,12 @@ impl PortalApp {
                 }
             }
             Ok::<(), AppError>(())
-        });
+        }));
     }
 
     async fn post_request_profile_service(&self, content: EventContent) -> Result<(), AppError> {
         let event = EventBuilder::text_note(serde_json::to_string(&content).unwrap())
-            .sign_with_keys(&self.router.keypair().get_keys())
+            .sign_with_keys(self.router.keypair().get_keys())
             .map_err(|_| AppError::ProfileRegistrationError("Failed to sign event".to_string()))?;
         let json_string = serde_json::to_string_pretty(&event).map_err(|_| {
             AppError::ProfileRegistrationError("Failed to serialize event".to_string())

@@ -25,7 +25,7 @@ impl PortalWallet for NwcWallet {
             .nwc
             .make_invoice(portal::nostr::nips::nip47::MakeInvoiceRequest {
                 amount: amount_msat,
-                description: description,
+                description,
                 description_hash: None,
                 expiry: None,
             })
